@@ -1,0 +1,1615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Patient–Doctor Simulation Playground · DSAIL</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & Variables ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:            #f5f6f8;
+      --surface:       #ffffff;
+      --elevated:      #fafbfc;
+      --border:        #d8dde6;
+      --border-bright: #c5ccd8;
+
+      --p-hue:         #c43d3d;
+      --p-hue-dim:     rgba(196,61,61,.10);
+      --p-msg-bg:      #fff5f5;
+      --p-msg-border:  #e8c4c4;
+
+      --d-hue:         #1a6fb5;
+      --d-hue-dim:     rgba(26,111,181,.10);
+      --d-msg-bg:      #f0f7fc;
+      --d-msg-border:  #b8d4ea;
+
+      --dx-hue:        #8a6d1a;
+      --dx-bg:         #fffbeb;
+      --dx-border:     #e8d48a;
+
+      --text-primary:  #1a1d24;
+      --text-secondary:#3d4450;
+      --text-muted:    #5c6470;
+      --text-code:     #2a3140;
+
+      --header-h: 58px;
+      /* 3-column: 1 : 3 : 1 (sides : chat : sides) */
+      --grid-side: 1fr;
+      --grid-chat: 3fr;
+      --radius:   10px;
+      --font-base: 17px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text-primary);
+      font-family: 'Inter', 'Noto Sans KR', sans-serif;
+      font-size: var(--font-base);
+      overflow: hidden;
+    }
+
+    /* ── Header ────────────────────────────────────────────────────────── */
+    header {
+      height: var(--header-h);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      gap: 16px;
+      flex-shrink: 0;
+    }
+
+    .hd-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 0 0 auto;
+    }
+    .hd-logo {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: .12em;
+      color: var(--text-muted);
+      background: var(--elevated);
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      border-radius: 4px;
+    }
+    .hd-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      letter-spacing: .02em;
+    }
+
+    /* Turn progress (center) */
+    .hd-progress {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      max-width: 480px;
+    }
+    .turn-dots {
+      display: flex;
+      gap: 6px;
+    }
+    .turn-dot {
+      width: 28px;
+      height: 7px;
+      border-radius: 4px;
+      background: var(--border);
+      transition: background .4s ease, transform .2s ease;
+    }
+    .turn-dot.patient { background: var(--p-hue); transform: scaleY(1.25); }
+    .turn-dot.doctor  { background: var(--d-hue); transform: scaleY(1.25); }
+    .turn-label {
+      font-family: 'Inter', 'Noto Sans KR', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-muted);
+      letter-spacing: 0;
+    }
+
+    /* Model badge (right) */
+    .hd-model {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      color: var(--text-muted);
+      background: var(--elevated);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+
+    /* ── Status Bar ────────────────────────────────────────────────────── */
+    #statusBar {
+      height: 0;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-family: 'Inter', 'Noto Sans KR', sans-serif;
+      font-size: 15px;
+      background: #eef4fa;
+      border-bottom: 1px solid var(--border);
+      color: var(--d-hue);
+      transition: height .3s ease;
+    }
+    #statusBar.visible { height: 42px; }
+    .status-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--d-hue);
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%,100% { opacity:.4; transform: scale(1); }
+      50%      { opacity:1;  transform: scale(1.3); }
+    }
+
+    /* ── Main Layout ───────────────────────────────────────────────────── */
+    main {
+      display: grid;
+      grid-template-columns: var(--grid-side) var(--grid-chat) var(--grid-side);
+      height: calc(100vh - var(--header-h));
+    }
+
+    /* ── Side Panels ───────────────────────────────────────────────────── */
+    .panel {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      overflow: hidden;
+      min-width: 0;
+      background: var(--surface);
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.03);
+    }
+    .panel.doctor-panel { border-right: none; border-left: 1px solid var(--border); }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .panel-title {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: .04em;
+    }
+    .patient-panel .panel-title { color: var(--p-hue); }
+    .doctor-panel  .panel-title { color: var(--d-hue); }
+
+    .panel-role {
+      margin-left: auto;
+      font-family: 'Inter', 'Noto Sans KR', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .04em;
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+    .patient-panel .panel-role { background: var(--p-hue-dim); color: var(--p-hue); border: 1px solid var(--p-msg-border); }
+    .doctor-panel  .panel-role { background: var(--d-hue-dim); color: var(--d-hue); border: 1px solid var(--d-msg-border); }
+
+    .panel-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-bright) #f0f0f0;
+    }
+
+    .section-label {
+      font-family: 'Inter', 'Noto Sans KR', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: .06em;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    .prompt-box {
+      background: var(--elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+    }
+    .prompt-box.prompt-box--rich {
+      padding: 0;
+    }
+    .prompt-doc {
+      font-family: 'Inter', 'Noto Sans KR', sans-serif;
+      font-size: 14px;
+      line-height: 1.68;
+      color: var(--text-secondary);
+      padding: 14px 16px 16px;
+    }
+    .prompt-section {
+      margin-top: 14px;
+      margin-bottom: 8px;
+      padding: 8px 0 6px 12px;
+      border-left: 3px solid var(--border-bright);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .05em;
+      color: var(--text-muted);
+    }
+    .prompt-doc .prompt-section:first-child {
+      margin-top: 0;
+    }
+    /* Symptom Profile 본문: 한 덩어리 카드로 묶음 */
+    .prompt-sp-shell {
+      margin-top: 6px;
+      margin-bottom: 4px;
+      padding: 12px 14px 14px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--elevated);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+    }
+    .patient-prompt-doc .prompt-sp-shell {
+      border-color: var(--p-msg-border);
+      background: linear-gradient(
+        165deg,
+        var(--p-msg-bg) 0%,
+        var(--surface) 55%,
+        var(--elevated) 100%
+      );
+    }
+    .prompt-section + .prompt-sp-shell {
+      margin-top: 2px;
+    }
+    .prompt-subsection {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin-top: 0.9rem;
+      margin-bottom: 2px;
+      padding-bottom: 6px;
+      border-bottom: 1px dashed var(--border-bright);
+    }
+    .prompt-sp-shell > .prompt-subsection:first-child {
+      margin-top: 0;
+    }
+    .prompt-subsection-mark {
+      flex: 0 0 auto;
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      opacity: 0.85;
+    }
+    .prompt-subsection-text {
+      flex: 1;
+      min-width: 0;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: var(--text-secondary);
+    }
+    .patient-prompt-doc .prompt-subsection-text {
+      color: var(--text-primary);
+    }
+    .prompt-sp-shell .prompt-item {
+      margin-left: 2px;
+      padding-left: 2px;
+    }
+    .prompt-sp-shell .prompt-line {
+      margin-left: 2px;
+    }
+    .patient-prompt-doc .prompt-section {
+      border-left-color: var(--p-hue);
+      color: var(--p-hue);
+      background: linear-gradient(90deg, var(--p-hue-dim) 0%, transparent 72%);
+    }
+    .doctor-prompt-doc .prompt-section {
+      border-left-color: var(--d-hue);
+      color: var(--d-hue);
+      background: linear-gradient(90deg, var(--d-hue-dim) 0%, transparent 72%);
+    }
+    .prompt-cmd {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      margin-bottom: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 6px 10px;
+    }
+    .prompt-cmd-name {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 5px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-weight: 600;
+      letter-spacing: .02em;
+    }
+    .patient-prompt-doc .prompt-cmd-name {
+      border-color: var(--p-msg-border);
+      color: var(--p-hue);
+      background: var(--p-msg-bg);
+    }
+    .doctor-prompt-doc .prompt-cmd-name {
+      border-color: var(--d-msg-border);
+      color: var(--d-hue);
+      background: var(--d-msg-bg);
+    }
+    .prompt-cmd-rest {
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+    .prompt-line {
+      margin: 0 0 0.5em 0;
+      color: var(--text-secondary);
+    }
+    .prompt-line:last-child { margin-bottom: 0; }
+    .prompt-gap {
+      height: 8px;
+    }
+    .prompt-item {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      margin: 0.32em 0;
+    }
+    .prompt-item--l1 { padding-left: 8px; }
+    .prompt-item--l2 { padding-left: 20px; }
+    .prompt-item--l3 { padding-left: 32px; }
+    .prompt-item--l4 { padding-left: 44px; }
+    .prompt-item-dot {
+      flex: 0 0 6px;
+      width: 6px;
+      height: 6px;
+      margin-top: 0.55em;
+      border-radius: 50%;
+      background: var(--border-bright);
+    }
+    .patient-prompt-doc .prompt-item-dot {
+      background: var(--p-hue);
+      opacity: .55;
+    }
+    .doctor-prompt-doc .prompt-item-dot {
+      background: var(--d-hue);
+      opacity: .55;
+    }
+    .patient-prompt-doc .prompt-item--l1 .prompt-item-dot,
+    .patient-prompt-doc .prompt-item--l2 .prompt-item-dot { opacity: .4; }
+    .doctor-prompt-doc .prompt-item--l1 .prompt-item-dot,
+    .doctor-prompt-doc .prompt-item--l2 .prompt-item-dot { opacity: .4; }
+    .prompt-item-text {
+      flex: 1;
+      min-width: 0;
+      word-break: break-word;
+    }
+
+    /* Doctor panel: 질문 로그 (시뮬 중 SSE로 동기화) */
+    .doctor-sync-block {
+      margin-top: 14px;
+      flex-shrink: 0;
+    }
+    .doctor-sync-label {
+      font-family: 'Inter', 'Noto Sans KR', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .06em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    #doctorQuestionLog {
+      background: var(--d-msg-bg);
+      border: 1px solid var(--d-msg-border);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      max-height: 220px;
+      overflow-y: auto;
+      font-size: 13px;
+      line-height: 1.55;
+      color: var(--text-secondary);
+    }
+    .doctor-sync-entry {
+      padding: 8px 0;
+      border-bottom: 1px dashed var(--border-bright);
+    }
+    .doctor-sync-entry:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+    .doctor-sync-entry:first-child {
+      padding-top: 0;
+    }
+    .doctor-sync-q {
+      display: inline-block;
+      min-width: 2.2em;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--d-hue);
+      margin-right: 6px;
+      vertical-align: top;
+    }
+
+    .doctor-prompts-scroll {
+      flex: 1;
+      min-height: 0;
+      max-height: min(46vh, 440px);
+      overflow-y: auto;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-bottom: 4px;
+      scrollbar-width: thin;
+    }
+    .doctor-prompt-tier-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--d-hue);
+      margin-bottom: 6px;
+      padding-left: 2px;
+    }
+    .doctor-prompt-tier .prompt-box--rich {
+      margin-bottom: 0;
+    }
+
+    .doctor-candidates-live {
+      background: var(--surface);
+      border: 1px solid var(--d-msg-border);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      min-height: 72px;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text-secondary);
+    }
+    .doctor-cand-meta {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .04em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .doctor-cand-note {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-style: italic;
+      margin-bottom: 10px;
+      padding: 8px 10px;
+      background: var(--elevated);
+      border-radius: 6px;
+      border-left: 3px solid var(--d-hue);
+    }
+    .doctor-cand-list {
+      margin: 0;
+      padding-left: 1.15em;
+    }
+    .doctor-cand-list li {
+      margin: 0.25em 0;
+    }
+    .doctor-cand-empty {
+      margin: 0;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    /* ── Chat Section ──────────────────────────────────────────────────── */
+    .chat-section {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-width: 0;
+      background: var(--bg);
+    }
+
+    .chat-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .chat-top-label {
+      font-family: 'Inter', 'Noto Sans KR', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: .04em;
+      color: var(--text-muted);
+    }
+
+    #startBtn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      background: var(--d-hue);
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Inter', 'Noto Sans KR', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity .2s, transform .1s;
+      letter-spacing: .02em;
+    }
+    #startBtn:hover:not(:disabled)  { opacity: .92; transform: translateY(-1px); }
+    #startBtn:active:not(:disabled) { transform: translateY(0); }
+    #startBtn:disabled { opacity: .4; cursor: not-allowed; }
+    #startBtn .btn-icon { font-size: 14px; }
+
+    /* Chat feed */
+    .chat-feed {
+      flex: 1;
+      overflow-y: auto;
+      padding: 22px 26px;
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    .chat-empty {
+      margin: auto;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 17px;
+      line-height: 1.85;
+      max-width: 360px;
+    }
+    .chat-empty-icon {
+      font-size: 36px;
+      margin-bottom: 12px;
+      opacity: .45;
+    }
+
+    /* Message bubbles */
+    .msg-wrapper {
+      display: flex;
+      flex-direction: column;
+      max-width: 78%;
+      animation: slideIn .25s ease forwards;
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    @keyframes slideIn {
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .msg-wrapper.patient { align-self: flex-start; }
+    .msg-wrapper.doctor  { align-self: flex-end; }
+
+    .msg-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .msg-wrapper.doctor .msg-meta { flex-direction: row-reverse; }
+
+    .msg-role {
+      font-family: 'Inter', 'Noto Sans KR', sans-serif;
+      font-size: 13px;
+      letter-spacing: .04em;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 4px;
+    }
+    .msg-wrapper.patient .msg-role { background: var(--p-hue-dim); color: var(--p-hue); border: 1px solid var(--p-msg-border); }
+    .msg-wrapper.doctor  .msg-role { background: var(--d-hue-dim); color: var(--d-hue); border: 1px solid var(--d-msg-border); }
+
+    .msg-bubble {
+      padding: 14px 18px;
+      border-radius: var(--radius);
+      font-size: 17px;
+      line-height: 1.75;
+      word-break: break-word;
+    }
+    .msg-wrapper.patient .msg-bubble {
+      background: var(--p-msg-bg);
+      border: 1px solid var(--p-msg-border);
+      border-radius: 2px var(--radius) var(--radius) var(--radius);
+    }
+    .msg-wrapper.doctor .msg-bubble {
+      background: var(--d-msg-bg);
+      border: 1px solid var(--d-msg-border);
+      border-radius: var(--radius) 2px var(--radius) var(--radius);
+    }
+
+    /* Typing indicator */
+    .typing-indicator {
+      display: flex;
+      gap: 5px;
+      padding: 12px 15px;
+      align-self: flex-start;
+    }
+    .typing-indicator.doctor { align-self: flex-end; }
+    .typing-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      animation: typingPulse 1.1s ease-in-out infinite;
+    }
+    .typing-indicator.patient .typing-dot { background: var(--p-hue); }
+    .typing-indicator.doctor  .typing-dot { background: var(--d-hue); }
+    .typing-dot:nth-child(2) { animation-delay: .18s; }
+    .typing-dot:nth-child(3) { animation-delay: .36s; }
+    @keyframes typingPulse {
+      0%,60%,100% { opacity: .3; transform: scale(.9); }
+      30%          { opacity: 1;  transform: scale(1.2); }
+    }
+
+    /* Diagnosis card */
+    .diagnosis-card {
+      align-self: stretch;
+      background: var(--dx-bg);
+      border: 1px solid var(--dx-border);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+      animation: slideIn .3s ease forwards;
+      opacity: 0;
+    }
+    .dx-label {
+      font-family: 'Inter', 'Noto Sans KR', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      color: var(--dx-hue);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .dx-label::before, .dx-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--dx-border);
+    }
+    .dx-content {
+      font-size: 17px;
+      line-height: 1.85;
+      color: var(--text-primary);
+      white-space: pre-wrap;
+    }
+
+    /* Done banner */
+    .done-banner {
+      align-self: center;
+      font-family: 'Inter', 'Noto Sans KR', sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0;
+      color: var(--text-muted);
+      padding: 10px 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      animation: slideIn .3s ease forwards;
+      opacity: 0;
+    }
+
+    /* Error card */
+    .error-card {
+      align-self: stretch;
+      background: #fff0f0;
+      border: 1px solid #e8a0a0;
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      color: #a02020;
+      font-size: 15px;
+      font-family: 'Inter', 'Noto Sans KR', sans-serif;
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #eee; }
+    ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 4px; }
+
+    /* ── Patient Config Modal ────────────────────────────────── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .25s ease;
+    }
+    .modal-overlay.open {
+      opacity: 1;
+      pointer-events: all;
+    }
+    .modal-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 28px 32px;
+      width: 480px;
+      max-width: 96vw;
+      box-shadow: 0 12px 40px rgba(0,0,0,.18);
+      transform: translateY(12px);
+      transition: transform .25s ease;
+    }
+    .modal-overlay.open .modal-box {
+      transform: translateY(0);
+    }
+    .modal-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 22px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .modal-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: .05em;
+      margin-bottom: 6px;
+      display: block;
+    }
+    .modal-select, .modal-input {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--elevated);
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+      appearance: none;
+      cursor: pointer;
+    }
+    .modal-select:focus, .modal-input:focus {
+      outline: none;
+      border-color: var(--d-hue);
+      box-shadow: 0 0 0 3px var(--d-hue-dim);
+    }
+    .modal-toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 22px;
+    }
+    .modal-toggle-label {
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+    .toggle-switch {
+      position: relative;
+      width: 42px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: var(--border-bright);
+      border-radius: 24px;
+      cursor: pointer;
+      transition: background .25s;
+    }
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      left: 3px;
+      top: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: transform .25s;
+      box-shadow: 0 1px 3px rgba(0,0,0,.25);
+    }
+    .toggle-switch input:checked + .toggle-slider { background: var(--d-hue); }
+    .toggle-switch input:checked + .toggle-slider::before { transform: translateX(18px); }
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 6px;
+    }
+    .modal-btn {
+      padding: 9px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: opacity .2s;
+    }
+    .modal-btn:hover { opacity: .85; }
+    .modal-btn-cancel {
+      background: var(--elevated);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+    .modal-btn-apply {
+      background: var(--d-hue);
+      color: white;
+    }
+    .modal-btn-apply:disabled { opacity: .5; cursor: not-allowed; }
+    .modal-status {
+      font-size: 12px;
+      margin-top: 10px;
+      min-height: 18px;
+      color: var(--text-muted);
+    }
+    .modal-status.err { color: #c43d3d; }
+    .modal-status.ok  { color: #2a845a; }
+    /* Config 버튼 */
+    #configBtn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 16px;
+      background: var(--elevated);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: border-color .2s, color .2s;
+    }
+    #configBtn:hover { border-color: var(--d-hue); color: var(--d-hue); }
+    #configBtn:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* ── Batch Eval ──────────────────────────────────────────────────── */
+    #batchBtn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 16px;
+      background: #1a7a4a;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      cursor: pointer;
+      transition: opacity .2s;
+    }
+    #batchBtn:hover   { opacity: .88; }
+    #batchBtn:disabled { opacity: .4; cursor: not-allowed; }
+    .batch-modal-box {
+      width: 600px;
+      max-width: 96vw;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .batch-progress-wrap {
+      background: var(--elevated);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+    }
+    .batch-progress-bar-track {
+      height: 10px;
+      background: var(--border);
+      border-radius: 5px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .batch-progress-bar-fill {
+      height: 100%;
+      background: #1a7a4a;
+      border-radius: 5px;
+      transition: width .5s ease;
+      width: 0%;
+    }
+    .batch-result-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .batch-result-table th {
+      text-align: left;
+      padding: 7px 10px;
+      background: var(--elevated);
+      border-bottom: 1px solid var(--border);
+      color: var(--text-muted);
+      font-weight: 600;
+      letter-spacing: .04em;
+    }
+    .batch-result-table td {
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+    .batch-result-table tr:last-child td { border-bottom: none; }
+    .batch-acc-high { color: #1a7a4a; font-weight: 700; }
+    .batch-acc-low  { color: #c43d3d; font-weight: 700; }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────────────────────────── -->
+<header>
+  <div class="hd-brand">
+    <span class="hd-logo">DSAIL</span>
+    <span class="hd-title">Playground</span>
+  </div>
+
+  <div class="hd-progress">
+    <div class="turn-dots" id="turnDots">
+      {% for i in range(max_turns) %}
+      <div class="turn-dot" id="dot-{{ i+1 }}"></div>
+      {% endfor %}
+    </div>
+    <div class="turn-label" id="turnLabel">Idle</div>
+  </div>
+
+  <div class="hd-model">{{ model_name }}</div>
+</header>
+
+<!-- ── Status bar (model loading) ─────────────────────────────────────────── -->
+<div id="statusBar">
+  <div class="status-dot"></div>
+  <span id="statusMsg">Loading model…</span>
+</div>
+
+<!-- ── Main ───────────────────────────────────────────────────────────────── -->
+<main>
+
+  <!-- Patient Panel -->
+  <aside class="panel patient-panel">
+    <div class="panel-header">
+      <span class="panel-title">Patient LLM</span>
+      <span class="panel-role">Patient</span>
+    </div>
+    <div class="panel-body">
+      <div class="section-label">SYSTEM PROMPT</div>
+      <div class="prompt-box prompt-box--rich">
+        <div class="prompt-doc patient-prompt-doc">{{ patient_system_html|safe }}</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Chat -->
+  <section class="chat-section">
+    <div class="chat-top">
+      <span class="chat-top-label">Clinical interview · auto simulation</span>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <button id="batchBtn">📊 Batch Eval (All × 10)</button>
+        <button id="configBtn">⚙️ Patient Config</button>
+        <button id="startBtn" disabled>
+          <span class="btn-icon">▶</span> Start simulation
+        </button>
+      </div>
+    </div>
+
+    <div class="chat-feed" id="chatFeed">
+      <div class="chat-empty" id="chatEmpty">
+        <div class="chat-empty-icon">⬡</div>
+        <div>Start the simulation to see the<br/>Patient LLM ↔ Doctor LLM<br/>conversation here.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Doctor Panel -->
+  <aside class="panel doctor-panel">
+    <div class="panel-header">
+      <span class="panel-title">Doctor LLM</span>
+      <span class="panel-role">Doctor</span>
+    </div>
+    <div class="panel-body">
+      <div class="section-label">시스템 프롬프트 (고정 · 3종)</div>
+      <div class="doctor-prompts-scroll">
+        <div class="doctor-prompt-tier">
+          <div class="doctor-prompt-tier-label">1 · Inference</div>
+          <div class="prompt-box prompt-box--rich">
+            <div class="prompt-doc doctor-prompt-doc">{{ doctor_inference_html|safe }}</div>
+          </div>
+        </div>
+        <div class="doctor-prompt-tier">
+          <div class="doctor-prompt-tier-label">2 · Questioning</div>
+          <div class="prompt-box prompt-box--rich">
+            <div class="prompt-doc doctor-prompt-doc">{{ doctor_questioning_html|safe }}</div>
+          </div>
+        </div>
+        <div class="doctor-prompt-tier">
+          <div class="doctor-prompt-tier-label">3 · Final diagnosis</div>
+          <div class="prompt-box prompt-box--rich">
+            <div class="prompt-doc doctor-prompt-doc">{{ doctor_final_html|safe }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="doctor-sync-block">
+        <div class="doctor-sync-label">질문 로그 (실시간)</div>
+        <div id="doctorQuestionLog">
+          <span class="doctor-sync-placeholder" style="color: var(--text-muted); font-size: 12px;">시뮬레이션 시작 후 질문이 여기에 쌓입니다.</span>
+        </div>
+      </div>
+      <div class="doctor-sync-block">
+        <div class="doctor-sync-label">현재 추정 후보 질환 로그 (실시간)</div>
+        <div id="doctorCandidatesLive" class="doctor-candidates-live" aria-live="polite">
+          <p class="doctor-cand-empty">시뮬레이션 시작 후, 매 inference마다 여기에 쌓입니다.</p>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+</main>
+
+<!-- ── Batch Eval Modal ───────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="batchModal">
+  <div class="modal-box batch-modal-box">
+    <div class="modal-title">📊 Batch Evaluation — All Disorders</div>
+
+    <label class="modal-label">Difficulty</label>
+    <select class="modal-select" id="batchDifficulty">
+      <option value="low">Low</option>
+      <option value="medium" selected>Medium</option>
+      <option value="high">High</option>
+    </select>
+
+    <label class="modal-label">Runs per disorder</label>
+    <input class="modal-select" id="batchRuns" type="number" value="10" min="1" max="100" style="margin-bottom:18px;" />
+
+    <div class="batch-progress-wrap" id="batchProgressWrap" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span id="batchCurrentLabel" style="font-size:13px;color:var(--text-muted);">Idle</span>
+        <span id="batchCountLabel" style="font-size:13px;font-weight:600;">0 / 0</span>
+      </div>
+      <div class="batch-progress-bar-track">
+        <div class="batch-progress-bar-fill" id="batchProgressFill"></div>
+      </div>
+    </div>
+
+    <div id="batchResultsWrap" style="display:none;margin-top:10px;">
+      <table class="batch-result-table" id="batchResultTable">
+        <thead><tr><th>Code</th><th>Disease</th><th>Accuracy</th><th>Correct</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div id="batchOverallRow" style="margin-top:10px;font-size:13px;font-weight:700;color:var(--text-secondary);"></div>
+    </div>
+
+    <div class="modal-actions" style="margin-top:18px;">
+      <button class="modal-btn modal-btn-cancel" id="batchCloseBtn">Close</button>
+      <button class="modal-btn modal-btn-apply" id="batchStartBtn" style="background:#1a7a4a;">Start</button>
+    </div>
+    <div class="modal-status" id="batchStatus"></div>
+  </div>
+</div>
+
+<!-- ── Patient Config Modal ───────────────────────────────────── -->
+<div class="modal-overlay" id="patientConfigModal">
+  <div class="modal-box">
+    <div class="modal-title">🤖 Patient Configuration</div>
+
+    <label class="modal-label" for="selDisease">Disease</label>
+    <select class="modal-select" id="selDisease"></select>
+
+    <label class="modal-label" for="selDifficulty">Difficulty Level</label>
+    <select class="modal-select" id="selDifficulty">
+      <option value="low">Low</option>
+      <option value="medium">Medium</option>
+      <option value="high">High</option>
+    </select>
+
+    <div class="modal-toggle-row">
+      <span class="modal-toggle-label">Use Knowledge Graph</span>
+      <label class="toggle-switch">
+        <input type="checkbox" id="chkUseKG" checked />
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div class="modal-actions">
+      <button class="modal-btn modal-btn-cancel" id="configCancelBtn">Cancel</button>
+      <button class="modal-btn modal-btn-apply" id="configApplyBtn">Apply &amp; Rebuild</button>
+    </div>
+    <div class="modal-status" id="configStatus"></div>
+  </div>
+</div>
+
+<!-- ── Script ─────────────────────────────────────────────────────────────── -->
+<script>
+const feed       = document.getElementById('chatFeed');
+const startBtn   = document.getElementById('startBtn');
+const turnLabel  = document.getElementById('turnLabel');
+const statusBar  = document.getElementById('statusBar');
+const statusMsg  = document.getElementById('statusMsg');
+const MAX_TURNS  = {{ max_turns }};
+const doctorQuestionLog = document.getElementById('doctorQuestionLog');
+const doctorCandidatesLive = document.getElementById('doctorCandidatesLive');
+
+let eventSource  = null;
+let currentTyping = null;
+/** When true, stream ended normally or server sent error — ignore spurious onerror after close() */
+let streamFinished = false;
+
+// ── Patient Config Modal ──────────────────────────────────────────────────────
+const configModal    = document.getElementById('patientConfigModal');
+const configBtn      = document.getElementById('configBtn');
+const configCancelBtn = document.getElementById('configCancelBtn');
+const configApplyBtn = document.getElementById('configApplyBtn');
+const configStatus   = document.getElementById('configStatus');
+const selDisease     = document.getElementById('selDisease');
+const selDifficulty  = document.getElementById('selDifficulty');
+const chkUseKG       = document.getElementById('chkUseKG');
+
+function openConfigModal() {
+  configStatus.textContent = '';
+  configStatus.className = 'modal-status';
+  configApplyBtn.disabled = false;
+  // 현재 config 로드
+  fetch('/api/patient_config')
+    .then(r => r.json())
+    .then(cfg => {
+      selDifficulty.value = cfg.difficulty_level || 'low';
+      chkUseKG.checked   = !!cfg.use_knowledge_graph;
+      // disease 목록 채우기
+      return fetch('/api/diseases').then(r => r.json()).then(data => {
+        selDisease.innerHTML = '';
+        (data.diseases || []).forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d.code;
+          opt.textContent = `${d.code} · ${d.name}`;
+          if (d.code === cfg.disease_code) opt.selected = true;
+          selDisease.appendChild(opt);
+        });
+      });
+    })
+    .catch(e => { configStatus.className = 'modal-status err'; configStatus.textContent = 'Failed to load config: ' + e; });
+  configModal.classList.add('open');
+}
+
+function closeConfigModal() {
+  configModal.classList.remove('open');
+}
+
+configBtn.addEventListener('click', openConfigModal);
+configCancelBtn.addEventListener('click', closeConfigModal);
+configModal.addEventListener('click', e => { if (e.target === configModal) closeConfigModal(); });
+
+configApplyBtn.addEventListener('click', () => {
+  configApplyBtn.disabled = true;
+  configStatus.className = 'modal-status';
+  configStatus.textContent = 'Rebuilding patient profile…';
+  fetch('/api/patient_config', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      disease_code:       selDisease.value,
+      difficulty_level:   selDifficulty.value,
+      use_knowledge_graph: chkUseKG.checked,
+    }),
+  })
+  .then(r => r.json())
+  .then(res => {
+    if (res.ok) {
+      configStatus.className = 'modal-status ok';
+      configStatus.textContent = '✓ Rebuilt: ' + (res.config.disease_code || '') + ' / ' + (res.config.difficulty_level || '');
+      // Patient 패널 프롬프트 새로고침 (페이지 리로드 없이)
+      fetch('/api/patient_system_html')
+        .then(r => r.json())
+        .then(d => {
+          const el = document.querySelector('.patient-prompt-doc');
+          if (el && d.html) el.innerHTML = d.html;
+        })
+        .catch(() => {});
+      setTimeout(closeConfigModal, 1200);
+    } else {
+      configStatus.className = 'modal-status err';
+      configStatus.textContent = 'Error: ' + (res.error || 'unknown');
+      configApplyBtn.disabled = false;
+    }
+  })
+  .catch(e => {
+    configStatus.className = 'modal-status err';
+    configStatus.textContent = 'Request failed: ' + e;
+    configApplyBtn.disabled = false;
+  });
+});
+
+
+// ── Batch Evaluation Modal ─────────────────────────────────────────────────────────────
+const batchModal      = document.getElementById('batchModal');
+const batchBtn        = document.getElementById('batchBtn');
+const batchCloseBtn   = document.getElementById('batchCloseBtn');
+const batchStartBtn   = document.getElementById('batchStartBtn');
+const batchDifficulty = document.getElementById('batchDifficulty');
+const batchRunsInput  = document.getElementById('batchRuns');
+const batchProgressWrap  = document.getElementById('batchProgressWrap');
+const batchProgressFill  = document.getElementById('batchProgressFill');
+const batchCurrentLabel  = document.getElementById('batchCurrentLabel');
+const batchCountLabel    = document.getElementById('batchCountLabel');
+const batchResultsWrap   = document.getElementById('batchResultsWrap');
+const batchResultTable   = document.getElementById('batchResultTable');
+const batchOverallRow    = document.getElementById('batchOverallRow');
+const batchStatus        = document.getElementById('batchStatus');
+
+let _batchPollTimer = null;
+
+function openBatchModal() { batchModal.classList.add('open'); }
+function closeBatchModal() { batchModal.classList.remove('open'); }
+
+batchBtn.addEventListener('click', openBatchModal);
+batchCloseBtn.addEventListener('click', closeBatchModal);
+batchModal.addEventListener('click', e => { if (e.target === batchModal) closeBatchModal(); });
+
+function _renderBatchResults(results) {
+  const tbody = batchResultTable.querySelector('tbody');
+  tbody.innerHTML = '';
+  let totalCorrect = 0, totalTotal = 0;
+  Object.keys(results).sort().forEach(code => {
+    const r = results[code];
+    totalCorrect += r.correct || 0;
+    totalTotal   += r.total  || 0;
+    const acc = r.accuracy != null ? (r.accuracy * 100).toFixed(1) + '%' : '—';
+    const accClass = (r.accuracy >= 0.5) ? 'batch-acc-high' : 'batch-acc-low';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${code}</td><td>${r.disease_name||''}</td><td class="${accClass}">${acc}</td><td>${r.correct}/${r.total}</td>`;
+    tbody.appendChild(tr);
+  });
+  if (totalTotal > 0) {
+    const ov = (totalCorrect / totalTotal * 100).toFixed(1);
+    batchOverallRow.textContent = `Overall Accuracy: ${ov}%  (${totalCorrect}/${totalTotal})`;
+  }
+  batchResultsWrap.style.display = 'block';
+}
+
+function _pollBatchStatus() {
+  fetch('/api/batch_status')
+    .then(r => r.json())
+    .then(d => {
+      batchProgressWrap.style.display = 'block';
+      const pct = d.total ? (d.done / d.total * 100).toFixed(1) : 0;
+      batchProgressFill.style.width = pct + '%';
+      batchCurrentLabel.textContent = d.current || '';
+      batchCountLabel.textContent = `${d.done} / ${d.total}`;
+
+      if (d.results_count > 0) _renderBatchResults(d.results);
+
+      if (d.error) {
+        batchStatus.className = 'modal-status err';
+        batchStatus.textContent = 'Error: ' + d.error;
+        batchStartBtn.disabled = false;
+        clearInterval(_batchPollTimer);
+      } else if (!d.running) {
+        batchStatus.className = 'modal-status ok';
+        batchStatus.textContent = '✓ Done! acc.txt written to project root.';
+        batchStartBtn.disabled = false;
+        clearInterval(_batchPollTimer);
+      }
+    })
+    .catch(() => {});
+}
+
+batchStartBtn.addEventListener('click', () => {
+  const runs = parseInt(batchRunsInput.value, 10) || 10;
+  const difficulty = batchDifficulty.value;
+  batchStartBtn.disabled = true;
+  batchStatus.className = 'modal-status';
+  batchStatus.textContent = 'Starting…';
+  batchResultsWrap.style.display = 'none';
+  batchResultTable.querySelector('tbody').innerHTML = '';
+  batchOverallRow.textContent = '';
+
+  fetch('/api/batch_eval', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ runs_per_disorder: runs, difficulty }),
+  })
+  .then(r => r.json())
+  .then(res => {
+    if (!res.ok) {
+      batchStatus.className = 'modal-status err';
+      batchStatus.textContent = 'Error: ' + (res.error || 'unknown');
+      batchStartBtn.disabled = false;
+      return;
+    }
+    batchStatus.className = 'modal-status';
+    batchStatus.textContent = `Running ${res.disorders} disorders × ${res.runs_per_disorder} runs…`;
+    if (_batchPollTimer) clearInterval(_batchPollTimer);
+    _batchPollTimer = setInterval(_pollBatchStatus, 5000);
+    _pollBatchStatus();
+  })
+  .catch(e => {
+    batchStatus.className = 'modal-status err';
+    batchStatus.textContent = 'Request failed: ' + e;
+    batchStartBtn.disabled = false;
+  });
+});
+
+
+// ── Model status polling ─────────────────────────────────────────────────────
+function pollStatus() {
+  fetch('/api/status')
+    .then(r => r.json())
+    .then(d => {
+      if (d.error) {
+        statusBar.classList.add('visible');
+        statusMsg.textContent = 'Model load failed: ' + d.error;
+        statusMsg.style.color = '#ff6b6b';
+      } else if (d.loaded) {
+        statusBar.classList.remove('visible');
+        startBtn.disabled = false;
+        startBtn.style.background = 'var(--d-hue)';
+      } else {
+        statusBar.classList.add('visible');
+        statusMsg.textContent = 'Loading model… ({{ model_name }})';
+        setTimeout(pollStatus, 2000);
+      }
+    })
+    .catch(() => setTimeout(pollStatus, 3000));
+}
+pollStatus();
+
+// ── Turn dots ────────────────────────────────────────────────────────────────
+function markDot(turn, role) {
+  const dot = document.getElementById('dot-' + turn);
+  if (dot) {
+    dot.classList.remove('patient','doctor');
+    dot.classList.add(role);
+  }
+}
+function updateTurnLabel(role) {
+  turnLabel.textContent = role === 'patient' ? 'Patient' : 'Doctor';
+}
+
+// ── Typing indicator ─────────────────────────────────────────────────────────
+function showTyping(role) {
+  removeTyping();
+  const div = document.createElement('div');
+  div.className = `typing-indicator ${role}`;
+  div.id = 'typingIndicator';
+  div.innerHTML = '<div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>';
+  feed.appendChild(div);
+  scrollFeed();
+}
+function removeTyping() {
+  const t = document.getElementById('typingIndicator');
+  if (t) t.remove();
+}
+
+// ── Add message bubble ───────────────────────────────────────────────────────
+function addMessage(role, content) {
+  removeTyping();
+  const wrap = document.createElement('div');
+  wrap.className = `msg-wrapper ${role}`;
+
+  const roleLbl = role === 'patient' ? 'Patient' : 'Doctor';
+
+  wrap.innerHTML = `
+    <div class="msg-meta">
+      <span class="msg-role">${roleLbl}</span>
+    </div>
+    <div class="msg-bubble">${escapeHtml(content)}</div>
+  `;
+  feed.appendChild(wrap);
+
+  scrollFeed();
+}
+
+// ── Diagnosis card ────────────────────────────────────────────────────────────
+function addDiagnosis(content) {
+  removeTyping();
+  const card = document.createElement('div');
+  card.className = 'diagnosis-card';
+  card.innerHTML = `
+    <div class="dx-label">Final diagnosis</div>
+    <div class="dx-content">${escapeHtml(content)}</div>
+  `;
+  feed.appendChild(card);
+
+  scrollFeed();
+}
+
+// ── Done banner ───────────────────────────────────────────────────────────────
+function addDoneBanner() {
+  const banner = document.createElement('div');
+  banner.className = 'done-banner';
+  banner.textContent = 'Simulation complete';
+  feed.appendChild(banner);
+  scrollFeed();
+  startBtn.disabled = false;
+  startBtn.textContent = '↺ Run again';
+  turnLabel.textContent = 'Done';
+}
+
+// ── Error card ─────────────────────────────────────────────────────────────
+function addError(msg) {
+  removeTyping();
+  const card = document.createElement('div');
+  card.className = 'error-card';
+  card.textContent = 'Error: ' + msg;
+  feed.appendChild(card);
+  scrollFeed();
+  startBtn.disabled = false;
+}
+
+// ── Scroll feed to bottom ────────────────────────────────────────────────────
+function scrollFeed() {
+  feed.scrollTo({ top: feed.scrollHeight, behavior: 'smooth' });
+}
+
+// ── HTML escape ──────────────────────────────────────────────────────────────
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+          .replace(/\n/g,'<br/>');
+}
+
+function renderDoctorCandidates(d) {
+  const el = doctorCandidatesLive;
+  if (!el) return;
+
+  // placeholder 제거 (최초 1회)
+  el.querySelectorAll('.doctor-cand-empty').forEach(p => p.remove());
+
+  // 새 항목을 만들어 맨 위에 삽입 (최신 턴이 상단)
+  const entry = document.createElement('div');
+  entry.style.cssText = 'margin-bottom:12px; padding-bottom:12px; border-bottom:1px dashed var(--border-bright);';
+
+  const meta = document.createElement('div');
+  meta.className = 'doctor-cand-meta';
+  meta.textContent = '환자 턴 ' + d.turn + ' 직후 inference';
+  entry.appendChild(meta);
+
+  if (d.note) {
+    const note = document.createElement('div');
+    note.className = 'doctor-cand-note';
+    note.textContent = d.note;
+    entry.appendChild(note);
+  }
+
+  const cands = d.candidates || [];
+  if (cands.length === 0) {
+    const empty = document.createElement('p');
+    empty.style.cssText = 'font-size:12px; color:var(--text-muted); margin:0;';
+    empty.textContent = '(파싱된 후보가 없습니다. 모델 출력 형식을 확인하세요.)';
+    entry.appendChild(empty);
+  } else {
+    const ul = document.createElement('ul');
+    ul.className = 'doctor-cand-list';
+    cands.forEach(function (c) {
+      const li = document.createElement('li');
+      li.textContent = c;
+      ul.appendChild(li);
+    });
+    entry.appendChild(ul);
+  }
+
+  // 맨 위에 삽입 (최신 항목이 상단)
+  el.insertBefore(entry, el.firstChild);
+}
+
+// ── Start simulation ─────────────────────────────────────────────────────────
+startBtn.addEventListener('click', () => {
+  if (eventSource) {
+    eventSource.onerror = null;
+    eventSource.close();
+    eventSource = null;
+  }
+
+  // Reset UI
+  feed.innerHTML = '';
+  if (doctorQuestionLog) {
+    doctorQuestionLog.innerHTML = '';
+    const ph = document.createElement('span');
+    ph.className = 'doctor-sync-placeholder';
+    ph.style.color = 'var(--text-muted)';
+    ph.style.fontSize = '12px';
+    ph.textContent = '시뮬레이션 시작 후 질문이 여기에 쌓입니다.';
+    doctorQuestionLog.appendChild(ph);
+  }
+  if (doctorCandidatesLive) {
+    doctorCandidatesLive.innerHTML = '<p class="doctor-cand-empty">시뮬레이션 시작 후, 매 inference마다 여기에 쌓입니다.</p>';
+  }
+  document.querySelectorAll('.turn-dot').forEach(d => d.className = 'turn-dot');
+  turnLabel.textContent = 'Running';
+  startBtn.disabled = true;
+  startBtn.textContent = '▶ Start simulation';
+
+  let nextRole = 'doctor'; // first typing indicator
+  streamFinished = false;
+
+  eventSource = new EventSource('/simulate');
+
+  function closeEventSourceCleanly() {
+    if (!eventSource) return;
+    streamFinished = true;
+    eventSource.onerror = null;
+    eventSource.close();
+    eventSource = null;
+  }
+
+  eventSource.onmessage = (e) => {
+    const d = JSON.parse(e.data);
+
+    if (d.event === 'start') {
+      showTyping('doctor');
+      return;
+    }
+
+    if (d.event === 'turn') {
+      addMessage(d.role, d.content);
+      if (d.role === 'doctor') markDot(d.turn, 'doctor');
+      if (d.role === 'patient') markDot(d.turn, 'patient');
+      updateTurnLabel(d.role);
+
+      // Show next typing (opposite role, or doctor if even)
+      const nextTyping = d.role === 'doctor' ? 'patient' : 'doctor';
+      showTyping(nextTyping);
+      return;
+    }
+
+    if (d.event === 'inference') {
+      renderDoctorCandidates(d);
+      return;
+    }
+
+    if (d.event === 'question_log' && doctorQuestionLog) {
+      doctorQuestionLog.querySelectorAll('.doctor-sync-placeholder').forEach(el => el.remove());
+      const row = document.createElement('div');
+      row.className = 'doctor-sync-entry';
+      const q = document.createElement('span');
+      q.className = 'doctor-sync-q';
+      q.textContent = d.turn === 0 ? 'Q0' : 'Q' + d.turn;
+      const text = document.createElement('span');
+      text.textContent = d.content || '';
+      row.appendChild(q);
+      row.appendChild(text);
+      doctorQuestionLog.appendChild(row);
+      doctorQuestionLog.scrollTop = doctorQuestionLog.scrollHeight;
+      return;
+    }
+
+    if (d.event === 'diagnosis') {
+      addDiagnosis(d.content);
+      return;
+    }
+
+    if (d.event === 'error') {
+      addError(d.message);
+      closeEventSourceCleanly();
+      return;
+    }
+
+    if (d.event === 'done') {
+      removeTyping();
+      addDoneBanner();
+      closeEventSourceCleanly();
+    }
+  };
+
+  eventSource.onerror = () => {
+    if (streamFinished) return;
+    removeTyping();
+    addError('Connection lost. Check the server and try again.');
+    closeEventSourceCleanly();
+    startBtn.disabled = false;
+  };
+});
+</script>
+</body>
+</html>
