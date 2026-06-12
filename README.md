@@ -1,6 +1,6 @@
 # Patient–Doctor Psychiatric Interview Simulation
 
-DSAIL@SKKU
+
 
 두 개의 LLM(**환자**와 **정신과 의사**)이 다중 턴으로 진단 인터뷰를 진행하는 시뮬레이터입니다.
 환자 LLM은 [MentalBench](mentalbench/) 지식 그래프(KG)에서 특정 정신질환의 증상 프로필을 동적으로
