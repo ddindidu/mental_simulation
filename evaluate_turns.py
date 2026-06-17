@@ -23,8 +23,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 BASE_DIR    = Path(__file__).parent
-RESULTS_DIR = BASE_DIR / "results"
-LOGS_DIR    = BASE_DIR / "logs"
+
+from utils.llm import get_run_dir as _get_run_dir
+_RUN_DIR    = _get_run_dir()
+RESULTS_DIR = BASE_DIR / "results" / _RUN_DIR
+LOGS_DIR    = BASE_DIR / "logs"    / _RUN_DIR
 CRITERIA_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "diagnostic_criteria.json"
 
 
