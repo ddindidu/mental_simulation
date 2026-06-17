@@ -140,6 +140,62 @@ def _diagnosis_matches(final_diag: str, true_name: str) -> bool:
     return tn in fd or fd in tn
 
 
+def _run_eval_pipeline() -> None:
+    """배치 완료 후 symptom_diagnosis → evaluate_* 파이프라인을 순서대로 실행한다.
+
+    실행 순서 (의존성 순):
+      1. symptom_diagnosis     → D{code}_{n}_result.json, summary.json
+      2. evaluate_final_diagnosis → final_diagnosis_eval.txt
+      3. evaluate_turns        → turn_eval.json + PNG (non-strict)
+      4. evaluate_turns_strict → turn_eval_strict.json + PNG (LLM 호출)
+    """
+    print("[pipeline] Starting post-batch evaluation pipeline...", flush=True)
+
+    with _batch_lock:
+        _batch_state["current"] = "[pipeline] symptom extraction & disease matching"
+    try:
+        import symptom_diagnosis
+        symptom_diagnosis.main()
+    except Exception as _e:
+        print(f"[pipeline] symptom_diagnosis failed: {_e}", flush=True)
+
+    with _batch_lock:
+        _batch_state["current"] = "[pipeline] final diagnosis eval"
+    try:
+        import evaluate_final_diagnosis
+        evaluate_final_diagnosis.main()
+    except SystemExit:
+        print("[pipeline] evaluate_final_diagnosis: no log files, skipping.", flush=True)
+    except Exception as _e:
+        print(f"[pipeline] evaluate_final_diagnosis failed: {_e}", flush=True)
+
+    with _batch_lock:
+        _batch_state["current"] = "[pipeline] turn-level eval (non-strict)"
+    try:
+        import evaluate_turns
+        _turns = evaluate_turns.evaluate()
+        evaluate_turns.plot(_turns)
+    except SystemExit:
+        print("[pipeline] evaluate_turns: no result files, skipping.", flush=True)
+    except Exception as _e:
+        print(f"[pipeline] evaluate_turns failed: {_e}", flush=True)
+
+    with _batch_lock:
+        _batch_state["current"] = "[pipeline] turn-level eval (strict)"
+    try:
+        import evaluate_turns_strict
+        _turns_s, _crit, _ = evaluate_turns_strict.evaluate()
+        evaluate_turns_strict.plot(_turns_s, _crit)
+    except SystemExit:
+        print("[pipeline] evaluate_turns_strict: no result files, skipping.", flush=True)
+    except Exception as _e:
+        print(f"[pipeline] evaluate_turns_strict failed: {_e}", flush=True)
+
+    with _batch_lock:
+        _batch_state["current"] = "Done"
+    print("[pipeline] All done.", flush=True)
+
+
 def _run_batch_evaluation(
     disorder_map: dict[str, str],
     runs_per_disorder: int,
@@ -262,6 +318,8 @@ def _run_batch_evaluation(
         acc_path.parent.mkdir(parents=True, exist_ok=True)
         acc_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         print(f"[batch] acc.txt written → {acc_path}", flush=True)
+
+        _run_eval_pipeline()
 
     except Exception as e:
         with _batch_lock:
