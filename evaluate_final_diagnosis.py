@@ -16,9 +16,12 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-BASE_DIR  = Path(__file__).parent
-LOGS_DIR  = BASE_DIR / "logs"
+BASE_DIR      = Path(__file__).parent
 DISORDER_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "disorder.json"
+
+from utils.llm import get_run_dir as _get_run_dir
+_RUN_DIR = _get_run_dir()
+LOGS_DIR = BASE_DIR / "logs" / _RUN_DIR
 
 
 def load_disorder_map() -> tuple[dict[str, str], dict[str, str]]:
@@ -135,7 +138,7 @@ def main():
         print(f"({no_diagnosis} log file(s) had no final diagnosis)")
 
     # ── Save TXT ──────────────────────────────────────────────────────────
-    out_path = BASE_DIR / "results" / "final_diagnosis_eval.txt"
+    out_path = BASE_DIR / "results" / _RUN_DIR / "final_diagnosis_eval.txt"
     out_path.parent.mkdir(exist_ok=True)
     out_path.write_text(output, encoding="utf-8")
     print(f"Saved to {out_path}")

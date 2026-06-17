@@ -42,8 +42,11 @@ def main() -> int:
         "--profile",
         "-p",
         type=Path,
-        required=True,
-        help="증상 프로필 JSON 경로 (예: data/profiles/symptom_profile.json)",
+        default=None,
+        help=(
+            "증상 프로필 JSON 경로 (예: data/profiles/symptom_profile.json). "
+            "미지정 시 config.json의 patient.use_knowledge_graph 설정을 따름."
+        ),
     )
     parser.add_argument(
         "--output-dir",
@@ -78,10 +81,21 @@ def main() -> int:
 
     _apply_llm_model_overrides(args.patient_model, args.doctor_model)
 
-    profile_path = args.profile.resolve()
-    if not profile_path.is_file():
-        print(f"프로필 파일이 없습니다: {profile_path}", file=sys.stderr)
+    use_kg = bool((CONFIG.get("patient") or {}).get("use_knowledge_graph", False))
+
+    if args.profile is not None:
+        profile_path = args.profile.resolve()
+        if not profile_path.is_file():
+            print(f"프로필 파일이 없습니다: {profile_path}", file=sys.stderr)
+            return 1
+    elif not use_kg:
+        print(
+            "--profile 미지정 + use_knowledge_graph=false: 프로필 경로를 지정해 주세요.",
+            file=sys.stderr,
+        )
         return 1
+    else:
+        profile_path = None
 
     out_dir = (args.output_dir or RESULTS_DIR).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -101,7 +115,8 @@ def main() -> int:
         flush=True,
     )
 
-    patient.set_symptom_profile_path(profile_path)
+    if profile_path is not None:
+        patient.set_symptom_profile_path(profile_path)
     patient_system = patient.SYSTEM_PROMPT
 
     try:
@@ -130,7 +145,7 @@ def main() -> int:
         patient_model=get_patient_model_name(),
         doctor_model=get_doctor_model_name(),
     )
-    tx_payload["metadata"]["symptom_profile_path"] = str(profile_path)
+    tx_payload["metadata"]["symptom_profile_path"] = str(profile_path) if profile_path else "kg_sampled"
     tx_payload["metadata"]["working_dir"] = str(PROJECT_ROOT)
     doctor.persist_interview_transcript_json(tx_payload, path=transcript_path)
 

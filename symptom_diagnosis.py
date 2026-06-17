@@ -19,18 +19,17 @@ import re
 import sys
 from pathlib import Path
 
-from openai import OpenAI
-
 # ── Paths ─────────────────────────────────────────────────────────────────────
-BASE_DIR         = Path(__file__).parent
-LOGS_DIR         = BASE_DIR / "logs"
-SYMPTOM_DIR      = BASE_DIR / "mentalbench/resources/knowledge_graph/EN/symptom"
-CRITERIA_FILE    = BASE_DIR / "mentalbench/resources/knowledge_graph/EN/diagnostic_criteria.json"
-OUTPUT_DIR       = BASE_DIR / "results"
+BASE_DIR      = Path(__file__).parent
+SYMPTOM_DIR   = BASE_DIR / "mentalbench/resources/knowledge_graph/EN/symptom"
+CRITERIA_FILE = BASE_DIR / "mentalbench/resources/knowledge_graph/EN/diagnostic_criteria.json"
 
-# ── vLLM client ───────────────────────────────────────────────────────────────
-client = OpenAI(base_url="http://localhost:8001/v1", api_key="dummy")
-MODEL  = "Qwen/Qwen3.5-35B-A3B"
+from utils.llm import get_run_dir as _get_run_dir
+_RUN_DIR   = _get_run_dir()
+LOGS_DIR   = BASE_DIR / "logs"    / _RUN_DIR
+OUTPUT_DIR = BASE_DIR / "results" / _RUN_DIR
+
+from utils.llm import chat as _llm_chat
 
 
 # ── Data loading ──────────────────────────────────────────────────────────────
@@ -125,20 +124,14 @@ Reply ONLY with valid JSON (no markdown, no explanation outside the JSON):
   }}
 }}"""
 
-    response = client.chat.completions.create(
-        model=MODEL,
-        messages=[
+    raw = _llm_chat(
+        [
             {"role": "system", "content": "You are a clinical psychiatrist. Output only valid JSON."},
             {"role": "user",   "content": prompt},
         ],
-        temperature=0.0,
-        max_tokens=2048,
-        extra_body={
-            "chat_template_kwargs": {"enable_thinking": False},
-        }, 
-    )
-
-    raw = response.choices[0].message.content.strip()
+        max_new_tokens=2048,
+        role="judge",
+    ).strip()
 
     # Strip accidental markdown fences
     raw = re.sub(r"^```[a-z]*\n?", "", raw)

@@ -30,19 +30,18 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from openai import OpenAI
 
 BASE_DIR      = Path(__file__).parent
-RESULTS_DIR   = BASE_DIR / "results"
-LOGS_DIR      = BASE_DIR / "logs"
-DENIAL_DIR    = RESULTS_DIR / "denials"
+
+from utils.llm import get_run_dir as _get_run_dir
+_RUN_DIR    = _get_run_dir()
+RESULTS_DIR = BASE_DIR / "results" / _RUN_DIR
+LOGS_DIR    = BASE_DIR / "logs"    / _RUN_DIR
+DENIAL_DIR  = RESULTS_DIR / "denials"
 CRITERIA_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "diagnostic_criteria.json"
 SYMPTOM_DIR   = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "symptom"
 
-VLLM_URL   = "http://localhost:8001/v1"
-VLLM_MODEL = "Qwen/Qwen3.5-35B-A3B"
-
-client = OpenAI(base_url=VLLM_URL, api_key="EMPTY")
+from utils.llm import chat as _llm_chat
 
 
 # ── Loaders ───────────────────────────────────────────────────────────────────
@@ -182,17 +181,14 @@ def extract_denials_for_log(
     catalogue = _build_symptom_catalogue(all_symptoms)
     prompt = DENIAL_PROMPT.format(catalogue=catalogue, dialogue=dialogue_text)
 
-    resp = client.chat.completions.create(
-        model=VLLM_MODEL,
-        messages=[
+    raw = _llm_chat(
+        [
             {"role": "system", "content": "You are a clinical analyst. Output only valid JSON."},
             {"role": "user", "content": prompt},
         ],
-        temperature=0.0,
-        max_tokens=3072,
-        extra_body={"chat_template_kwargs": {"enable_thinking": False}},
-    )
-    raw = resp.choices[0].message.content.strip()
+        max_new_tokens=3072,
+        role="judge",
+    ).strip()
     raw = _strip_fences(raw)
     m = re.search(r"\{.*\}", raw, re.DOTALL)
     if m:
@@ -222,36 +218,57 @@ def extract_denials_for_log(
 
 def method_b_truth_set(
     gt: str,
-    confirmed_cumulative: set[str],
+    new_confirmed: set[str],
     denied_cumulative: set[str],
     criteria: dict,
+    prev_truth_set: "set[str] | None",
 ) -> set[str]:
     """
-    Method B (practical): a disease D is in truth_set iff
-      (feasible) every must_include group G has |G.pool − denied| ≥ G.min_count
-      AND
-      (supported) at least one must_include group G has G.pool ∩ confirmed ≠ ∅
-    The ground truth disease is always included.
+    Intersection-based truth set: narrow candidate diseases each turn.
+
+    1. Start from prev_truth_set (or all diseases on turn 1).
+    2. If new symptoms were confirmed this turn, intersect with diseases
+       that have at least one must_include group overlapping those symptoms.
+    3. Remove any disease that is now infeasible (denied symptoms exhaust a
+       must_include group below its min_count).
+    4. Ground truth is always kept.
     """
-    truth = {gt}
-    for did, ddata in criteria.items():
+    # Step 1: candidate pool
+    if prev_truth_set is None:
+        candidate_pool = set(criteria.keys())
+    else:
+        candidate_pool = set(prev_truth_set)
+
+    # Step 2: narrow by diseases compatible with this turn's new evidence
+    if new_confirmed:
+        supported_now: set[str] = set()
+        for did, ddata in criteria.items():
+            for grp in ddata["required_criteria"].values():
+                if not isinstance(grp, dict) or "symptom_pool" not in grp:
+                    continue
+                if grp.get("relation") != "must_include":
+                    continue
+                if set(grp["symptom_pool"]) & new_confirmed:
+                    supported_now.add(did)
+                    break
+        candidate_pool &= supported_now
+
+    # Step 3: remove infeasible diseases; always keep gt
+    truth: set[str] = {gt}
+    for did in candidate_pool:
         if did == gt:
             continue
         feasible = True
-        supported = False
-        for gname, grp in ddata["required_criteria"].items():
+        for grp in criteria[did]["required_criteria"].values():
             if not isinstance(grp, dict) or "symptom_pool" not in grp:
                 continue
             if grp.get("relation") != "must_include":
                 continue
             pool = set(grp["symptom_pool"])
-            min_count = grp.get("min_count", 1)
-            if len(pool - denied_cumulative) < min_count:
+            if len(pool - denied_cumulative) < grp.get("min_count", 1):
                 feasible = False
                 break
-            if pool & confirmed_cumulative:
-                supported = True
-        if feasible and supported:
+        if feasible:
             truth.add(did)
     return truth
 
@@ -334,6 +351,7 @@ def evaluate() -> tuple[list[dict], dict, int]:
 
         denied_cumulative: set[str] = set()
         confirmed_cumulative: set[str] = set()
+        prev_truth_set: "set[str] | None" = None
 
         for turn in r["turns"]:
             t = turn["turn"]
@@ -341,7 +359,8 @@ def evaluate() -> tuple[list[dict], dict, int]:
 
             # Accumulate denials and confirmed symptoms up to this turn
             denied_cumulative |= set(denials_per_turn.get(t, []))
-            confirmed_cumulative |= set(turn.get("identified_symptoms", []))
+            new_confirmed = set(turn.get("identified_symptoms", [])) - confirmed_cumulative
+            confirmed_cumulative |= new_confirmed
 
             # Doctor predictions for this turn
             if turn_idx < len(doctor_cands):
@@ -351,10 +370,11 @@ def evaluate() -> tuple[list[dict], dict, int]:
                 preds = set()
                 raw_candidates = []
 
-            # Method B truth set
+            # Intersection-based truth set: narrow from prev_truth_set
             truth_set = method_b_truth_set(
-                gt, confirmed_cumulative, denied_cumulative, criteria
+                gt, new_confirmed, denied_cumulative, criteria, prev_truth_set
             )
+            prev_truth_set = truth_set
 
             tp = len(preds & truth_set)
             fp = len(preds - truth_set)
@@ -379,6 +399,7 @@ def evaluate() -> tuple[list[dict], dict, int]:
                 "turn": t,
                 "patient_response": turn["patient_response"],
                 "identified_symptoms": turn["identified_symptoms"],
+                "new_confirmed_this_turn": sorted(new_confirmed),
                 "denied_symptoms_this_turn": sorted(denials_per_turn.get(t, [])),
                 "denied_cumulative": sorted(denied_cumulative),
                 "confirmed_cumulative": sorted(confirmed_cumulative),
@@ -450,7 +471,7 @@ def evaluate() -> tuple[list[dict], dict, int]:
 def plot(sample_turns: list[dict], criteria: dict) -> None:
     id2name = {did: v["name"] for did, v in criteria.items()}
 
-    stats = defaultdict(lambda: defaultdict(lambda: {"acc": [], "prec": [], "recall": []}))
+    stats: dict = defaultdict(lambda: defaultdict(lambda: {"acc": [], "prec": [], "recall": []}))
     for e in sample_turns:
         m = re.match(r"(D\d+)", e["log_file"])
         did = m.group(1)
@@ -460,40 +481,56 @@ def plot(sample_turns: list[dict], criteria: dict) -> None:
         stats[did][t]["recall"].append(e["recall"])
 
     disease_ids = sorted(stats.keys(), key=lambda x: int(x[1:]))
-    fig, axes = plt.subplots(4, 6, figsize=(30, 18))
-    axes_flat = axes.flatten()
+
+    overall: dict = defaultdict(lambda: {"acc": [], "prec": [], "recall": []})
+    for e in sample_turns:
+        t = e["turn"]
+        overall[t]["acc"].append(e["accuracy"])
+        overall[t]["prec"].append(e["precision"])
+        overall[t]["recall"].append(e["recall"])
+
     colors  = {"acc": "#1f77b4", "prec": "#ff7f0e", "recall": "#2ca02c"}
-    markers = {"acc": "o", "prec": "s", "recall": "^"}
+    markers = {"acc": "o",       "prec": "s",        "recall": "^"}
+    n_dis   = len(disease_ids)
+    n_cols  = 6
+    n_rows  = (n_dis + 1 + n_cols - 1) // n_cols
+
+    def _scatter(ax, turn_data, metric, color, marker):
+        for t in sorted(turn_data.keys()):
+            vals = turn_data[t][metric]
+            n = len(vals)
+            xs = np.linspace(t - 0.2, t + 0.2, n) if n > 1 else np.array([float(t)])
+            ax.scatter(xs, vals, color=color, alpha=0.4, s=18, marker=marker, zorder=2)
 
     def plot_one(ax, turn_data, title):
         turns = sorted(turn_data.keys())
-        mean_acc = [np.mean(turn_data[t]["acc"]) for t in turns]
-        mean_prec = [np.mean(turn_data[t]["prec"]) for t in turns]
-        mean_rec = [np.mean(turn_data[t]["recall"]) for t in turns]
-        counts = [len(turn_data[t]["acc"]) for t in turns]
+        mean_acc  = [np.mean(turn_data[t]["acc"])    for t in turns]
+        mean_prec = [np.mean(turn_data[t]["prec"])   for t in turns]
+        mean_rec  = [np.mean(turn_data[t]["recall"]) for t in turns]
+        counts    = [len(turn_data[t]["acc"])         for t in turns]
 
         ax2 = ax.twinx()
-        ax2.bar(turns, counts, color="gray", alpha=0.25, width=0.7, zorder=1,
-                label="#Samples")
+        ax2.bar(turns, counts, color="gray", alpha=0.25, width=0.7, zorder=1, label="#Samples")
         ax2.set_ylim(0, max(counts) * 1.15 if counts else 1)
         ax2.set_ylabel("# Samples", fontsize=8, color="gray")
         ax2.tick_params(axis="y", labelsize=7, colors="gray")
         for t, c in zip(turns, counts):
-            ax2.text(t, c, str(c), ha="center", va="bottom",
-                     fontsize=7, color="gray", alpha=0.9)
+            ax2.text(t, c, str(c), ha="center", va="bottom", fontsize=7, color="gray", alpha=0.9)
 
-        ax.plot(turns, mean_acc, color=colors["acc"], marker=markers["acc"],
+        for key in ("acc", "prec", "recall"):
+            _scatter(ax, turn_data, key, colors[key], markers[key])
+
+        ax.plot(turns, mean_acc,  color=colors["acc"],    marker=markers["acc"],
                 label="Accuracy (TN)", linewidth=1.5, markersize=5, zorder=3)
-        ax.plot(turns, mean_prec, color=colors["prec"], marker=markers["prec"],
-                label="Precision", linewidth=1.5, markersize=5, zorder=3)
-        ax.plot(turns, mean_rec, color=colors["recall"], marker=markers["recall"],
-                label="Recall", linewidth=1.5, markersize=5, zorder=3)
+        ax.plot(turns, mean_prec, color=colors["prec"],   marker=markers["prec"],
+                label="Precision",     linewidth=1.5, markersize=5, zorder=3)
+        ax.plot(turns, mean_rec,  color=colors["recall"], marker=markers["recall"],
+                label="Recall",        linewidth=1.5, markersize=5, zorder=3)
 
         ax.set_ylim(0.0, 1.1)
         ax.set_yticks(np.arange(0.0, 1.2, 0.2))
         for y in np.arange(0.0, 1.2, 0.2):
-            ax.axhline(y=y, color="gray", linestyle="--",
-                       linewidth=0.5, alpha=0.6, zorder=2)
+            ax.axhline(y=y, color="gray", linestyle="--", linewidth=0.5, alpha=0.6, zorder=0)
         ax.set_xlim(left=0.5)
         ax.set_xticks(turns)
         ax.set_xlabel("Turn")
@@ -503,25 +540,58 @@ def plot(sample_turns: list[dict], criteria: dict) -> None:
         ax.patch.set_visible(False)
         ax.legend(loc="lower left", fontsize=7)
 
-    for i, did in enumerate(disease_ids):
-        short_name = id2name.get(did, did)
-        if len(short_name) > 40:
-            short_name = short_name[:37] + "..."
-        plot_one(axes_flat[i], stats[did], f"{did}: {short_name}")
+    def plot_metric(ax, turn_data, title, metric, color, marker, label):
+        turns = sorted(turn_data.keys())
+        means = [np.mean(turn_data[t][metric]) for t in turns]
+        _scatter(ax, turn_data, metric, color, marker)
+        ax.plot(turns, means, color=color, marker=marker, label=label,
+                linewidth=2.0, markersize=6, zorder=3)
+        ax.set_ylim(0.0, 1.1)
+        ax.set_yticks(np.arange(0.0, 1.2, 0.2))
+        for y in np.arange(0.0, 1.2, 0.2):
+            ax.axhline(y=y, color="gray", linestyle="--", linewidth=0.5, alpha=0.6, zorder=0)
+        ax.set_xlim(left=0.5)
+        ax.set_xticks(turns)
+        ax.set_xlabel("Turn")
+        ax.set_ylabel(label)
+        ax.set_title(title, fontsize=9, fontweight="bold")
+        ax.legend(loc="lower left", fontsize=7)
 
-    overall = defaultdict(lambda: {"acc": [], "prec": [], "recall": []})
-    for e in sample_turns:
-        t = e["turn"]
-        overall[t]["acc"].append(e["accuracy"])
-        overall[t]["prec"].append(e["precision"])
-        overall[t]["recall"].append(e["recall"])
-    plot_one(axes_flat[23], overall, "Overall Average")
+    def _iter_subplots(fn):
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 5, n_rows * 4.5))
+        axes_flat = np.asarray(axes).flatten()
+        for i, did in enumerate(disease_ids):
+            short = id2name.get(did, did)
+            if len(short) > 40:
+                short = short[:37] + "..."
+            fn(axes_flat[i], stats[did], f"{did}: {short}")
+        fn(axes_flat[n_dis], overall, "Overall Average")
+        for j in range(n_dis + 1, len(axes_flat)):
+            axes_flat[j].set_visible(False)
+        plt.tight_layout()
+        return fig
 
-    plt.tight_layout()
+    # ── Combined plot (all three metrics + individual dots) ──
+    fig = _iter_subplots(plot_one)
     out_png = RESULTS_DIR / "turn_eval_plot_strict.png"
-    plt.savefig(out_png, dpi=300, bbox_inches="tight")
+    fig.savefig(out_png, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"Saved plot to {out_png}")
+
+    # ── Per-metric plots ──
+    metric_cfgs = [
+        ("acc",    "#1f77b4", "o", "Accuracy (TN)", "turn_eval_plot_strict_accuracy.png"),
+        ("prec",   "#ff7f0e", "s", "Precision",     "turn_eval_plot_strict_precision.png"),
+        ("recall", "#2ca02c", "^", "Recall",        "turn_eval_plot_strict_recall.png"),
+    ]
+    for metric_key, color, marker, label, out_name in metric_cfgs:
+        def _fn(ax, td, title, _m=metric_key, _c=color, _mk=marker, _l=label):
+            plot_metric(ax, td, title, _m, _c, _mk, _l)
+        fig = _iter_subplots(_fn)
+        out_png = RESULTS_DIR / out_name
+        fig.savefig(out_png, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+        print(f"Saved plot to {out_png}")
 
 
 if __name__ == "__main__":

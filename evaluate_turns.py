@@ -19,6 +19,9 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+import matplotlib.pyplot as plt
+import numpy as np
+
 BASE_DIR    = Path(__file__).parent
 RESULTS_DIR = BASE_DIR / "results"
 LOGS_DIR    = BASE_DIR / "logs"
@@ -239,7 +242,148 @@ def evaluate():
     out_path = RESULTS_DIR / "turn_eval.json"
     out_path.write_text(json.dumps(sample_turns, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"\nSaved {len(sample_turns)} sample-turn entries to {out_path}")
+    return sample_turns
+
+
+def plot(sample_turns: list[dict]) -> None:
+    try:
+        with open(CRITERIA_FILE, encoding="utf-8") as f:
+            criteria = json.load(f)
+        id2name = {did: v["name"] for did, v in criteria.items()}
+    except Exception:
+        id2name = {}
+
+    stats: dict = defaultdict(lambda: defaultdict(lambda: {"acc": [], "prec": [], "recall": []}))
+    for e in sample_turns:
+        m = re.match(r"(D\d+)", e["log_file"])
+        if not m:
+            continue
+        did = m.group(1)
+        t = e["turn"]
+        stats[did][t]["acc"].append(e["accuracy"])
+        stats[did][t]["prec"].append(e["precision"])
+        stats[did][t]["recall"].append(e["recall"])
+
+    disease_ids = sorted(stats.keys(), key=lambda x: int(x[1:]))
+
+    overall: dict = defaultdict(lambda: {"acc": [], "prec": [], "recall": []})
+    for e in sample_turns:
+        t = e["turn"]
+        overall[t]["acc"].append(e["accuracy"])
+        overall[t]["prec"].append(e["precision"])
+        overall[t]["recall"].append(e["recall"])
+
+    colors   = {"acc": "#1f77b4", "prec": "#ff7f0e", "recall": "#2ca02c"}
+    markers  = {"acc": "o",       "prec": "s",        "recall": "^"}
+    n_dis    = len(disease_ids)
+    n_cols   = 6
+    n_rows   = (n_dis + 1 + n_cols - 1) // n_cols
+
+    def _scatter(ax, turn_data, metric, color, marker):
+        for t in sorted(turn_data.keys()):
+            vals = turn_data[t][metric]
+            n = len(vals)
+            xs = np.linspace(t - 0.2, t + 0.2, n) if n > 1 else np.array([float(t)])
+            ax.scatter(xs, vals, color=color, alpha=0.4, s=18, marker=marker, zorder=2)
+
+    def _plot_combined(ax, turn_data, title):
+        turns = sorted(turn_data.keys())
+        if not turns:
+            ax.set_title(title, fontsize=9)
+            return
+        mean_acc  = [np.mean(turn_data[t]["acc"])    for t in turns]
+        mean_prec = [np.mean(turn_data[t]["prec"])   for t in turns]
+        mean_rec  = [np.mean(turn_data[t]["recall"]) for t in turns]
+        counts    = [len(turn_data[t]["acc"])         for t in turns]
+
+        ax2 = ax.twinx()
+        ax2.bar(turns, counts, color="gray", alpha=0.25, width=0.7, zorder=1)
+        ax2.set_ylim(0, max(counts) * 1.15 if counts else 1)
+        ax2.set_ylabel("# Samples", fontsize=8, color="gray")
+        ax2.tick_params(axis="y", labelsize=7, colors="gray")
+        for t, c in zip(turns, counts):
+            ax2.text(t, c, str(c), ha="center", va="bottom", fontsize=7, color="gray", alpha=0.9)
+
+        for key in ("acc", "prec", "recall"):
+            _scatter(ax, turn_data, key, colors[key], markers[key])
+
+        ax.plot(turns, mean_acc,  color=colors["acc"],    marker=markers["acc"],
+                label="Accuracy",  linewidth=1.5, markersize=5, zorder=3)
+        ax.plot(turns, mean_prec, color=colors["prec"],   marker=markers["prec"],
+                label="Precision", linewidth=1.5, markersize=5, zorder=3)
+        ax.plot(turns, mean_rec,  color=colors["recall"], marker=markers["recall"],
+                label="Recall",    linewidth=1.5, markersize=5, zorder=3)
+
+        ax.set_ylim(0.0, 1.1)
+        ax.set_yticks(np.arange(0.0, 1.2, 0.2))
+        for y in np.arange(0.0, 1.2, 0.2):
+            ax.axhline(y=y, color="gray", linestyle="--", linewidth=0.5, alpha=0.6, zorder=0)
+        ax.set_xlim(left=0.5)
+        ax.set_xticks(turns)
+        ax.set_xlabel("Turn")
+        ax.set_ylabel("Score")
+        ax.set_title(title, fontsize=9, fontweight="bold")
+        ax.set_zorder(ax2.get_zorder() + 1)
+        ax.patch.set_visible(False)
+        ax.legend(loc="lower left", fontsize=7)
+
+    def _plot_metric(ax, turn_data, title, metric, color, marker, label):
+        turns = sorted(turn_data.keys())
+        if not turns:
+            ax.set_title(title, fontsize=9)
+            return
+        means = [np.mean(turn_data[t][metric]) for t in turns]
+        _scatter(ax, turn_data, metric, color, marker)
+        ax.plot(turns, means, color=color, marker=marker, label=label,
+                linewidth=2.0, markersize=6, zorder=3)
+        ax.set_ylim(0.0, 1.1)
+        ax.set_yticks(np.arange(0.0, 1.2, 0.2))
+        for y in np.arange(0.0, 1.2, 0.2):
+            ax.axhline(y=y, color="gray", linestyle="--", linewidth=0.5, alpha=0.6, zorder=0)
+        ax.set_xlim(left=0.5)
+        ax.set_xticks(turns)
+        ax.set_xlabel("Turn")
+        ax.set_ylabel(label)
+        ax.set_title(title, fontsize=9, fontweight="bold")
+        ax.legend(loc="lower left", fontsize=7)
+
+    def _iter_subplots(fn):
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 5, n_rows * 4.5))
+        axes_flat = np.asarray(axes).flatten()
+        for i, did in enumerate(disease_ids):
+            short = id2name.get(did, did)
+            if len(short) > 40:
+                short = short[:37] + "..."
+            fn(axes_flat[i], stats[did], f"{did}: {short}")
+        fn(axes_flat[n_dis], overall, "Overall Average")
+        for j in range(n_dis + 1, len(axes_flat)):
+            axes_flat[j].set_visible(False)
+        plt.tight_layout()
+        return fig
+
+    # ── Combined plot (all three metrics + individual dots) ──
+    fig = _iter_subplots(_plot_combined)
+    out_png = RESULTS_DIR / "turn_eval_plot.png"
+    fig.savefig(out_png, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved plot to {out_png}")
+
+    # ── Per-metric plots ──
+    metric_cfgs = [
+        ("acc",    "#1f77b4", "o", "Accuracy",  "turn_eval_plot_accuracy.png"),
+        ("prec",   "#ff7f0e", "s", "Precision", "turn_eval_plot_precision.png"),
+        ("recall", "#2ca02c", "^", "Recall",    "turn_eval_plot_recall.png"),
+    ]
+    for metric_key, color, marker, label, out_name in metric_cfgs:
+        def _fn(ax, td, title, _m=metric_key, _c=color, _mk=marker, _l=label):
+            _plot_metric(ax, td, title, _m, _c, _mk, _l)
+        fig = _iter_subplots(_fn)
+        out_png = RESULTS_DIR / out_name
+        fig.savefig(out_png, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+        print(f"Saved plot to {out_png}")
 
 
 if __name__ == "__main__":
-    evaluate()
+    sample_turns = evaluate()
+    plot(sample_turns)
