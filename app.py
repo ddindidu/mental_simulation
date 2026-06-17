@@ -16,6 +16,7 @@ from utils.llm import get_doctor_inference_max_tokens
 from utils.llm import get_doctor_model_name
 from utils.llm import get_patient_alignment_max_tokens
 from utils.llm import get_patient_model_name
+from utils.llm import get_run_dir
 from utils.llm import get_status
 from utils.llm import rotate_log_file
 from utils.llm import set_log_path
@@ -292,9 +293,12 @@ def batch_eval():
         return jsonify({"ok": False, "error": str(e)}), 500
 
     from utils.paths import PROJECT_ROOT
-    logs_dir = PROJECT_ROOT / "logs"
-    logs_dir.mkdir(exist_ok=True)
-    acc_path = PROJECT_ROOT / "acc.txt"
+    run_dir = get_run_dir()
+    logs_dir = PROJECT_ROOT / "logs" / run_dir
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    acc_path = PROJECT_ROOT / "results" / run_dir / "acc.txt"
+
+    print(f"[batch] run_dir = {run_dir}", flush=True)
 
     t = threading.Thread(
         target=_run_batch_evaluation,
@@ -308,6 +312,7 @@ def batch_eval():
         "disorders": len(disorder_map),
         "runs_per_disorder": runs,
         "difficulty": difficulty,
+        "run_dir": run_dir,
         "logs_dir": str(logs_dir),
         "acc_path": str(acc_path),
     })

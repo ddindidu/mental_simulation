@@ -11,15 +11,11 @@ from .config import CONFIG
 _LLM = CONFIG.get("llm") or {}
 
 # ── Logging ──────────────────────────────────────────────────────────────────
-# 시뮬레이션 시작(rotate_log_file 호출)마다 logging1.txt, logging2.txt ... 순으로 증가
 _current_log_path: "Path | None" = None
 
 
 def rotate_log_file() -> "Path":
-    """로그 파일 번호를 자동 증가시켜 새 파일 경로를 설정하고 반환한다.
-    logging1.txt 이 없으면 logging1.txt 를 사용하고,
-    이미 있으면 logging(n+1).txt 를 사용한다.
-    """
+    """로그 파일 번호를 자동 증가시켜 새 파일 경로를 설정하고 반환한다."""
     global _current_log_path
     from .paths import PROJECT_ROOT
     n = 1
@@ -38,15 +34,19 @@ def set_log_path(path: "Path | str") -> None:
     _current_log_path.parent.mkdir(parents=True, exist_ok=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
-Role = Literal["patient", "doctor"]
+Role = Literal["patient", "doctor", "judge"]
 
-# Per-role resolved config: { "provider", "model", "openai": {...} }
+# Per-role resolved config: { "provider", "model", "openai": {...}, "gemini": {...} }
 _patient_cfg: dict[str, Any]
 _doctor_cfg: dict[str, Any]
+_judge_cfg: dict[str, Any]
 
 _openai_client: Any | None = None
 _openai_ready = threading.Event()
 _openai_error: str | None = None
+
+_gemini_ready = threading.Event()
+_gemini_error: str | None = None
 
 # Local: one bundle per HuggingFace model id (supports patient/doctor different models)
 _local_bundles: dict[str, dict[str, Any]] = {}
@@ -54,18 +54,13 @@ _local_events: dict[str, threading.Event] = {}
 _model_lock = threading.Lock()
 
 
-def _merge_openai(role_partial: dict) -> dict[str, Any]:
-    shared = (_LLM.get("openai") or {}) if isinstance(_LLM.get("openai"), dict) else {}
-    extra = role_partial.get("openai") if isinstance(role_partial.get("openai"), dict) else {}
-    return {**shared, **extra}
-
-
-def _normalize_role_configs() -> tuple[dict[str, Any], dict[str, Any]]:
-    """Legacy: top-level provider/model only → both roles share. New: patient + doctor blocks."""
+def _normalize_role_configs() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Parse per-role configs. Returns (patient_cfg, doctor_cfg, judge_cfg)."""
     raw = _LLM
     shared_openai = raw.get("openai") if isinstance(raw.get("openai"), dict) else {}
+    shared_gemini = raw.get("gemini") if isinstance(raw.get("gemini"), dict) else {}
 
-    if isinstance(raw.get("patient"), dict) or isinstance(raw.get("doctor"), dict):
+    if any(isinstance(raw.get(r), dict) for r in ("patient", "doctor", "judge")):
         legacy_prov = (raw.get("provider") or "openai").lower().strip()
         legacy_model = raw.get("model") or "gpt-4o-mini"
 
@@ -74,9 +69,14 @@ def _normalize_role_configs() -> tuple[dict[str, Any], dict[str, Any]]:
             prov = (block.get("provider") or legacy_prov).lower().strip()
             model = block.get("model") or legacy_model or default_model
             o = {**shared_openai, **(block.get("openai") or {})}
-            return {"provider": prov, "model": str(model), "openai": o}
+            g = {**shared_gemini, **(block.get("gemini") or {})}
+            return {"provider": prov, "model": str(model), "openai": o, "gemini": g}
 
-        return one("patient", "gpt-4o-mini"), one("doctor", "gpt-4o-mini")
+        return (
+            one("patient", "gpt-4o-mini"),
+            one("doctor", "gpt-4o-mini"),
+            one("judge", "gpt-4o-mini"),
+        )
 
     prov = (raw.get("provider") or "openai").lower().strip()
     model = raw.get("model") or "gpt-4o-mini"
@@ -84,20 +84,21 @@ def _normalize_role_configs() -> tuple[dict[str, Any], dict[str, Any]]:
         "provider": prov,
         "model": str(model),
         "openai": {**shared_openai},
+        "gemini": {**shared_gemini},
     }
-    return cfg, cfg
+    return cfg, cfg, cfg
 
 
-_patient_cfg, _doctor_cfg = _normalize_role_configs()
+_patient_cfg, _doctor_cfg, _judge_cfg = _normalize_role_configs()
 
 
-def _normalize_generation() -> tuple[dict[str, Any], dict[str, Any]]:
-    """Legacy: flat generation dict → patient/doctor에 동일 값 복제. 새 형식: patient / doctor 블록."""
+def _normalize_generation() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Returns (patient_gen, doctor_gen, judge_gen)."""
     raw = CONFIG.get("generation") or {}
     legacy_shared = {
         k: v
         for k, v in raw.items()
-        if k not in ("patient", "doctor") and not isinstance(v, dict)
+        if k not in ("patient", "doctor", "judge") and not isinstance(v, dict)
     }
 
     patient_defaults: dict[str, Any] = {
@@ -112,13 +113,21 @@ def _normalize_generation() -> tuple[dict[str, Any], dict[str, Any]]:
         "inference_max_new_tokens": 400,
         "diagnosis_max_new_tokens": 600,
     }
+    judge_defaults: dict[str, Any] = {
+        "default_max_new_tokens": 3072,
+        "temperature": 0.0,
+        "top_p": 1.0,
+        "do_sample": False,
+    }
 
-    if isinstance(raw.get("patient"), dict) or isinstance(raw.get("doctor"), dict):
+    if any(isinstance(raw.get(r), dict) for r in ("patient", "doctor", "judge")):
         pb = raw.get("patient") if isinstance(raw.get("patient"), dict) else {}
         db = raw.get("doctor") if isinstance(raw.get("doctor"), dict) else {}
+        jb = raw.get("judge") if isinstance(raw.get("judge"), dict) else {}
         patient = {**patient_defaults, **legacy_shared, **pb}
         doctor = {**doctor_defaults, **legacy_shared, **db}
-        return patient, doctor
+        judge = {**judge_defaults, **jb}
+        return patient, doctor, judge
 
     flat = raw
     common = {
@@ -133,14 +142,18 @@ def _normalize_generation() -> tuple[dict[str, Any], dict[str, Any]]:
         "inference_max_new_tokens": int(flat.get("inference_max_new_tokens", 400)),
         "diagnosis_max_new_tokens": int(flat.get("diagnosis_max_new_tokens", 600)),
     }
-    return common, doctor_only
+    return common, doctor_only, dict(judge_defaults)
 
 
-_patient_gen, _doctor_gen = _normalize_generation()
+_patient_gen, _doctor_gen, _judge_gen = _normalize_generation()
 
 
 def _gen_for_role(role: Role) -> dict[str, Any]:
-    return _patient_gen if role == "patient" else _doctor_gen
+    if role == "patient":
+        return _patient_gen
+    if role == "doctor":
+        return _doctor_gen
+    return _judge_gen
 
 
 def get_doctor_inference_max_tokens() -> int:
@@ -163,16 +176,44 @@ def get_doctor_model_name() -> str:
     return str(_doctor_cfg.get("model") or "")
 
 
+def get_judge_model_name() -> str:
+    return str(_judge_cfg.get("model") or "")
+
+
+def _model_slug(model: str) -> str:
+    """'org/name' → 'name', 경로에 안전하지 않은 문자는 '_' 로 치환."""
+    name = model.rsplit("/", 1)[-1]
+    return re.sub(r"[^\w.\-]", "_", name)
+
+
+def get_run_dir() -> str:
+    """{patient}/{judge}/{doctor} 3단계 경로를 반환한다.
+
+    계층 설계 근거:
+      - patient : 변종 적음 (조건 고정) → 최상위
+      - judge   : 중간 변종              → 중간
+      - doctor  : 평가 대상, 종류 최다   → 최하위 leaf
+    """
+    p = _model_slug(_patient_cfg["model"])
+    j = _model_slug(_judge_cfg["model"])
+    d = _model_slug(_doctor_cfg["model"])
+    return f"{p}/{j}/{d}"
+
+
 def _cfg_for_role(role: Role) -> dict[str, Any]:
-    return _patient_cfg if role == "patient" else _doctor_cfg
+    if role == "patient":
+        return _patient_cfg
+    if role == "doctor":
+        return _doctor_cfg
+    return _judge_cfg
 
 
 def get_display_model_name() -> str:
-    """헤더 등에 표시: 두 역할 모델을 한 줄로."""
-    p, d = _patient_cfg, _doctor_cfg
+    p, d, j = _patient_cfg, _doctor_cfg, _judge_cfg
     return (
         f"Patient: {p['model']} ({p['provider']}) · "
-        f"Doctor: {d['model']} ({d['provider']})"
+        f"Doctor: {d['model']} ({d['provider']}) · "
+        f"Judge: {j['model']} ({j['provider']})"
     )
 
 
@@ -181,10 +222,22 @@ def get_provider() -> str:
     return str(_patient_cfg["provider"])
 
 
+def _unique_local_model_names() -> list[str]:
+    names: list[str] = []
+    for cfg in (_patient_cfg, _doctor_cfg, _judge_cfg):
+        if cfg["provider"] == "local":
+            m = str(cfg["model"])
+            if m not in names:
+                names.append(m)
+    return names
+
+
 def get_status() -> dict[str, Any]:
-    p, d = _patient_cfg, _doctor_cfg
-    needs_openai = p["provider"] == "openai" or d["provider"] == "openai"
-    needs_vllm = p["provider"] == "vllm" or d["provider"] == "vllm"
+    p, d, j = _patient_cfg, _doctor_cfg, _judge_cfg
+    all_cfgs = (p, d, j)
+    needs_openai = any(c["provider"] == "openai" for c in all_cfgs)
+    needs_vllm   = any(c["provider"] == "vllm"   for c in all_cfgs)
+    needs_gemini = any(c["provider"] == "gemini"  for c in all_cfgs)
     loading = False
     err: str | None = None
 
@@ -199,6 +252,12 @@ def get_status() -> dict[str, Any]:
             loading = True
         elif _vllm_error:
             err = _vllm_error
+
+    if needs_gemini:
+        if not _gemini_ready.is_set():
+            loading = True
+        elif _gemini_error:
+            err = _gemini_error
 
     for name in _unique_local_model_names():
         ev = _local_events.get(name)
@@ -215,18 +274,9 @@ def get_status() -> dict[str, Any]:
         "loading": loading,
         "error": err,
         "patient": {"provider": p["provider"], "model": p["model"]},
-        "doctor": {"provider": d["provider"], "model": d["model"]},
+        "doctor":  {"provider": d["provider"], "model": d["model"]},
+        "judge":   {"provider": j["provider"], "model": j["model"]},
     }
-
-
-def _unique_local_model_names() -> list[str]:
-    names: list[str] = []
-    for cfg in (_patient_cfg, _doctor_cfg):
-        if cfg["provider"] == "local":
-            m = str(cfg["model"])
-            if m not in names:
-                names.append(m)
-    return names
 
 
 def _init_openai() -> None:
@@ -237,6 +287,29 @@ def _init_openai() -> None:
     else:
         _openai_error = None
     _openai_ready.set()
+
+
+def _init_gemini() -> None:
+    global _gemini_error
+    key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not key:
+        _gemini_error = "GEMINI_API_KEY is missing; add it to .env"
+        _gemini_ready.set()
+        return
+    try:
+        import google.generativeai as genai  # type: ignore[import]
+        genai.configure(api_key=key)
+        _gemini_error = None
+        print("[INFO] Gemini client ready", flush=True)
+    except ImportError:
+        _gemini_error = (
+            "google-generativeai package not installed; "
+            "run: pip install google-generativeai"
+        )
+    except Exception as e:
+        _gemini_error = str(e)
+    finally:
+        _gemini_ready.set()
 
 
 def _load_local_model_named(hf_name: str) -> None:
@@ -285,7 +358,7 @@ def _init_vllm() -> None:
         from openai import OpenAI
         global _vllm_client
         _vllm_client = OpenAI(
-            api_key="EMPTY",  # vLLM은 인증 불필요
+            api_key="EMPTY",
             base_url=base_url,
             timeout=float(v_cfg.get("timeout_seconds", 600)),
         )
@@ -309,16 +382,15 @@ def _chat_vllm(messages: list[dict], max_new_tokens: int, role: Role) -> str:
     resp = _vllm_client.chat.completions.create(  # type: ignore[union-attr]
         model=model,
         messages=messages,
-        max_tokens=16384,
+        max_tokens=max_new_tokens,
         temperature=float(g["temperature"]),
         top_p=float(g["top_p"]),
         extra_body={
             "chat_template_kwargs": {"enable_thinking": False},
-        }, 
+        },
     )
 
     result = _message_content_text(resp.choices[0].message) if getattr(resp, "choices", None) else ""
-    # <think>...</think> 태그 제거 (Qwen3 reasoning 모드)
     result = re.sub(r"<think>.*?</think>", "", result, flags=re.DOTALL).strip()
 
     from .paths import PROJECT_ROOT
@@ -359,7 +431,7 @@ def _get_openai_client():
 
 
 def _message_content_text(msg: Any) -> str:
-    """Normalize message.content (str or list of parts for some models)."""
+    """Normalize message.content (str or list of parts)."""
     c = getattr(msg, "content", None)
     if c is None:
         return ""
@@ -387,7 +459,6 @@ def _should_log_openai_response() -> bool:
 
 
 def _log_openai_response_object(resp: Any) -> None:
-    """Print full API response to stdout when logging is enabled."""
     if not _should_log_openai_response():
         return
     print("========== OpenAI response ==========", flush=True)
@@ -473,6 +544,66 @@ def _chat_openai(messages: list[dict], max_new_tokens: int, role: Role) -> str:
     return _message_content_text(resp.choices[0].message)
 
 
+# ── Gemini ────────────────────────────────────────────────────────────────────
+
+def _messages_to_gemini(messages: list[dict]) -> tuple[str | None, list[dict]]:
+    """Convert OpenAI-format messages to Gemini contents + system_instruction."""
+    system_parts: list[str] = []
+    contents: list[dict] = []
+    for msg in messages:
+        msg_role = msg.get("role", "user")
+        content = msg.get("content", "")
+        if msg_role == "system":
+            system_parts.append(content)
+        elif msg_role == "user":
+            contents.append({"role": "user", "parts": [{"text": content}]})
+        elif msg_role == "assistant":
+            contents.append({"role": "model", "parts": [{"text": content}]})
+    system_instruction = "\n\n".join(system_parts) if system_parts else None
+    return system_instruction, contents
+
+
+def _chat_gemini(messages: list[dict], max_new_tokens: int, role: Role) -> str:
+    _gemini_ready.wait()
+    if _gemini_error:
+        raise RuntimeError(f"Gemini not available: {_gemini_error}")
+
+    import google.generativeai as genai  # type: ignore[import]
+
+    cfg = _cfg_for_role(role)
+    g = _gen_for_role(role)
+    model_name = str(cfg["model"])
+
+    system_instruction, contents = _messages_to_gemini(messages)
+
+    model = genai.GenerativeModel(
+        model_name=model_name,
+        system_instruction=system_instruction,
+    )
+    generation_config = genai.types.GenerationConfig(
+        max_output_tokens=max_new_tokens,
+        temperature=float(g["temperature"]),
+        top_p=float(g["top_p"]),
+    )
+    resp = model.generate_content(contents, generation_config=generation_config)
+
+    try:
+        finish_reason = resp.candidates[0].finish_reason if resp.candidates else None
+        # finish_reason 2 == MAX_TOKENS (응답이 토큰 한도로 잘림)
+        if finish_reason is not None and str(finish_reason) not in ("FinishReason.STOP", "STOP", "1"):
+            print(
+                f"[WARN] Gemini response truncated (finish_reason={finish_reason}, "
+                f"max_output_tokens={max_new_tokens}, role={role})",
+                flush=True,
+            )
+    except Exception:
+        pass
+
+    return resp.text.strip() if getattr(resp, "text", None) else ""
+
+
+# ── Local (HuggingFace) ───────────────────────────────────────────────────────
+
 def _chat_local(messages: list[dict], max_new_tokens: int, role: Role) -> str:
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer  # noqa: F401
@@ -541,6 +672,8 @@ def _chat_local(messages: list[dict], max_new_tokens: int, role: Role) -> str:
     return resp
 
 
+# ── Public chat entry point ───────────────────────────────────────────────────
+
 def chat(
     messages: list[dict],
     max_new_tokens: int | None = None,
@@ -565,6 +698,12 @@ def chat(
             raise RuntimeError(_openai_error)
         return _chat_openai(messages, max_new_tokens, role)
 
+    if prov == "gemini":
+        _gemini_ready.wait()
+        if _gemini_error:
+            raise RuntimeError(_gemini_error)
+        return _chat_gemini(messages, max_new_tokens, role)
+
     if prov == "local":
         hf_name = str(cfg["model"])
         ev = _local_events.get(hf_name)
@@ -572,13 +711,18 @@ def chat(
             ev.wait()
         return _chat_local(messages, max_new_tokens, role)
 
-    raise ValueError(f"Unknown llm provider for role {role!r}: {prov!r}; use 'vllm', 'local', or 'openai'")
+    raise ValueError(
+        f"Unknown llm provider for role {role!r}: {prov!r}; "
+        "use 'vllm', 'openai', 'gemini', or 'local'"
+    )
 
 
 def _bootstrap() -> None:
-    need_openai = _patient_cfg["provider"] == "openai" or _doctor_cfg["provider"] == "openai"
-    need_local = _patient_cfg["provider"] == "local" or _doctor_cfg["provider"] == "local"
-    need_vllm = _patient_cfg["provider"] == "vllm" or _doctor_cfg["provider"] == "vllm"
+    all_cfgs = (_patient_cfg, _doctor_cfg, _judge_cfg)
+    need_openai = any(c["provider"] == "openai" for c in all_cfgs)
+    need_local  = any(c["provider"] == "local"  for c in all_cfgs)
+    need_vllm   = any(c["provider"] == "vllm"   for c in all_cfgs)
+    need_gemini = any(c["provider"] == "gemini"  for c in all_cfgs)
 
     if need_openai:
         _init_openai()
@@ -590,9 +734,17 @@ def _bootstrap() -> None:
     else:
         _vllm_ready.set()
 
-    if not need_openai and not need_local and not need_vllm:
+    if need_gemini:
+        threading.Thread(target=_init_gemini, daemon=True).start()
+    else:
+        _gemini_ready.set()
+
+    if not any((need_openai, need_local, need_vllm, need_gemini)):
         global _openai_error
-        _openai_error = 'No llm role uses "openai", "vllm", or "local"; check config.json'
+        _openai_error = (
+            'No llm role uses "openai", "vllm", "gemini", or "local"; '
+            "check config.json"
+        )
 
     for name in _unique_local_model_names():
         if name not in _local_events:
