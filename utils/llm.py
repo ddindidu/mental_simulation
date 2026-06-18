@@ -26,12 +26,33 @@ def rotate_log_file() -> "Path":
     return _current_log_path
 
 
-def set_log_path(path: "Path | str") -> None:
-    """배치 평가 등에서 로그 파일 경로를 직접 지정한다."""
+def set_log_path(path: "Path | str | None") -> None:
+    """배치 평가 등에서 로그 파일 경로를 직접 지정한다.
+
+    새 시뮬레이션마다 호출하면 기존 파일을 지우고 빈 파일로 시작한다.
+    path=None 이면 로그 경로를 해제한다 (이후 호출은 logging.txt 로 폴백).
+    """
     global _current_log_path
+    if path is None:
+        _current_log_path = None
+        return
     from pathlib import Path as _Path
     _current_log_path = _Path(path)
     _current_log_path.parent.mkdir(parents=True, exist_ok=True)
+    # 새 시뮬레이션이므로 이전 실행의 잔여 내용을 지우고 새 파일로 시작
+    _current_log_path.write_text("", encoding="utf-8")
+
+
+def _append_to_log(role: str, messages: list, result: str) -> None:
+    """LLM 입출력을 현재 로그 파일에 추가한다."""
+    from .paths import PROJECT_ROOT
+    log_path = _current_log_path if _current_log_path is not None else (PROJECT_ROOT / "logging.txt")
+    with open(log_path, "a", encoding="utf-8") as f:
+        f.write(f"========== INPUT [{role}] ==========\n")
+        f.write(json.dumps(messages, ensure_ascii=False, indent=2) + "\n")
+        f.write(f"========== OUTPUT [{role}] ==========\n")
+        f.write(result + "\n")
+        f.write("=====================================\n\n")
 
 # ─────────────────────────────────────────────────────────────────────────────
 Role = Literal["patient", "doctor", "judge"]
@@ -392,16 +413,6 @@ def _chat_vllm(messages: list[dict], max_new_tokens: int, role: Role) -> str:
 
     result = _message_content_text(resp.choices[0].message) if getattr(resp, "choices", None) else ""
     result = re.sub(r"<think>.*?</think>", "", result, flags=re.DOTALL).strip()
-
-    from .paths import PROJECT_ROOT
-    log_path = _current_log_path if _current_log_path is not None else (PROJECT_ROOT / "logging.txt")
-    with open(log_path, "a", encoding="utf-8") as f:
-        f.write(f"========== INPUT [{role}] ==========\n")
-        f.write(json.dumps(messages, ensure_ascii=False, indent=2) + "\n")
-        f.write(f"========== OUTPUT [{role}] ==========\n")
-        f.write(result + "\n")
-        f.write("=====================================\n\n")
-
     return result
 
 
@@ -658,18 +669,7 @@ def _chat_local(messages: list[dict], max_new_tokens: int, role: Role) -> str:
 
     new_tokens = out[0][inputs["input_ids"].shape[1]:]
     resp = tokenizer.decode(new_tokens, skip_special_tokens=True)
-    resp = re.sub(r"<think>.*?</think>", "", resp, flags=re.DOTALL).strip()
-
-    from .paths import PROJECT_ROOT
-    log_path = _current_log_path if _current_log_path is not None else (PROJECT_ROOT / "logging.txt")
-    with open(log_path, "a", encoding="utf-8") as f:
-        f.write(f"========== INPUT [{role}] ==========\n")
-        f.write(text + "\n")
-        f.write(f"========== OUTPUT [{role}] ==========\n")
-        f.write(resp + "\n")
-        f.write("=====================================\n\n")
-
-    return resp
+    return re.sub(r"<think>.*?</think>", "", resp, flags=re.DOTALL).strip()
 
 
 # ── Public chat entry point ───────────────────────────────────────────────────
@@ -690,31 +690,31 @@ def chat(
         _vllm_ready.wait()
         if _vllm_error:
             raise RuntimeError(_vllm_error)
-        return _chat_vllm(messages, max_new_tokens, role)
-
-    if prov == "openai":
+        result = _chat_vllm(messages, max_new_tokens, role)
+    elif prov == "openai":
         _openai_ready.wait()
         if _openai_error:
             raise RuntimeError(_openai_error)
-        return _chat_openai(messages, max_new_tokens, role)
-
-    if prov == "gemini":
+        result = _chat_openai(messages, max_new_tokens, role)
+    elif prov == "gemini":
         _gemini_ready.wait()
         if _gemini_error:
             raise RuntimeError(_gemini_error)
-        return _chat_gemini(messages, max_new_tokens, role)
-
-    if prov == "local":
+        result = _chat_gemini(messages, max_new_tokens, role)
+    elif prov == "local":
         hf_name = str(cfg["model"])
         ev = _local_events.get(hf_name)
         if ev:
             ev.wait()
-        return _chat_local(messages, max_new_tokens, role)
+        result = _chat_local(messages, max_new_tokens, role)
+    else:
+        raise ValueError(
+            f"Unknown llm provider for role {role!r}: {prov!r}; "
+            "use 'vllm', 'openai', 'gemini', or 'local'"
+        )
 
-    raise ValueError(
-        f"Unknown llm provider for role {role!r}: {prov!r}; "
-        "use 'vllm', 'openai', 'gemini', or 'local'"
-    )
+    _append_to_log(role, messages, result)
+    return result
 
 
 def _bootstrap() -> None:
