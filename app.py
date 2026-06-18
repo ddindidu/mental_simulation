@@ -149,47 +149,70 @@ def _run_eval_pipeline() -> None:
       3. evaluate_turns        → turn_eval.json + PNG (non-strict)
       4. evaluate_turns_strict → turn_eval_strict.json + PNG (LLM 호출)
     """
+    import traceback as _tb
+    from utils.paths import PROJECT_ROOT
+
+    # 파이프라인 LLM 호출(symptom_diagnosis judge 호출 등)이
+    # 마지막 시뮬레이션 로그 파일에 섞이지 않도록 별도 로그로 분리
+    set_log_path(PROJECT_ROOT / "results" / get_run_dir() / "_pipeline_llm.log")
+
     print("[pipeline] Starting post-batch evaluation pipeline...", flush=True)
+    print(f"[pipeline] logs dir  : {PROJECT_ROOT / 'logs' / get_run_dir()}", flush=True)
+    print(f"[pipeline] results dir: {PROJECT_ROOT / 'results' / get_run_dir()}", flush=True)
+
+    import importlib
+
+    def _load(name: str):
+        """import 후 reload 하여 module-level 경로 상수가 최신 run_dir를 쓰게 한다."""
+        import sys
+        import importlib as _il
+        if name in sys.modules:
+            return _il.reload(sys.modules[name])
+        return _il.import_module(name)
 
     with _batch_lock:
         _batch_state["current"] = "[pipeline] symptom extraction & disease matching"
     try:
-        import symptom_diagnosis
-        symptom_diagnosis.main()
+        sd = _load("symptom_diagnosis")
+        sd.main()
     except Exception as _e:
         print(f"[pipeline] symptom_diagnosis failed: {_e}", flush=True)
+        _tb.print_exc()
 
     with _batch_lock:
         _batch_state["current"] = "[pipeline] final diagnosis eval"
     try:
-        import evaluate_final_diagnosis
-        evaluate_final_diagnosis.main()
+        efd = _load("evaluate_final_diagnosis")
+        efd.main()
     except SystemExit:
         print("[pipeline] evaluate_final_diagnosis: no log files, skipping.", flush=True)
     except Exception as _e:
         print(f"[pipeline] evaluate_final_diagnosis failed: {_e}", flush=True)
+        _tb.print_exc()
 
     with _batch_lock:
         _batch_state["current"] = "[pipeline] turn-level eval (non-strict)"
     try:
-        import evaluate_turns
-        _turns = evaluate_turns.evaluate()
-        evaluate_turns.plot(_turns)
+        et = _load("evaluate_turns")
+        _turns = et.evaluate()
+        et.plot(_turns)
     except SystemExit:
         print("[pipeline] evaluate_turns: no result files, skipping.", flush=True)
     except Exception as _e:
         print(f"[pipeline] evaluate_turns failed: {_e}", flush=True)
+        _tb.print_exc()
 
     with _batch_lock:
         _batch_state["current"] = "[pipeline] turn-level eval (strict)"
     try:
-        import evaluate_turns_strict
-        _turns_s, _crit, _ = evaluate_turns_strict.evaluate()
-        evaluate_turns_strict.plot(_turns_s, _crit)
+        ets = _load("evaluate_turns_strict")
+        _turns_s, _crit, _ = ets.evaluate()
+        ets.plot(_turns_s, _crit)
     except SystemExit:
         print("[pipeline] evaluate_turns_strict: no result files, skipping.", flush=True)
     except Exception as _e:
         print(f"[pipeline] evaluate_turns_strict failed: {_e}", flush=True)
+        _tb.print_exc()
 
     with _batch_lock:
         _batch_state["current"] = "Done"
@@ -216,6 +239,34 @@ def _run_batch_evaluation(
         _batch_state["results"] = {}
         _batch_state["error"] = None
 
+    # symptom_diagnosis 리소스를 배치 내에서 한 번만 로드하는 lazy cache
+    _sd_cache: list = []  # [module, all_symptoms, diagnostic_criteria]
+
+    def _ensure_sd() -> tuple:
+        if not _sd_cache:
+            import importlib as _il, sys as _sys
+            name = "symptom_diagnosis"
+            mod = _il.reload(_sys.modules[name]) if name in _sys.modules else _il.import_module(name)
+            _sd_cache.extend([mod, mod.load_all_symptoms(), mod.load_diagnostic_criteria()])
+        return _sd_cache[0], _sd_cache[1], _sd_cache[2]
+
+    def _run_symptom_diagnosis(txt_path: Path, out_path: Path) -> None:
+        """시뮬레이션 직후 호출: txt_log → _result.json 즉시 생성."""
+        if not txt_path.exists():
+            return
+        try:
+            sd, sd_syms, sd_crit = _ensure_sd()
+            sd_result = sd.process_log(txt_path, sd_syms, sd_crit)
+            if sd_result is not None:
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                out_path.write_text(
+                    json.dumps(sd_result, indent=2, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+                print(f"[batch] symptom_diagnosis → {out_path.name}", flush=True)
+        except Exception as _e:
+            print(f"[batch] symptom_diagnosis failed ({txt_path.stem}): {_e}", flush=True)
+
     try:
         for code in codes:
             true_name = disorder_map[code]
@@ -226,9 +277,49 @@ def _run_batch_evaluation(
                 with _batch_lock:
                     _batch_state["current"] = f"{code} run {run_idx}/{runs_per_disorder}"
 
-                # 로그 파일 경로 설정
-                log_file = logs_dir / f"{code}_{run_idx}.txt"
-                set_log_path(log_file)
+                json_log_path    = logs_dir / f"{code}_{run_idx}.json"
+                txt_log_path     = logs_dir / f"{code}_{run_idx}.txt"
+                result_json_path = acc_path.parent / f"{code}_{run_idx}_result.json"
+
+                has_json_log = json_log_path.exists()
+                has_result   = result_json_path.exists()
+
+                # ── Skip 조건 ────────────────────────────────────────────
+                if has_json_log or has_result:
+                    if has_json_log and not has_result:
+                        # Case 2: json_log 있고 _result.json 없음 → 즉시 생성
+                        _run_symptom_diagnosis(txt_log_path, result_json_path)
+
+                    # final_diag는 json_log에서 읽음
+                    final_diag_skip, is_correct_skip = "", False
+                    if has_json_log:
+                        try:
+                            existing = json.loads(json_log_path.read_text(encoding="utf-8"))
+                            final_diag_skip = existing.get("final_diagnosis", "")
+                            is_correct_skip = _diagnosis_matches(final_diag_skip, true_name)
+                            if is_correct_skip:
+                                correct += 1
+                        except Exception:
+                            pass
+
+                    status = (
+                        "log+result" if (has_json_log and has_result) else
+                        "log→result" if has_json_log else
+                        "result_only"
+                    )
+                    print(f"[batch] {code} run {run_idx}: skip ({status})", flush=True)
+                    runs_log.append({
+                        "run": run_idx,
+                        "final_diagnosis": final_diag_skip,
+                        "correct": is_correct_skip,
+                        "skipped": True,
+                    })
+                    with _batch_lock:
+                        _batch_state["done"] += 1
+                    continue
+
+                # ── Case 4: 둘 다 없음 → 시뮬레이션 실행 ────────────────
+                set_log_path(txt_log_path)
 
                 # 환자 프로파일 재생성 (같은 disease, 매번 랜덤 증상)
                 try:
@@ -265,11 +356,34 @@ def _run_batch_evaluation(
                         "candidates": fd.get("candidates", []),
                         "reason": fd.get("reason", ""),
                     })
+
+                    # 시뮬레이션 결과 JSON 로그 저장
+                    json_log_data = {
+                        "disease_code": code,
+                        "run": run_idx,
+                        "closed_at_patient_turn": result.get("closed_at_patient_turn"),
+                        "final_diagnosis": final_diag,
+                        "is_correct": is_correct,
+                        "transcript": [
+                            {"role": r, "content": c}
+                            for r, c in result.get("transcript", [])
+                        ],
+                        "doctor_memory": mem,
+                    }
+                    json_log_path.write_text(
+                        json.dumps(json_log_data, ensure_ascii=False, indent=2),
+                        encoding="utf-8",
+                    )
+
                     print(
                         f"[batch] {code} run {run_idx}: {final_diag!r} "
                         f"→ {'✓' if is_correct else '✗'}  (true={true_name!r})",
                         flush=True,
                     )
+
+                    # 시뮬레이션 직후 즉시 symptom_diagnosis 실행 → _result.json 생성
+                    _run_symptom_diagnosis(txt_log_path, result_json_path)
+
                 except Exception as e:
                     print(f"[batch] simulation error {code} run {run_idx}: {e}", flush=True)
                     runs_log.append({"run": run_idx, "error": str(e), "correct": False})
