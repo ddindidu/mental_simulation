@@ -274,7 +274,7 @@ def main():
     diagnostic_criteria = load_diagnostic_criteria()
     print(f"  {len(diagnostic_criteria)} diseases loaded.\n")
 
-    OUTPUT_DIR.mkdir(exist_ok=True)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     log_files   = sorted(LOGS_DIR.glob("*.txt"))
     print(f"Found {len(log_files)} log files in {LOGS_DIR.name}/")
