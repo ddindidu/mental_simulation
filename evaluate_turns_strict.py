@@ -459,6 +459,7 @@ def evaluate() -> tuple[list[dict], dict, int]:
     if skipped:
         print(f"\n({skipped} sample(s) skipped)")
 
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     out_path = RESULTS_DIR / "turn_eval_strict.json"
     out_path.write_text(json.dumps(sample_turns, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"\nSaved {len(sample_turns)} sample-turn entries to {out_path}")
@@ -472,6 +473,7 @@ def plot(sample_turns: list[dict], criteria: dict) -> None:
     id2name = {did: v["name"] for did, v in criteria.items()}
 
     stats: dict = defaultdict(lambda: defaultdict(lambda: {"acc": [], "prec": [], "recall": []}))
+    case_series: dict = defaultdict(lambda: defaultdict(list))
     for e in sample_turns:
         m = re.match(r"(D\d+)", e["log_file"])
         did = m.group(1)
@@ -479,21 +481,34 @@ def plot(sample_turns: list[dict], criteria: dict) -> None:
         stats[did][t]["acc"].append(e["accuracy"])
         stats[did][t]["prec"].append(e["precision"])
         stats[did][t]["recall"].append(e["recall"])
+        case_series[did][e["log_file"]].append((t, e["accuracy"], e["precision"], e["recall"]))
 
     disease_ids = sorted(stats.keys(), key=lambda x: int(x[1:]))
 
     overall: dict = defaultdict(lambda: {"acc": [], "prec": [], "recall": []})
+    overall_series: dict = defaultdict(list)
     for e in sample_turns:
         t = e["turn"]
         overall[t]["acc"].append(e["accuracy"])
         overall[t]["prec"].append(e["precision"])
         overall[t]["recall"].append(e["recall"])
+        overall_series[e["log_file"]].append((t, e["accuracy"], e["precision"], e["recall"]))
 
     colors  = {"acc": "#1f77b4", "prec": "#ff7f0e", "recall": "#2ca02c"}
     markers = {"acc": "o",       "prec": "s",        "recall": "^"}
     n_dis   = len(disease_ids)
     n_cols  = 6
     n_rows  = (n_dis + 1 + n_cols - 1) // n_cols
+
+    def _case_lines(ax, series, metric, color):
+        """각 case(log_file)의 turn별 점수를 연한 실선으로 연결."""
+        key_idx = {"acc": 1, "prec": 2, "recall": 3}[metric]
+        for pts in series.values():
+            pts_s = sorted(pts, key=lambda x: x[0])
+            if len(pts_s) < 2:
+                continue
+            ax.plot([p[0] for p in pts_s], [p[key_idx] for p in pts_s],
+                    color=color, alpha=0.3, linewidth=0.7, zorder=1)
 
     def _scatter(ax, turn_data, metric, color, marker):
         for t in sorted(turn_data.keys()):
@@ -502,7 +517,7 @@ def plot(sample_turns: list[dict], criteria: dict) -> None:
             xs = np.linspace(t - 0.2, t + 0.2, n) if n > 1 else np.array([float(t)])
             ax.scatter(xs, vals, color=color, alpha=0.4, s=18, marker=marker, zorder=2)
 
-    def plot_one(ax, turn_data, title):
+    def plot_one(ax, turn_data, series, title):
         turns = sorted(turn_data.keys())
         mean_acc  = [np.mean(turn_data[t]["acc"])    for t in turns]
         mean_prec = [np.mean(turn_data[t]["prec"])   for t in turns]
@@ -518,6 +533,7 @@ def plot(sample_turns: list[dict], criteria: dict) -> None:
             ax2.text(t, c, str(c), ha="center", va="bottom", fontsize=7, color="gray", alpha=0.9)
 
         for key in ("acc", "prec", "recall"):
+            _case_lines(ax, series, key, colors[key])
             _scatter(ax, turn_data, key, colors[key], markers[key])
 
         ax.plot(turns, mean_acc,  color=colors["acc"],    marker=markers["acc"],
@@ -540,9 +556,10 @@ def plot(sample_turns: list[dict], criteria: dict) -> None:
         ax.patch.set_visible(False)
         ax.legend(loc="lower left", fontsize=7)
 
-    def plot_metric(ax, turn_data, title, metric, color, marker, label):
+    def plot_metric(ax, turn_data, series, title, metric, color, marker, label):
         turns = sorted(turn_data.keys())
         means = [np.mean(turn_data[t][metric]) for t in turns]
+        _case_lines(ax, series, metric, color)
         _scatter(ax, turn_data, metric, color, marker)
         ax.plot(turns, means, color=color, marker=marker, label=label,
                 linewidth=2.0, markersize=6, zorder=3)
@@ -564,8 +581,8 @@ def plot(sample_turns: list[dict], criteria: dict) -> None:
             short = id2name.get(did, did)
             if len(short) > 40:
                 short = short[:37] + "..."
-            fn(axes_flat[i], stats[did], f"{did}: {short}")
-        fn(axes_flat[n_dis], overall, "Overall Average")
+            fn(axes_flat[i], stats[did], case_series[did], f"{did}: {short}")
+        fn(axes_flat[n_dis], overall, overall_series, "Overall Average")
         for j in range(n_dis + 1, len(axes_flat)):
             axes_flat[j].set_visible(False)
         plt.tight_layout()
@@ -585,8 +602,8 @@ def plot(sample_turns: list[dict], criteria: dict) -> None:
         ("recall", "#2ca02c", "^", "Recall",        "turn_eval_plot_strict_recall.png"),
     ]
     for metric_key, color, marker, label, out_name in metric_cfgs:
-        def _fn(ax, td, title, _m=metric_key, _c=color, _mk=marker, _l=label):
-            plot_metric(ax, td, title, _m, _c, _mk, _l)
+        def _fn(ax, td, ser, title, _m=metric_key, _c=color, _mk=marker, _l=label):
+            plot_metric(ax, td, ser, title, _m, _c, _mk, _l)
         fig = _iter_subplots(_fn)
         out_png = RESULTS_DIR / out_name
         fig.savefig(out_png, dpi=300, bbox_inches="tight")

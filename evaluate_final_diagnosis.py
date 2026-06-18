@@ -139,7 +139,7 @@ def main():
 
     # ── Save TXT ──────────────────────────────────────────────────────────
     out_path = BASE_DIR / "results" / _RUN_DIR / "final_diagnosis_eval.txt"
-    out_path.parent.mkdir(exist_ok=True)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(output, encoding="utf-8")
     print(f"Saved to {out_path}")
 
