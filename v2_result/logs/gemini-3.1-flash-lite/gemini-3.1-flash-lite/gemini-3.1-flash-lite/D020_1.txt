@@ -1,0 +1,519 @@
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n\n[Already Asked Questions]\n\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "Chief complaint",
+  "subcategory": null,
+  "question": "Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ adjustment_symptoms\n  - With Depressed Mood: Symptoms mainly include low mood, tearfulness, or feelings of hopelessness.\n  - With Anxiety: Symptoms mainly include nervousness, worry, jitteriness, or separation anxiety.\n  - With Mixed Anxiety and Depressed Mood: A combination of depression and anxiety symptoms appears.\n  - With Disturbance of Conduct: Symptoms mainly involve violation of rules, truancy, vandalism, reckless driving, or fighting.\n  - With Mixed Disturbance of Emotions and Conduct: Both emotional symptoms (depression, anxiety) and behavioral problems appear together.\n  - Unspecified: Maladaptive reactions not classified into the above types (e.g., physical complaints, social withdrawal).\n▸ Critical Diagnostic Criteria\n  - Duration: 2 months\n  - Additional: Symptoms must develop within 3 months of the onset of the stressor\n  - Additional: Within 6 months of the termination of the stressor or its consequences\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 1\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nHello, I am Dr. Smith. Could you please tell me what brings you in to see me today?"
+  }
+]
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["adjustment_symptoms"], "answer_strategy": "Briefly state that you have been feeling down, anxious, or struggling to cope since a recent stressful event occurred about two months ago. Keep the focus on the primary emotional distress."}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Adjustment Disorder.\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ adjustment_symptoms\n  - With Depressed Mood: Symptoms mainly include low mood, tearfulness, or feelings of hopelessness.\n  - With Anxiety: Symptoms mainly include nervousness, worry, jitteriness, or separation anxiety.\n  - With Mixed Anxiety and Depressed Mood: A combination of depression and anxiety symptoms appears.\n  - With Disturbance of Conduct: Symptoms mainly involve violation of rules, truancy, vandalism, reckless driving, or fighting.\n  - With Mixed Disturbance of Emotions and Conduct: Both emotional symptoms (depression, anxiety) and behavioral problems appear together.\n  - Unspecified: Maladaptive reactions not classified into the above types (e.g., physical complaints, social withdrawal).\n▸ Critical Diagnostic Criteria\n  - Duration: 2 months\n  - Additional: Symptoms must develop within 3 months of the onset of the stressor\n  - Additional: Within 6 months of the termination of the stressor or its consequences\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Stress_Related_Maladaptive_Response\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(Matched with profile)\nRelated sections: adjustment_symptoms\nAnswer strategy: Briefly state that you have been feeling down, anxious, or struggling to cope since a recent stressful event occurred about two months ago. Keep the focus on the primary emotional distress."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?"
+  }
+]
+========== OUTPUT [patient] ==========
+I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Interview Transcript:\n\nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["Adjustment Disorder", "Acute Stress Disorder", "Major Depressive Disorder", "Generalized Anxiety Disorder"], "note": "The patient reports symptoms starting after a stressful event two months ago, which necessitates considering stress-related disorders (Adjustment Disorder, Acute Stress Disorder) as well as mood and anxiety disorders that may have been triggered by or co-occur with the stressor."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n[Current Candidate Diagnoses]\n- Adjustment Disorder\n- Acute Stress Disorder\n- Major Depressive Disorder\n- Generalized Anxiety Disorder\n\n[Already Asked Questions]\n\n[Already Asked Questions]\n- Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"Chief complaint\",\n  \"subcategory\": null,\n  \"question\": \"Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Adjustment Disorder\", \"Acute Stress Disorder\", \"Major Depressive Disorder\", \"Generalized Anxiety Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "symptom nature",
+  "question": "Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ adjustment_symptoms\n  - With Depressed Mood: Symptoms mainly include low mood, tearfulness, or feelings of hopelessness.\n  - With Anxiety: Symptoms mainly include nervousness, worry, jitteriness, or separation anxiety.\n  - With Mixed Anxiety and Depressed Mood: A combination of depression and anxiety symptoms appears.\n  - With Disturbance of Conduct: Symptoms mainly involve violation of rules, truancy, vandalism, reckless driving, or fighting.\n  - With Mixed Disturbance of Emotions and Conduct: Both emotional symptoms (depression, anxiety) and behavioral problems appear together.\n  - Unspecified: Maladaptive reactions not classified into the above types (e.g., physical complaints, social withdrawal).\n▸ Critical Diagnostic Criteria\n  - Duration: 2 months\n  - Additional: Symptoms must develop within 3 months of the onset of the stressor\n  - Additional: Within 6 months of the termination of the stressor or its consequences\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 2\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nCan you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?"
+  }
+]
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["adjustment_symptoms"], "answer_strategy": "Clearly identify whether the symptoms lean more toward the depressed mood category (sadness, hopelessness) or the anxiety category (worry, jitteriness/tension), or if it is a mix of both, based on the definitions provided in the symptom profile."}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Adjustment Disorder.\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ adjustment_symptoms\n  - With Depressed Mood: Symptoms mainly include low mood, tearfulness, or feelings of hopelessness.\n  - With Anxiety: Symptoms mainly include nervousness, worry, jitteriness, or separation anxiety.\n  - With Mixed Anxiety and Depressed Mood: A combination of depression and anxiety symptoms appears.\n  - With Disturbance of Conduct: Symptoms mainly involve violation of rules, truancy, vandalism, reckless driving, or fighting.\n  - With Mixed Disturbance of Emotions and Conduct: Both emotional symptoms (depression, anxiety) and behavioral problems appear together.\n  - Unspecified: Maladaptive reactions not classified into the above types (e.g., physical complaints, social withdrawal).\n▸ Critical Diagnostic Criteria\n  - Duration: 2 months\n  - Additional: Symptoms must develop within 3 months of the onset of the stressor\n  - Additional: Within 6 months of the termination of the stressor or its consequences\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Stress_Related_Maladaptive_Response\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(Matched with profile)\nRelated sections: adjustment_symptoms\nAnswer strategy: Clearly identify whether the symptoms lean more toward the depressed mood category (sadness, hopelessness) or the anxiety category (worry, jitteriness/tension), or if it is a mix of both, based on the definitions provided in the symptom profile."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.\n\nDoctor: Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?"
+  }
+]
+========== OUTPUT [patient] ==========
+It’s actually a bit of both. I feel really low and hopeless a lot of the time, but I also feel constantly nervous and jittery, like I’m always on edge.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Previous Candidates:\n[\"Adjustment Disorder\", \"Acute Stress Disorder\", \"Major Depressive Disorder\", \"Generalized Anxiety Disorder\"]\n\nInterview Transcript:\n\nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.\n\nDoctor: Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\n\nPatient: It’s actually a bit of both. I feel really low and hopeless a lot of the time, but I also feel constantly nervous and jittery, like I’m always on edge."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["Major Depressive Disorder", "Generalized Anxiety Disorder", "Adjustment Disorder"], "note": "Acute Stress Disorder was removed because the patient's symptoms have persisted for two months, exceeding the one-month duration criteria for that diagnosis. Major Depressive Disorder, Generalized Anxiety Disorder, and Adjustment Disorder remain as potential candidates given the patient's report of both low mood and persistent anxiety following a stressor."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n[Current Candidate Diagnoses]\n- Major Depressive Disorder\n- Generalized Anxiety Disorder\n- Adjustment Disorder\n\n[Already Asked Questions]\n\n[Already Asked Questions]\n- Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n- Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"Chief complaint\",\n  \"subcategory\": null,\n  \"question\": \"Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Adjustment Disorder\", \"Acute Stress Disorder\", \"Major Depressive Disorder\", \"Generalized Anxiety Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"differential point\",\n  \"subcategory\": \"symptom nature\",\n  \"question\": \"Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Major Depressive Disorder\", \"Generalized Anxiety Disorder\", \"Adjustment Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.\n\nDoctor: Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\n\nPatient: It’s actually a bit of both. I feel really low and hopeless a lot of the time, but I also feel constantly nervous and jittery, like I’m always on edge.\n\nPatient: It’s actually a bit of both. I feel really low and hopeless a lot of the time, but I also feel constantly nervous and jittery, like I’m always on edge."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "anhedonia/interest",
+  "question": "Beyond these feelings, have you noticed a significant loss of interest or pleasure in the activities you usually enjoy, or are you still finding moments of enjoyment?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ adjustment_symptoms\n  - With Depressed Mood: Symptoms mainly include low mood, tearfulness, or feelings of hopelessness.\n  - With Anxiety: Symptoms mainly include nervousness, worry, jitteriness, or separation anxiety.\n  - With Mixed Anxiety and Depressed Mood: A combination of depression and anxiety symptoms appears.\n  - With Disturbance of Conduct: Symptoms mainly involve violation of rules, truancy, vandalism, reckless driving, or fighting.\n  - With Mixed Disturbance of Emotions and Conduct: Both emotional symptoms (depression, anxiety) and behavioral problems appear together.\n  - Unspecified: Maladaptive reactions not classified into the above types (e.g., physical complaints, social withdrawal).\n▸ Critical Diagnostic Criteria\n  - Duration: 2 months\n  - Additional: Symptoms must develop within 3 months of the onset of the stressor\n  - Additional: Within 6 months of the termination of the stressor or its consequences\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 3\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nBeyond these feelings, have you noticed a significant loss of interest or pleasure in the activities you usually enjoy, or are you still finding moments of enjoyment?"
+  }
+]
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["adjustment_symptoms", "With Depressed Mood"], "answer_strategy": "Confirm whether you are experiencing anhedonia (loss of interest/pleasure). If you are, describe it as part of your depressed mood, noting if it contributes to your feelings of hopelessness or low mood as mentioned in the profile."}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Adjustment Disorder.\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ adjustment_symptoms\n  - With Depressed Mood: Symptoms mainly include low mood, tearfulness, or feelings of hopelessness.\n  - With Anxiety: Symptoms mainly include nervousness, worry, jitteriness, or separation anxiety.\n  - With Mixed Anxiety and Depressed Mood: A combination of depression and anxiety symptoms appears.\n  - With Disturbance of Conduct: Symptoms mainly involve violation of rules, truancy, vandalism, reckless driving, or fighting.\n  - With Mixed Disturbance of Emotions and Conduct: Both emotional symptoms (depression, anxiety) and behavioral problems appear together.\n  - Unspecified: Maladaptive reactions not classified into the above types (e.g., physical complaints, social withdrawal).\n▸ Critical Diagnostic Criteria\n  - Duration: 2 months\n  - Additional: Symptoms must develop within 3 months of the onset of the stressor\n  - Additional: Within 6 months of the termination of the stressor or its consequences\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Stress_Related_Maladaptive_Response\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(Matched with profile)\nRelated sections: adjustment_symptoms, With Depressed Mood\nAnswer strategy: Confirm whether you are experiencing anhedonia (loss of interest/pleasure). If you are, describe it as part of your depressed mood, noting if it contributes to your feelings of hopelessness or low mood as mentioned in the profile."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.\n\nDoctor: Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\n\nPatient: It’s actually a bit of both. I feel really low and hopeless a lot of the time, but I also feel constantly nervous and jittery, like I’m always on edge.\n\nDoctor: Beyond these feelings, have you noticed a significant loss of interest or pleasure in the activities you usually enjoy, or are you still finding moments of enjoyment?"
+  }
+]
+========== OUTPUT [patient] ==========
+I’ve definitely lost interest in the things I used to enjoy, and nothing really brings me pleasure anymore. It just makes the feelings of hopelessness even worse, and I feel like I'm stuck in this low mood all the time.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Previous Candidates:\n[\"Major Depressive Disorder\", \"Generalized Anxiety Disorder\", \"Adjustment Disorder\"]\n\nInterview Transcript:\n\nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.\n\nDoctor: Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\n\nPatient: It’s actually a bit of both. I feel really low and hopeless a lot of the time, but I also feel constantly nervous and jittery, like I’m always on edge.\n\nDoctor: Beyond these feelings, have you noticed a significant loss of interest or pleasure in the activities you usually enjoy, or are you still finding moments of enjoyment?\n\nPatient: I’ve definitely lost interest in the things I used to enjoy, and nothing really brings me pleasure anymore. It just makes the feelings of hopelessness even worse, and I feel like I'm stuck in this low mood all the time."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["Major Depressive Disorder", "Generalized Anxiety Disorder", "Adjustment Disorder"], "note": "The patient reports symptoms of both low mood/anhedonia (suggestive of Major Depressive Disorder) and persistent nervousness/tension (suggestive of Generalized Anxiety Disorder), occurring in the context of a specific stressor from two months ago (suggestive of Adjustment Disorder). At this stage, all three remain viable candidates as we need to further clarify the duration, severity, and functional impairment to distinguish between these diagnostic criteria."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n[Current Candidate Diagnoses]\n- Major Depressive Disorder\n- Generalized Anxiety Disorder\n- Adjustment Disorder\n\n[Already Asked Questions]\n\n[Already Asked Questions]\n- Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n- Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\n- Beyond these feelings, have you noticed a significant loss of interest or pleasure in the activities you usually enjoy, or are you still finding moments of enjoyment?\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"Chief complaint\",\n  \"subcategory\": null,\n  \"question\": \"Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Adjustment Disorder\", \"Acute Stress Disorder\", \"Major Depressive Disorder\", \"Generalized Anxiety Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"differential point\",\n  \"subcategory\": \"symptom nature\",\n  \"question\": \"Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Major Depressive Disorder\", \"Generalized Anxiety Disorder\", \"Adjustment Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.\n\nDoctor: Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\n\nPatient: It’s actually a bit of both. I feel really low and hopeless a lot of the time, but I also feel constantly nervous and jittery, like I’m always on edge.\n\nPatient: It’s actually a bit of both. I feel really low and hopeless a lot of the time, but I also feel constantly nervous and jittery, like I’m always on edge."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"differential point\",\n  \"subcategory\": \"anhedonia/interest\",\n  \"question\": \"Beyond these feelings, have you noticed a significant loss of interest or pleasure in the activities you usually enjoy, or are you still finding moments of enjoyment?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Major Depressive Disorder\", \"Generalized Anxiety Disorder\", \"Adjustment Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.\n\nDoctor: Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\n\nPatient: It’s actually a bit of both. I feel really low and hopeless a lot of the time, but I also feel constantly nervous and jittery, like I’m always on edge.\n\nDoctor: Beyond these feelings, have you noticed a significant loss of interest or pleasure in the activities you usually enjoy, or are you still finding moments of enjoyment?\n\nPatient: I’ve definitely lost interest in the things I used to enjoy, and nothing really brings me pleasure anymore. It just makes the feelings of hopelessness even worse, and I feel like I'm stuck in this low mood all the time.\n\nPatient: I’ve definitely lost interest in the things I used to enjoy, and nothing really brings me pleasure anymore. It just makes the feelings of hopelessness even worse, and I feel like I'm stuck in this low mood all the time."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "severity and impairment",
+  "question": "Have you noticed any physical changes associated with this, such as significant changes in your sleep patterns, appetite, or energy levels?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ adjustment_symptoms\n  - With Depressed Mood: Symptoms mainly include low mood, tearfulness, or feelings of hopelessness.\n  - With Anxiety: Symptoms mainly include nervousness, worry, jitteriness, or separation anxiety.\n  - With Mixed Anxiety and Depressed Mood: A combination of depression and anxiety symptoms appears.\n  - With Disturbance of Conduct: Symptoms mainly involve violation of rules, truancy, vandalism, reckless driving, or fighting.\n  - With Mixed Disturbance of Emotions and Conduct: Both emotional symptoms (depression, anxiety) and behavioral problems appear together.\n  - Unspecified: Maladaptive reactions not classified into the above types (e.g., physical complaints, social withdrawal).\n▸ Critical Diagnostic Criteria\n  - Duration: 2 months\n  - Additional: Symptoms must develop within 3 months of the onset of the stressor\n  - Additional: Within 6 months of the termination of the stressor or its consequences\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 4\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nHave you noticed any physical changes associated with this, such as significant changes in your sleep patterns, appetite, or energy levels?"
+  }
+]
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["adjustment_symptoms", "Unspecified"], "answer_strategy": "Confirm whether you have experienced these physical changes. If you have, describe them (e.g., insomnia, loss of appetite, or fatigue) as these fall under the 'Unspecified' category for adjustment symptoms when physical complaints are present."}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Adjustment Disorder.\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ adjustment_symptoms\n  - With Depressed Mood: Symptoms mainly include low mood, tearfulness, or feelings of hopelessness.\n  - With Anxiety: Symptoms mainly include nervousness, worry, jitteriness, or separation anxiety.\n  - With Mixed Anxiety and Depressed Mood: A combination of depression and anxiety symptoms appears.\n  - With Disturbance of Conduct: Symptoms mainly involve violation of rules, truancy, vandalism, reckless driving, or fighting.\n  - With Mixed Disturbance of Emotions and Conduct: Both emotional symptoms (depression, anxiety) and behavioral problems appear together.\n  - Unspecified: Maladaptive reactions not classified into the above types (e.g., physical complaints, social withdrawal).\n▸ Critical Diagnostic Criteria\n  - Duration: 2 months\n  - Additional: Symptoms must develop within 3 months of the onset of the stressor\n  - Additional: Within 6 months of the termination of the stressor or its consequences\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Stress_Related_Maladaptive_Response\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(Matched with profile)\nRelated sections: adjustment_symptoms, Unspecified\nAnswer strategy: Confirm whether you have experienced these physical changes. If you have, describe them (e.g., insomnia, loss of appetite, or fatigue) as these fall under the 'Unspecified' category for adjustment symptoms when physical complaints are present."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.\n\nDoctor: Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\n\nPatient: It’s actually a bit of both. I feel really low and hopeless a lot of the time, but I also feel constantly nervous and jittery, like I’m always on edge.\n\nDoctor: Beyond these feelings, have you noticed a significant loss of interest or pleasure in the activities you usually enjoy, or are you still finding moments of enjoyment?\n\nPatient: I’ve definitely lost interest in the things I used to enjoy, and nothing really brings me pleasure anymore. It just makes the feelings of hopelessness even worse, and I feel like I'm stuck in this low mood all the time.\n\nDoctor: Have you noticed any physical changes associated with this, such as significant changes in your sleep patterns, appetite, or energy levels?"
+  }
+]
+========== OUTPUT [patient] ==========
+Yes, I have noticed some changes. I’ve been having a lot of trouble sleeping through the night, and I’ve completely lost my appetite, which has left me feeling exhausted all the time.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Previous Candidates:\n[\"Major Depressive Disorder\", \"Generalized Anxiety Disorder\", \"Adjustment Disorder\"]\n\nInterview Transcript:\n\nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.\n\nDoctor: Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\n\nPatient: It’s actually a bit of both. I feel really low and hopeless a lot of the time, but I also feel constantly nervous and jittery, like I’m always on edge.\n\nDoctor: Beyond these feelings, have you noticed a significant loss of interest or pleasure in the activities you usually enjoy, or are you still finding moments of enjoyment?\n\nPatient: I’ve definitely lost interest in the things I used to enjoy, and nothing really brings me pleasure anymore. It just makes the feelings of hopelessness even worse, and I feel like I'm stuck in this low mood all the time.\n\nDoctor: Have you noticed any physical changes associated with this, such as significant changes in your sleep patterns, appetite, or energy levels?\n\nPatient: Yes, I have noticed some changes. I’ve been having a lot of trouble sleeping through the night, and I’ve completely lost my appetite, which has left me feeling exhausted all the time."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["Major Depressive Disorder", "Generalized Anxiety Disorder"], "note": "Previously the candidates were [Major Depressive Disorder, Generalized Anxiety Disorder, Adjustment Disorder]. I have removed Adjustment Disorder because the patient's symptoms, including anhedonia, significant sleep disturbance, appetite loss, and pervasive hopelessness, meet the clinical criteria for a Major Depressive Episode, which typically supersedes a diagnosis of Adjustment Disorder. I am retaining Major Depressive Disorder and Generalized Anxiety Disorder as the patient reports significant symptoms of both mood and anxiety."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n[Current Candidate Diagnoses]\n- Major Depressive Disorder\n- Generalized Anxiety Disorder\n\n[Already Asked Questions]\n\n[Already Asked Questions]\n- Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n- Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\n- Beyond these feelings, have you noticed a significant loss of interest or pleasure in the activities you usually enjoy, or are you still finding moments of enjoyment?\n- Have you noticed any physical changes associated with this, such as significant changes in your sleep patterns, appetite, or energy levels?\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"Chief complaint\",\n  \"subcategory\": null,\n  \"question\": \"Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Adjustment Disorder\", \"Acute Stress Disorder\", \"Major Depressive Disorder\", \"Generalized Anxiety Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"differential point\",\n  \"subcategory\": \"symptom nature\",\n  \"question\": \"Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Major Depressive Disorder\", \"Generalized Anxiety Disorder\", \"Adjustment Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.\n\nDoctor: Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\n\nPatient: It’s actually a bit of both. I feel really low and hopeless a lot of the time, but I also feel constantly nervous and jittery, like I’m always on edge.\n\nPatient: It’s actually a bit of both. I feel really low and hopeless a lot of the time, but I also feel constantly nervous and jittery, like I’m always on edge."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"differential point\",\n  \"subcategory\": \"anhedonia/interest\",\n  \"question\": \"Beyond these feelings, have you noticed a significant loss of interest or pleasure in the activities you usually enjoy, or are you still finding moments of enjoyment?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Major Depressive Disorder\", \"Generalized Anxiety Disorder\", \"Adjustment Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.\n\nDoctor: Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\n\nPatient: It’s actually a bit of both. I feel really low and hopeless a lot of the time, but I also feel constantly nervous and jittery, like I’m always on edge.\n\nDoctor: Beyond these feelings, have you noticed a significant loss of interest or pleasure in the activities you usually enjoy, or are you still finding moments of enjoyment?\n\nPatient: I’ve definitely lost interest in the things I used to enjoy, and nothing really brings me pleasure anymore. It just makes the feelings of hopelessness even worse, and I feel like I'm stuck in this low mood all the time.\n\nPatient: I’ve definitely lost interest in the things I used to enjoy, and nothing really brings me pleasure anymore. It just makes the feelings of hopelessness even worse, and I feel like I'm stuck in this low mood all the time."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"differential point\",\n  \"subcategory\": \"severity and impairment\",\n  \"question\": \"Have you noticed any physical changes associated with this, such as significant changes in your sleep patterns, appetite, or energy levels?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Major Depressive Disorder\", \"Generalized Anxiety Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.\n\nDoctor: Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\n\nPatient: It’s actually a bit of both. I feel really low and hopeless a lot of the time, but I also feel constantly nervous and jittery, like I’m always on edge.\n\nDoctor: Beyond these feelings, have you noticed a significant loss of interest or pleasure in the activities you usually enjoy, or are you still finding moments of enjoyment?\n\nPatient: I’ve definitely lost interest in the things I used to enjoy, and nothing really brings me pleasure anymore. It just makes the feelings of hopelessness even worse, and I feel like I'm stuck in this low mood all the time.\n\nDoctor: Have you noticed any physical changes associated with this, such as significant changes in your sleep patterns, appetite, or energy levels?\n\nPatient: Yes, I have noticed some changes. I’ve been having a lot of trouble sleeping through the night, and I’ve completely lost my appetite, which has left me feeling exhausted all the time.\n\nPatient: Yes, I have noticed some changes. I’ve been having a lot of trouble sleeping through the night, and I’ve completely lost my appetite, which has left me feeling exhausted all the time."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "cognitive symptoms",
+  "question": "Do you find that you are having persistent feelings of worthlessness or excessive, inappropriate guilt about your situation?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ adjustment_symptoms\n  - With Depressed Mood: Symptoms mainly include low mood, tearfulness, or feelings of hopelessness.\n  - With Anxiety: Symptoms mainly include nervousness, worry, jitteriness, or separation anxiety.\n  - With Mixed Anxiety and Depressed Mood: A combination of depression and anxiety symptoms appears.\n  - With Disturbance of Conduct: Symptoms mainly involve violation of rules, truancy, vandalism, reckless driving, or fighting.\n  - With Mixed Disturbance of Emotions and Conduct: Both emotional symptoms (depression, anxiety) and behavioral problems appear together.\n  - Unspecified: Maladaptive reactions not classified into the above types (e.g., physical complaints, social withdrawal).\n▸ Critical Diagnostic Criteria\n  - Duration: 2 months\n  - Additional: Symptoms must develop within 3 months of the onset of the stressor\n  - Additional: Within 6 months of the termination of the stressor or its consequences\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 5\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nDo you find that you are having persistent feelings of worthlessness or excessive, inappropriate guilt about your situation?"
+  }
+]
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["adjustment_symptoms", "With Depressed Mood"], "answer_strategy": "Confirm whether you are experiencing these feelings of worthlessness or guilt. Since these align with the 'With Depressed Mood' category of your adjustment symptoms, describe your emotional state honestly, focusing on how these feelings relate to your current stressor."}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Adjustment Disorder.\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ adjustment_symptoms\n  - With Depressed Mood: Symptoms mainly include low mood, tearfulness, or feelings of hopelessness.\n  - With Anxiety: Symptoms mainly include nervousness, worry, jitteriness, or separation anxiety.\n  - With Mixed Anxiety and Depressed Mood: A combination of depression and anxiety symptoms appears.\n  - With Disturbance of Conduct: Symptoms mainly involve violation of rules, truancy, vandalism, reckless driving, or fighting.\n  - With Mixed Disturbance of Emotions and Conduct: Both emotional symptoms (depression, anxiety) and behavioral problems appear together.\n  - Unspecified: Maladaptive reactions not classified into the above types (e.g., physical complaints, social withdrawal).\n▸ Critical Diagnostic Criteria\n  - Duration: 2 months\n  - Additional: Symptoms must develop within 3 months of the onset of the stressor\n  - Additional: Within 6 months of the termination of the stressor or its consequences\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Stress_Related_Maladaptive_Response\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(Matched with profile)\nRelated sections: adjustment_symptoms, With Depressed Mood\nAnswer strategy: Confirm whether you are experiencing these feelings of worthlessness or guilt. Since these align with the 'With Depressed Mood' category of your adjustment symptoms, describe your emotional state honestly, focusing on how these feelings relate to your current stressor."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.\n\nDoctor: Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\n\nPatient: It’s actually a bit of both. I feel really low and hopeless a lot of the time, but I also feel constantly nervous and jittery, like I’m always on edge.\n\nDoctor: Beyond these feelings, have you noticed a significant loss of interest or pleasure in the activities you usually enjoy, or are you still finding moments of enjoyment?\n\nPatient: I’ve definitely lost interest in the things I used to enjoy, and nothing really brings me pleasure anymore. It just makes the feelings of hopelessness even worse, and I feel like I'm stuck in this low mood all the time.\n\nDoctor: Have you noticed any physical changes associated with this, such as significant changes in your sleep patterns, appetite, or energy levels?\n\nPatient: Yes, I have noticed some changes. I’ve been having a lot of trouble sleeping through the night, and I’ve completely lost my appetite, which has left me feeling exhausted all the time.\n\nDoctor: Do you find that you are having persistent feelings of worthlessness or excessive, inappropriate guilt about your situation?"
+  }
+]
+========== OUTPUT [patient] ==========
+Yes, I feel like I'm a burden to those around me, and I constantly blame myself for not being able to handle this stress better. It makes me feel incredibly worthless and stuck in this cycle of guilt.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Previous Candidates:\n[\"Major Depressive Disorder\", \"Generalized Anxiety Disorder\"]\n\nInterview Transcript:\n\nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.\n\nDoctor: Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\n\nPatient: It’s actually a bit of both. I feel really low and hopeless a lot of the time, but I also feel constantly nervous and jittery, like I’m always on edge.\n\nDoctor: Beyond these feelings, have you noticed a significant loss of interest or pleasure in the activities you usually enjoy, or are you still finding moments of enjoyment?\n\nPatient: I’ve definitely lost interest in the things I used to enjoy, and nothing really brings me pleasure anymore. It just makes the feelings of hopelessness even worse, and I feel like I'm stuck in this low mood all the time.\n\nDoctor: Have you noticed any physical changes associated with this, such as significant changes in your sleep patterns, appetite, or energy levels?\n\nPatient: Yes, I have noticed some changes. I’ve been having a lot of trouble sleeping through the night, and I’ve completely lost my appetite, which has left me feeling exhausted all the time.\n\nDoctor: Do you find that you are having persistent feelings of worthlessness or excessive, inappropriate guilt about your situation?\n\nPatient: Yes, I feel like I'm a burden to those around me, and I constantly blame myself for not being able to handle this stress better. It makes me feel incredibly worthless and stuck in this cycle of guilt."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["Major Depressive Disorder", "Adjustment Disorder"], "note": "Previously the candidates were [Major Depressive Disorder, Generalized Anxiety Disorder]. While the patient meets many criteria for Major Depressive Disorder (anhedonia, sleep/appetite changes, worthlessness), the onset is linked to a specific stressful event two months ago. Therefore, I have added Adjustment Disorder to the differential to account for the clear stressor-related onset, while retaining Major Depressive Disorder due to the severity and duration of the depressive symptoms."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n[Current Candidate Diagnoses]\n- Major Depressive Disorder\n- Adjustment Disorder\n\n[Already Asked Questions]\n\n[Already Asked Questions]\n- Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n- Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\n- Beyond these feelings, have you noticed a significant loss of interest or pleasure in the activities you usually enjoy, or are you still finding moments of enjoyment?\n- Have you noticed any physical changes associated with this, such as significant changes in your sleep patterns, appetite, or energy levels?\n- Do you find that you are having persistent feelings of worthlessness or excessive, inappropriate guilt about your situation?\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"Chief complaint\",\n  \"subcategory\": null,\n  \"question\": \"Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Adjustment Disorder\", \"Acute Stress Disorder\", \"Major Depressive Disorder\", \"Generalized Anxiety Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"differential point\",\n  \"subcategory\": \"symptom nature\",\n  \"question\": \"Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Major Depressive Disorder\", \"Generalized Anxiety Disorder\", \"Adjustment Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.\n\nDoctor: Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\n\nPatient: It’s actually a bit of both. I feel really low and hopeless a lot of the time, but I also feel constantly nervous and jittery, like I’m always on edge.\n\nPatient: It’s actually a bit of both. I feel really low and hopeless a lot of the time, but I also feel constantly nervous and jittery, like I’m always on edge."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"differential point\",\n  \"subcategory\": \"anhedonia/interest\",\n  \"question\": \"Beyond these feelings, have you noticed a significant loss of interest or pleasure in the activities you usually enjoy, or are you still finding moments of enjoyment?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Major Depressive Disorder\", \"Generalized Anxiety Disorder\", \"Adjustment Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.\n\nDoctor: Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\n\nPatient: It’s actually a bit of both. I feel really low and hopeless a lot of the time, but I also feel constantly nervous and jittery, like I’m always on edge.\n\nDoctor: Beyond these feelings, have you noticed a significant loss of interest or pleasure in the activities you usually enjoy, or are you still finding moments of enjoyment?\n\nPatient: I’ve definitely lost interest in the things I used to enjoy, and nothing really brings me pleasure anymore. It just makes the feelings of hopelessness even worse, and I feel like I'm stuck in this low mood all the time.\n\nPatient: I’ve definitely lost interest in the things I used to enjoy, and nothing really brings me pleasure anymore. It just makes the feelings of hopelessness even worse, and I feel like I'm stuck in this low mood all the time."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"differential point\",\n  \"subcategory\": \"severity and impairment\",\n  \"question\": \"Have you noticed any physical changes associated with this, such as significant changes in your sleep patterns, appetite, or energy levels?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Major Depressive Disorder\", \"Generalized Anxiety Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.\n\nDoctor: Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\n\nPatient: It’s actually a bit of both. I feel really low and hopeless a lot of the time, but I also feel constantly nervous and jittery, like I’m always on edge.\n\nDoctor: Beyond these feelings, have you noticed a significant loss of interest or pleasure in the activities you usually enjoy, or are you still finding moments of enjoyment?\n\nPatient: I’ve definitely lost interest in the things I used to enjoy, and nothing really brings me pleasure anymore. It just makes the feelings of hopelessness even worse, and I feel like I'm stuck in this low mood all the time.\n\nDoctor: Have you noticed any physical changes associated with this, such as significant changes in your sleep patterns, appetite, or energy levels?\n\nPatient: Yes, I have noticed some changes. I’ve been having a lot of trouble sleeping through the night, and I’ve completely lost my appetite, which has left me feeling exhausted all the time.\n\nPatient: Yes, I have noticed some changes. I’ve been having a lot of trouble sleeping through the night, and I’ve completely lost my appetite, which has left me feeling exhausted all the time."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"differential point\",\n  \"subcategory\": \"cognitive symptoms\",\n  \"question\": \"Do you find that you are having persistent feelings of worthlessness or excessive, inappropriate guilt about your situation?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Major Depressive Disorder\", \"Adjustment Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.\n\nDoctor: Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\n\nPatient: It’s actually a bit of both. I feel really low and hopeless a lot of the time, but I also feel constantly nervous and jittery, like I’m always on edge.\n\nDoctor: Beyond these feelings, have you noticed a significant loss of interest or pleasure in the activities you usually enjoy, or are you still finding moments of enjoyment?\n\nPatient: I’ve definitely lost interest in the things I used to enjoy, and nothing really brings me pleasure anymore. It just makes the feelings of hopelessness even worse, and I feel like I'm stuck in this low mood all the time.\n\nDoctor: Have you noticed any physical changes associated with this, such as significant changes in your sleep patterns, appetite, or energy levels?\n\nPatient: Yes, I have noticed some changes. I’ve been having a lot of trouble sleeping through the night, and I’ve completely lost my appetite, which has left me feeling exhausted all the time.\n\nDoctor: Do you find that you are having persistent feelings of worthlessness or excessive, inappropriate guilt about your situation?\n\nPatient: Yes, I feel like I'm a burden to those around me, and I constantly blame myself for not being able to handle this stress better. It makes me feel incredibly worthless and stuck in this cycle of guilt.\n\nPatient: Yes, I feel like I'm a burden to those around me, and I constantly blame myself for not being able to handle this stress better. It makes me feel incredibly worthless and stuck in this cycle of guilt."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "duration and scope",
+  "question": "Are these feelings of worthlessness and low mood present throughout most of the day, nearly every day, and do they seem out of proportion to the initial stressful event?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ adjustment_symptoms\n  - With Depressed Mood: Symptoms mainly include low mood, tearfulness, or feelings of hopelessness.\n  - With Anxiety: Symptoms mainly include nervousness, worry, jitteriness, or separation anxiety.\n  - With Mixed Anxiety and Depressed Mood: A combination of depression and anxiety symptoms appears.\n  - With Disturbance of Conduct: Symptoms mainly involve violation of rules, truancy, vandalism, reckless driving, or fighting.\n  - With Mixed Disturbance of Emotions and Conduct: Both emotional symptoms (depression, anxiety) and behavioral problems appear together.\n  - Unspecified: Maladaptive reactions not classified into the above types (e.g., physical complaints, social withdrawal).\n▸ Critical Diagnostic Criteria\n  - Duration: 2 months\n  - Additional: Symptoms must develop within 3 months of the onset of the stressor\n  - Additional: Within 6 months of the termination of the stressor or its consequences\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 6\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nAre these feelings of worthlessness and low mood present throughout most of the day, nearly every day, and do they seem out of proportion to the initial stressful event?"
+  }
+]
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["adjustment_symptoms", "With Depressed Mood"], "answer_strategy": "Confirm that the symptoms of low mood and hopelessness are persistent and feel disproportionate to the stressor, as this aligns with the clinical presentation of an adjustment disorder with depressed mood."}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Adjustment Disorder.\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ adjustment_symptoms\n  - With Depressed Mood: Symptoms mainly include low mood, tearfulness, or feelings of hopelessness.\n  - With Anxiety: Symptoms mainly include nervousness, worry, jitteriness, or separation anxiety.\n  - With Mixed Anxiety and Depressed Mood: A combination of depression and anxiety symptoms appears.\n  - With Disturbance of Conduct: Symptoms mainly involve violation of rules, truancy, vandalism, reckless driving, or fighting.\n  - With Mixed Disturbance of Emotions and Conduct: Both emotional symptoms (depression, anxiety) and behavioral problems appear together.\n  - Unspecified: Maladaptive reactions not classified into the above types (e.g., physical complaints, social withdrawal).\n▸ Critical Diagnostic Criteria\n  - Duration: 2 months\n  - Additional: Symptoms must develop within 3 months of the onset of the stressor\n  - Additional: Within 6 months of the termination of the stressor or its consequences\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Stress_Related_Maladaptive_Response\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(Matched with profile)\nRelated sections: adjustment_symptoms, With Depressed Mood\nAnswer strategy: Confirm that the symptoms of low mood and hopelessness are persistent and feel disproportionate to the stressor, as this aligns with the clinical presentation of an adjustment disorder with depressed mood."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.\n\nDoctor: Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\n\nPatient: It’s actually a bit of both. I feel really low and hopeless a lot of the time, but I also feel constantly nervous and jittery, like I’m always on edge.\n\nDoctor: Beyond these feelings, have you noticed a significant loss of interest or pleasure in the activities you usually enjoy, or are you still finding moments of enjoyment?\n\nPatient: I’ve definitely lost interest in the things I used to enjoy, and nothing really brings me pleasure anymore. It just makes the feelings of hopelessness even worse, and I feel like I'm stuck in this low mood all the time.\n\nDoctor: Have you noticed any physical changes associated with this, such as significant changes in your sleep patterns, appetite, or energy levels?\n\nPatient: Yes, I have noticed some changes. I’ve been having a lot of trouble sleeping through the night, and I’ve completely lost my appetite, which has left me feeling exhausted all the time.\n\nDoctor: Do you find that you are having persistent feelings of worthlessness or excessive, inappropriate guilt about your situation?\n\nPatient: Yes, I feel like I'm a burden to those around me, and I constantly blame myself for not being able to handle this stress better. It makes me feel incredibly worthless and stuck in this cycle of guilt.\n\nDoctor: Are these feelings of worthlessness and low mood present throughout most of the day, nearly every day, and do they seem out of proportion to the initial stressful event?"
+  }
+]
+========== OUTPUT [patient] ==========
+Yes, I feel this way almost every single day, and it honestly feels much more intense than what the situation actually warrants. It's overwhelming how much these feelings have taken over, even though I know the stressor itself doesn't justify being this hopeless.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Previous Candidates:\n[\"Major Depressive Disorder\", \"Adjustment Disorder\"]\n\nInterview Transcript:\n\nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.\n\nDoctor: Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\n\nPatient: It’s actually a bit of both. I feel really low and hopeless a lot of the time, but I also feel constantly nervous and jittery, like I’m always on edge.\n\nDoctor: Beyond these feelings, have you noticed a significant loss of interest or pleasure in the activities you usually enjoy, or are you still finding moments of enjoyment?\n\nPatient: I’ve definitely lost interest in the things I used to enjoy, and nothing really brings me pleasure anymore. It just makes the feelings of hopelessness even worse, and I feel like I'm stuck in this low mood all the time.\n\nDoctor: Have you noticed any physical changes associated with this, such as significant changes in your sleep patterns, appetite, or energy levels?\n\nPatient: Yes, I have noticed some changes. I’ve been having a lot of trouble sleeping through the night, and I’ve completely lost my appetite, which has left me feeling exhausted all the time.\n\nDoctor: Do you find that you are having persistent feelings of worthlessness or excessive, inappropriate guilt about your situation?\n\nPatient: Yes, I feel like I'm a burden to those around me, and I constantly blame myself for not being able to handle this stress better. It makes me feel incredibly worthless and stuck in this cycle of guilt.\n\nDoctor: Are these feelings of worthlessness and low mood present throughout most of the day, nearly every day, and do they seem out of proportion to the initial stressful event?\n\nPatient: Yes, I feel this way almost every single day, and it honestly feels much more intense than what the situation actually warrants. It's overwhelming how much these feelings have taken over, even though I know the stressor itself doesn't justify being this hopeless."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["Major Depressive Disorder"], "note": "Previously the candidates were [Major Depressive Disorder, Adjustment Disorder]. Based on the patient's report that their symptoms—including anhedonia, sleep disturbance, appetite loss, fatigue, feelings of worthlessness, and excessive guilt—are present nearly every day and feel disproportionate to the stressor, the criteria for Major Depressive Disorder are met. Adjustment Disorder is less appropriate because the severity and nature of the symptoms exceed what is typically expected for an adjustment reaction."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the full interview transcript and the differential diagnosis candidates,\nwrite the final diagnosis report.\n\n[Constraint: Allowed Candidate List]\nBoth the \"diagnosis\" and \"candidates\" fields MUST ONLY contain items from the following list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\nOutput Format (JSON only, no other text):\n{\"diagnosis\": \"Final Diagnosis Name\", \"candidates\": [\"Candidate1\", \"Candidate2\"], \"reason\": \"Brief summary of key collected symptoms supporting this diagnosis\"}\n\n[Field Instructions]\n- diagnosis: The single diagnosis name from the allowed list you are most confident about.\n- candidates: Top 2–3 differential candidates from the allowed list considered until the end.\n- reason: Brief diagnostic rationale.\n"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Major Depressive Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: I’ve been having a really hard time coping since a stressful event happened about two months ago. I just haven't been feeling like myself lately and I'm struggling to get through my daily life.\n\nDoctor: Can you describe the specific nature of these struggles, such as feeling persistently sad and hopeless, or is it more of a constant, excessive worry and physical tension?\n\nPatient: It’s actually a bit of both. I feel really low and hopeless a lot of the time, but I also feel constantly nervous and jittery, like I’m always on edge.\n\nDoctor: Beyond these feelings, have you noticed a significant loss of interest or pleasure in the activities you usually enjoy, or are you still finding moments of enjoyment?\n\nPatient: I’ve definitely lost interest in the things I used to enjoy, and nothing really brings me pleasure anymore. It just makes the feelings of hopelessness even worse, and I feel like I'm stuck in this low mood all the time.\n\nDoctor: Have you noticed any physical changes associated with this, such as significant changes in your sleep patterns, appetite, or energy levels?\n\nPatient: Yes, I have noticed some changes. I’ve been having a lot of trouble sleeping through the night, and I’ve completely lost my appetite, which has left me feeling exhausted all the time.\n\nDoctor: Do you find that you are having persistent feelings of worthlessness or excessive, inappropriate guilt about your situation?\n\nPatient: Yes, I feel like I'm a burden to those around me, and I constantly blame myself for not being able to handle this stress better. It makes me feel incredibly worthless and stuck in this cycle of guilt.\n\nDoctor: Are these feelings of worthlessness and low mood present throughout most of the day, nearly every day, and do they seem out of proportion to the initial stressful event?\n\nPatient: Yes, I feel this way almost every single day, and it honestly feels much more intense than what the situation actually warrants. It's overwhelming how much these feelings have taken over, even though I know the stressor itself doesn't justify being this hopeless."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"diagnosis": "Major Depressive Disorder", "candidates": ["Major Depressive Disorder", "Adjustment Disorder"], "reason": "The patient exhibits a persistent low mood, anhedonia, sleep disturbance, appetite loss, fatigue, and feelings of worthlessness/guilt lasting two months. While the symptoms began following a stressful event, the intensity and severity of the clinical presentation exceed what is typically expected for an adjustment disorder, meeting the diagnostic criteria for a major depressive episode."}
+=====================================
+

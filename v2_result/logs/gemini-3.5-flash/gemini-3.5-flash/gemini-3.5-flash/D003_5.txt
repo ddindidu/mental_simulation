@@ -1,0 +1,336 @@
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n\n[Already Asked Questions]\n\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "initial_complaint",
+  "subcategory": null,
+  "question": "Hello. I'm glad you're here today. What brings you in to see me?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ hyperactivity_impulsivity\n  - Leaving_Seat: Often leaves seat in situations when remaining seated is expected.\n  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.\n  - Blurting_Answers: Often blurts out an answer before a question has been completed.\n▸ Critical Diagnostic Criteria\n  - Duration: 1 year and 2 months\n  - Additional: Onset prior to age 12 years\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 1\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nHello. I'm glad you're here today. What brings you in to see me?"
+  }
+]
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["hyperactivity_impulsivity"], "answer_strategy": "Introduce your chief complaint by explaining that you've been feeling extremely restless, constantly 'on the go' as if driven by a motor, and having a hard time staying seated when you need to. Do not mention the other symptoms or duration yet."}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation).\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ hyperactivity_impulsivity\n  - Leaving_Seat: Often leaves seat in situations when remaining seated is expected.\n  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.\n  - Blurting_Answers: Often blurts out an answer before a question has been completed.\n▸ Critical Diagnostic Criteria\n  - Duration: 1 year and 2 months\n  - Additional: Onset prior to age 12 years\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Leaving_Seat\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(Matched with profile)\nRelated sections: hyperactivity_impulsivity\nAnswer strategy: Introduce your chief complaint by explaining that you've been feeling extremely restless, constantly 'on the go' as if driven by a motor, and having a hard time staying seated when you need to. Do not mention the other symptoms or duration yet."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello. I'm glad you're here today. What brings you in to see me?"
+  }
+]
+========== OUTPUT [patient] ==========
+Hi doctor. I've been feeling extremely restless lately, constantly "on the go" as if I'm driven by a motor. It's gotten to the point where I have a really hard time staying seated when I'm supposed to, like during work meetings or dinners.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Interview Transcript:\n\nDoctor: Hello. I'm glad you're here today. What brings you in to see me?\n\nPatient: Hi doctor. I've been feeling extremely restless lately, constantly \"on the go\" as if I'm driven by a motor. It's gotten to the point where I have a really hard time staying seated when I'm supposed to, like during work meetings or dinners."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)", "Attention-Deficit/Hyperactivity Disorder (Combined Presentation)", "Bipolar I Disorder", "Bipolar II Disorder", "Generalized Anxiety Disorder"], "note": "This is the initial assessment. The patient presents with significant restlessness, feeling 'driven by a motor', and difficulty remaining seated. This clinical picture is highly suggestive of ADHD (Hyperactive/Impulsive or Combined presentation), but could also represent psychomotor agitation seen in manic/hypomanic episodes of Bipolar I or II Disorder, or physical restlessness associated with Generalized Anxiety Disorder."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n[Current Candidate Diagnoses]\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Generalized Anxiety Disorder\n\n[Already Asked Questions]\n\n[Already Asked Questions]\n- Hello. I'm glad you're here today. What brings you in to see me?\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"initial_complaint\",\n  \"subcategory\": null,\n  \"question\": \"Hello. I'm glad you're here today. What brings you in to see me?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\", \"Bipolar I Disorder\", \"Bipolar II Disorder\", \"Generalized Anxiety Disorder\"]\n\nInterview Transcript: \nDoctor: Hello. I'm glad you're here today. What brings you in to see me?\n\nPatient: Hi doctor. I've been feeling extremely restless lately, constantly \"on the go\" as if I'm driven by a motor. It's gotten to the point where I have a really hard time staying seated when I'm supposed to, like during work meetings or dinners.\n\nPatient: Hi doctor. I've been feeling extremely restless lately, constantly \"on the go\" as if I'm driven by a motor. It's gotten to the point where I have a really hard time staying seated when I'm supposed to, like during work meetings or dinners."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential_point",
+  "subcategory": "onset_and_course",
+  "question": "Have you struggled with this restlessness and difficulty staying still for most of your life since childhood, or does it come and go in distinct periods?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ hyperactivity_impulsivity\n  - Leaving_Seat: Often leaves seat in situations when remaining seated is expected.\n  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.\n  - Blurting_Answers: Often blurts out an answer before a question has been completed.\n▸ Critical Diagnostic Criteria\n  - Duration: 1 year and 2 months\n  - Additional: Onset prior to age 12 years\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 2\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nHave you struggled with this restlessness and difficulty staying still for most of your life since childhood, or does it come and go in distinct periods?"
+  }
+]
+========== OUTPUT [patient] ==========
+```json
+{
+  "matched": true,
+  "matched_sections": [
+    "Critical Diagnostic Criteria -> Additional: Onset prior to age 12 years",
+    "Critical Diagnostic Criteria -> Duration: 1 year and 2 months",
+    "hyperactivity_impulsivity -> Constant_Activity",
+    "hyperactivity_impulsivity -> Leaving_Seat"
+  ],
+  "answer_strategy": "Confirm that this restlessness (feeling 'driven by a motor' and constantly needing to get up or move) has been a persistent, ongoing issue since childhood (starting before age 12) rather than coming and going in episodes. Mention that it has been consistently present for about 1 year and 2 months."
+}
+```
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation).\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ hyperactivity_impulsivity\n  - Leaving_Seat: Often leaves seat in situations when remaining seated is expected.\n  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.\n  - Blurting_Answers: Often blurts out an answer before a question has been completed.\n▸ Critical Diagnostic Criteria\n  - Duration: 1 year and 2 months\n  - Additional: Onset prior to age 12 years\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Leaving_Seat\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(Matched with profile)\nRelated sections: Critical Diagnostic Criteria -> Additional: Onset prior to age 12 years, Critical Diagnostic Criteria -> Duration: 1 year and 2 months, hyperactivity_impulsivity -> Constant_Activity, hyperactivity_impulsivity -> Leaving_Seat\nAnswer strategy: Confirm that this restlessness (feeling 'driven by a motor' and constantly needing to get up or move) has been a persistent, ongoing issue since childhood (starting before age 12) rather than coming and going in episodes. Mention that it has been consistently present for about 1 year and 2 months."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello. I'm glad you're here today. What brings you in to see me?\n\nPatient: Hi doctor. I've been feeling extremely restless lately, constantly \"on the go\" as if I'm driven by a motor. It's gotten to the point where I have a really hard time staying seated when I'm supposed to, like during work meetings or dinners.\n\nDoctor: Have you struggled with this restlessness and difficulty staying still for most of your life since childhood, or does it come and go in distinct periods?"
+  }
+]
+========== OUTPUT [patient] ==========
+Yes, I've actually struggled with this since childhood, definitely starting before I was 12, and it doesn't really come and go in episodes. It has been a constant, everyday issue for about a year and two months now.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Previous Candidates:\n[\"Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\", \"Bipolar I Disorder\", \"Bipolar II Disorder\", \"Generalized Anxiety Disorder\"]\n\nInterview Transcript:\n\nDoctor: Hello. I'm glad you're here today. What brings you in to see me?\n\nPatient: Hi doctor. I've been feeling extremely restless lately, constantly \"on the go\" as if I'm driven by a motor. It's gotten to the point where I have a really hard time staying seated when I'm supposed to, like during work meetings or dinners.\n\nDoctor: Have you struggled with this restlessness and difficulty staying still for most of your life since childhood, or does it come and go in distinct periods?\n\nPatient: Yes, I've actually struggled with this since childhood, definitely starting before I was 12, and it doesn't really come and go in episodes. It has been a constant, everyday issue for about a year and two months now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["Attention-Deficit/Hyperactivity Disorder (Combined Presentation)", "Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)"], "note": "Previously the candidates were ['Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)', 'Attention-Deficit/Hyperactivity Disorder (Combined Presentation)', 'Bipolar I Disorder', 'Bipolar II Disorder', 'Generalized Anxiety Disorder']. Based on the patient's report that the symptoms have been present continuously since childhood (before age 12) and do not occur in episodes, Bipolar I and Bipolar II Disorders are highly unlikely. Generalized Anxiety Disorder is also less likely given the specific childhood-
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n\n[Already Asked Questions]\n\n[Already Asked Questions]\n- Hello. I'm glad you're here today. What brings you in to see me?\n- Have you struggled with this restlessness and difficulty staying still for most of your life since childhood, or does it come and go in distinct periods?\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"initial_complaint\",\n  \"subcategory\": null,\n  \"question\": \"Hello. I'm glad you're here today. What brings you in to see me?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\", \"Bipolar I Disorder\", \"Bipolar II Disorder\", \"Generalized Anxiety Disorder\"]\n\nInterview Transcript: \nDoctor: Hello. I'm glad you're here today. What brings you in to see me?\n\nPatient: Hi doctor. I've been feeling extremely restless lately, constantly \"on the go\" as if I'm driven by a motor. It's gotten to the point where I have a really hard time staying seated when I'm supposed to, like during work meetings or dinners.\n\nPatient: Hi doctor. I've been feeling extremely restless lately, constantly \"on the go\" as if I'm driven by a motor. It's gotten to the point where I have a really hard time staying seated when I'm supposed to, like during work meetings or dinners."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"differential_point\",\n  \"subcategory\": \"onset_and_course\",\n  \"question\": \"Have you struggled with this restlessness and difficulty staying still for most of your life since childhood, or does it come and go in distinct periods?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[]\n\nInterview Transcript: \nDoctor: Hello. I'm glad you're here today. What brings you in to see me?\n\nPatient: Hi doctor. I've been feeling extremely restless lately, constantly \"on the go\" as if I'm driven by a motor. It's gotten to the point where I have a really hard time staying seated when I'm supposed to, like during work meetings or dinners.\n\nDoctor: Have you struggled with this restlessness and difficulty staying still for most of your life since childhood, or does it come and go in distinct periods?\n\nPatient: Yes, I've actually struggled with this since childhood, definitely starting before I was 12, and it doesn't really come and go in episodes. It has been a constant, everyday issue for about a year and two months now.\n\nPatient: Yes, I've actually struggled with this since childhood, definitely starting before I was 12, and it doesn't really come and go in episodes. It has been a constant, everyday issue for about a year and two months now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential_point",
+  "subcategory": "inattention",
+  "question": "Along with the restlessness, do you often find it hard to focus, keep track of things, or finish tasks because you get easily distracted?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ hyperactivity_impulsivity\n  - Leaving_Seat: Often leaves seat in situations when remaining seated is expected.\n  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.\n  - Blurting_Answers: Often blurts out an answer before a question has been completed.\n▸ Critical Diagnostic Criteria\n  - Duration: 1 year and 2 months\n  - Additional: Onset prior to age 12 years\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 3\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nAlong with the restlessness, do you often find it hard to focus, keep track of things, or finish tasks because you get easily distracted?"
+  }
+]
+========== OUTPUT [patient] ==========
+```json
+{
+  "matched": false,
+  "matched_sections": [],
+  "answer_strategy": "Respond briefly, indicating that you don't really have significant trouble with focusing, keeping track of things, or being easily distracted, keeping the focus on your physical restlessness instead."
+}
+```
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation).\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ hyperactivity_impulsivity\n  - Leaving_Seat: Often leaves seat in situations when remaining seated is expected.\n  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.\n  - Blurting_Answers: Often blurts out an answer before a question has been completed.\n▸ Critical Diagnostic Criteria\n  - Duration: 1 year and 2 months\n  - Additional: Onset prior to age 12 years\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Leaving_Seat\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(No match in profile or inference only)\nAnswer strategy: Respond briefly, indicating that you don't really have significant trouble with focusing, keeping track of things, or being easily distracted, keeping the focus on your physical restlessness instead."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello. I'm glad you're here today. What brings you in to see me?\n\nPatient: Hi doctor. I've been feeling extremely restless lately, constantly \"on the go\" as if I'm driven by a motor. It's gotten to the point where I have a really hard time staying seated when I'm supposed to, like during work meetings or dinners.\n\nDoctor: Have you struggled with this restlessness and difficulty staying still for most of your life since childhood, or does it come and go in distinct periods?\n\nPatient: Yes, I've actually struggled with this since childhood, definitely starting before I was 12, and it doesn't really come and go in episodes. It has been a constant, everyday issue for about a year and two months now.\n\nDoctor: Along with the restlessness, do you often find it hard to focus, keep track of things, or finish tasks because you get easily distracted?"
+  }
+]
+========== OUTPUT [patient] ==========
+To be honest, I don't really have much trouble focusing or getting easily distracted. My main struggle is just this constant physical urge to move and not being able to sit still.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Interview Transcript:\n\nDoctor: Hello. I'm glad you're here today. What brings you in to see me?\n\nPatient: Hi doctor. I've been feeling extremely restless lately, constantly \"on the go\" as if I'm driven by a motor. It's gotten to the point where I have a really hard time staying seated when I'm supposed to, like during work meetings or dinners.\n\nDoctor: Have you struggled with this restlessness and difficulty staying still for most of your life since childhood, or does it come and go in distinct periods?\n\nPatient: Yes, I've actually struggled with this since childhood, definitely starting before I was 12, and it doesn't really come and go in episodes. It has been a constant, everyday issue for about a year and two months now.\n\nDoctor: Along with the restlessness, do you often find it hard to focus, keep track of things, or finish tasks because you get easily distracted?\n\nPatient: To be honest, I don't really have much trouble focusing or getting easily distracted. My main struggle is just this constant physical urge to move and not being able to sit still."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)", "Generalized Anxiety Disorder"], "note": "The patient reports chronic restlessness, feeling 'driven by a motor,' and difficulty staying seated since childhood (prior to age 12), without episodic variation. They deny significant inattentive symptoms (difficulty focusing or easy distractibility). This presentation is highly suggestive of Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation). Generalized Anxiety Disorder is also considered as a differential diagnosis due to the prominent physical restlessness, though the childhood onset and specific hyperactive symptoms point more towards ADHD."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n[Current Candidate Diagnoses]\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Generalized Anxiety Disorder\n\n[Already Asked Questions]\n\n[Already Asked Questions]\n- Hello. I'm glad you're here today. What brings you in to see me?\n- Have you struggled with this restlessness and difficulty staying still for most of your life since childhood, or does it come and go in distinct periods?\n- Along with the restlessness, do you often find it hard to focus, keep track of things, or finish tasks because you get easily distracted?\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"initial_complaint\",\n  \"subcategory\": null,\n  \"question\": \"Hello. I'm glad you're here today. What brings you in to see me?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\", \"Bipolar I Disorder\", \"Bipolar II Disorder\", \"Generalized Anxiety Disorder\"]\n\nInterview Transcript: \nDoctor: Hello. I'm glad you're here today. What brings you in to see me?\n\nPatient: Hi doctor. I've been feeling extremely restless lately, constantly \"on the go\" as if I'm driven by a motor. It's gotten to the point where I have a really hard time staying seated when I'm supposed to, like during work meetings or dinners.\n\nPatient: Hi doctor. I've been feeling extremely restless lately, constantly \"on the go\" as if I'm driven by a motor. It's gotten to the point where I have a really hard time staying seated when I'm supposed to, like during work meetings or dinners."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"differential_point\",\n  \"subcategory\": \"onset_and_course\",\n  \"question\": \"Have you struggled with this restlessness and difficulty staying still for most of your life since childhood, or does it come and go in distinct periods?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[]\n\nInterview Transcript: \nDoctor: Hello. I'm glad you're here today. What brings you in to see me?\n\nPatient: Hi doctor. I've been feeling extremely restless lately, constantly \"on the go\" as if I'm driven by a motor. It's gotten to the point where I have a really hard time staying seated when I'm supposed to, like during work meetings or dinners.\n\nDoctor: Have you struggled with this restlessness and difficulty staying still for most of your life since childhood, or does it come and go in distinct periods?\n\nPatient: Yes, I've actually struggled with this since childhood, definitely starting before I was 12, and it doesn't really come and go in episodes. It has been a constant, everyday issue for about a year and two months now.\n\nPatient: Yes, I've actually struggled with this since childhood, definitely starting before I was 12, and it doesn't really come and go in episodes. It has been a constant, everyday issue for about a year and two months now."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"differential_point\",\n  \"subcategory\": \"inattention\",\n  \"question\": \"Along with the restlessness, do you often find it hard to focus, keep track of things, or finish tasks because you get easily distracted?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\", \"Generalized Anxiety Disorder\"]\n\nInterview Transcript: \nDoctor: Hello. I'm glad you're here today. What brings you in to see me?\n\nPatient: Hi doctor. I've been feeling extremely restless lately, constantly \"on the go\" as if I'm driven by a motor. It's gotten to the point where I have a really hard time staying seated when I'm supposed to, like during work meetings or dinners.\n\nDoctor: Have you struggled with this restlessness and difficulty staying still for most of your life since childhood, or does it come and go in distinct periods?\n\nPatient: Yes, I've actually struggled with this since childhood, definitely starting before I was 12, and it doesn't really come and go in episodes. It has been a constant, everyday issue for about a year and two months now.\n\nDoctor: Along with the restlessness, do you often find it hard to focus, keep track of things, or finish tasks because you get easily distracted?\n\nPatient: To be honest, I don't really have much trouble focusing or getting easily distracted. My main struggle is just this constant physical urge to move and not being able to sit still.\n\nPatient: To be honest, I don't really have much trouble focusing or getting easily distracted. My main struggle is just this constant physical urge to move and not being able to sit still."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential_point",
+  "subcategory": "anxiety_worry",
+  "question": "Do you often experience excessive, hard-to-control worry or anxiety about everyday things like your work, health, or daily chores?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ hyperactivity_impulsivity\n  - Leaving_Seat: Often leaves seat in situations when remaining seated is expected.\n  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.\n  - Blurting_Answers: Often blurts out an answer before a question has been completed.\n▸ Critical Diagnostic Criteria\n  - Duration: 1 year and 2 months\n  - Additional: Onset prior to age 12 years\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 4\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nDo you often experience excessive, hard-to-control worry or anxiety about everyday things like your work, health, or daily chores?"
+  }
+]
+========== OUTPUT [patient] ==========
+{"matched": false, "matched_sections": [], "answer_strategy": "Respond briefly, stating that you do not really experience excessive or hard-to-control worry or anxiety about everyday things."}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation).\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ hyperactivity_impulsivity\n  - Leaving_Seat: Often leaves seat in situations when remaining seated is expected.\n  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.\n  - Blurting_Answers: Often blurts out an answer before a question has been completed.\n▸ Critical Diagnostic Criteria\n  - Duration: 1 year and 2 months\n  - Additional: Onset prior to age 12 years\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Leaving_Seat\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(No match in profile or inference only)\nAnswer strategy: Respond briefly, stating that you do not really experience excessive or hard-to-control worry or anxiety about everyday things."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello. I'm glad you're here today. What brings you in to see me?\n\nPatient: Hi doctor. I've been feeling extremely restless lately, constantly \"on the go\" as if I'm driven by a motor. It's gotten to the point where I have a really hard time staying seated when I'm supposed to, like during work meetings or dinners.\n\nDoctor: Have you struggled with this restlessness and difficulty staying still for most of your life since childhood, or does it come and go in distinct periods?\n\nPatient: Yes, I've actually struggled with this since childhood, definitely starting before I was 12, and it doesn't really come and go in episodes. It has been a constant, everyday issue for about a year and two months now.\n\nDoctor: Along with the restlessness, do you often find it hard to focus, keep track of things, or finish tasks because you get easily distracted?\n\nPatient: To be honest, I don't really have much trouble focusing or getting easily distracted. My main struggle is just this constant physical urge to move and not being able to sit still.\n\nDoctor: Do you often experience excessive, hard-to-control worry or anxiety about everyday things like your work, health, or daily chores?"
+  }
+]
+========== OUTPUT [patient] ==========
+No, I don't really experience excessive or hard-to-control worry about everyday things like that. I might get a bit frustrated when I can't sit still, but I wouldn't say I struggle with anxiety.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Previous Candidates:\n[\"Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\", \"Generalized Anxiety Disorder\"]\n\nInterview Transcript:\n\nDoctor: Hello. I'm glad you're here today. What brings you in to see me?\n\nPatient: Hi doctor. I've been feeling extremely restless lately, constantly \"on the go\" as if I'm driven by a motor. It's gotten to the point where I have a really hard time staying seated when I'm supposed to, like during work meetings or dinners.\n\nDoctor: Have you struggled with this restlessness and difficulty staying still for most of your life since childhood, or does it come and go in distinct periods?\n\nPatient: Yes, I've actually struggled with this since childhood, definitely starting before I was 12, and it doesn't really come and go in episodes. It has been a constant, everyday issue for about a year and two months now.\n\nDoctor: Along with the restlessness, do you often find it hard to focus, keep track of things, or finish tasks because you get easily distracted?\n\nPatient: To be honest, I don't really have much trouble focusing or getting easily distracted. My main struggle is just this constant physical urge to move and not being able to sit still.\n\nDoctor: Do you often experience excessive, hard-to-control worry or anxiety about everyday things like your work, health, or daily chores?\n\nPatient: No, I don't really experience excessive or hard-to-control worry about everyday things like that. I might get a bit frustrated when I can't sit still, but I wouldn't say I struggle with anxiety."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)"], "note": "Previously, the candidates were Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation) and Generalized Anxiety Disorder. Based on the patient's explicit denial of excessive, hard-to-control worry about everyday things, Generalized Anxiety Disorder is ruled out. The patient's presentation of lifelong (onset before age 12) hyperactivity and restlessness without significant inattention confirms the diagnosis of Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the full interview transcript and the differential diagnosis candidates,\nwrite the final diagnosis report.\n\n[Constraint: Allowed Candidate List]\nBoth the \"diagnosis\" and \"candidates\" fields MUST ONLY contain items from the following list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\nOutput Format (JSON only, no other text):\n{\"diagnosis\": \"Final Diagnosis Name\", \"candidates\": [\"Candidate1\", \"Candidate2\"], \"reason\": \"Brief summary of key collected symptoms supporting this diagnosis\"}\n\n[Field Instructions]\n- diagnosis: The single diagnosis name from the allowed list you are most confident about.\n- candidates: Top 2–3 differential candidates from the allowed list considered until the end.\n- reason: Brief diagnostic rationale.\n"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\"]\n\nInterview Transcript: \nDoctor: Hello. I'm glad you're here today. What brings you in to see me?\n\nPatient: Hi doctor. I've been feeling extremely restless lately, constantly \"on the go\" as if I'm driven by a motor. It's gotten to the point where I have a really hard time staying seated when I'm supposed to, like during work meetings or dinners.\n\nDoctor: Have you struggled with this restlessness and difficulty staying still for most of your life since childhood, or does it come and go in distinct periods?\n\nPatient: Yes, I've actually struggled with this since childhood, definitely starting before I was 12, and it doesn't really come and go in episodes. It has been a constant, everyday issue for about a year and two months now.\n\nDoctor: Along with the restlessness, do you often find it hard to focus, keep track of things, or finish tasks because you get easily distracted?\n\nPatient: To be honest, I don't really have much trouble focusing or getting easily distracted. My main struggle is just this constant physical urge to move and not being able to sit still.\n\nDoctor: Do you often experience excessive, hard-to-control worry or anxiety about everyday things like your work, health, or daily chores?\n\nPatient: No, I don't really experience excessive or hard-to-control worry about everyday things like that. I might get a bit frustrated when I can't sit still, but I wouldn't say I struggle with anxiety."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"diagnosis": "Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)", "candidates": ["Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)", "Attention-Deficit/Hyperactivity Disorder (Combined Presentation)", "Generalized Anxiety Disorder"], "reason": "The patient reports chronic, long-standing symptoms of hyperactivity and restlessness (feeling 'driven by a motor' and inability to remain seated) dating back to childhood (before age 12). They explicitly deny significant inattentive symptoms or generalized anxiety, which points directly to the predominantly hyperactive/impulsive presentation of ADHD."}
+=====================================
+
