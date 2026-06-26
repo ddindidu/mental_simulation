@@ -1,0 +1,321 @@
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n\n[Already Asked Questions]\n\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "opening question",
+  "subcategory": null,
+  "question": "Hello, I’m glad you came in. What brings you in today?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ adjustment_symptoms\n  - With Depressed Mood: Symptoms mainly include low mood, tearfulness, or feelings of hopelessness.\n  - With Anxiety: Symptoms mainly include nervousness, worry, jitteriness, or separation anxiety.\n  - With Mixed Anxiety and Depressed Mood: A combination of depression and anxiety symptoms appears.\n  - With Disturbance of Conduct: Symptoms mainly involve violation of rules, truancy, vandalism, reckless driving, or fighting.\n  - With Mixed Disturbance of Emotions and Conduct: Both emotional symptoms (depression, anxiety) and behavioral problems appear together.\n  - Unspecified: Maladaptive reactions not classified into the above types (e.g., physical complaints, social withdrawal).\n▸ Critical Diagnostic Criteria\n  - Duration: 5 months\n  - Additional: Symptoms must develop within 3 months of the onset of the stressor\n  - Additional: Within 6 months of the termination of the stressor or its consequences\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 1\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nHello, I’m glad you came in. What brings you in today?"
+  }
+]
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["adjustment_symptoms", "Critical Diagnostic Criteria"], "answer_strategy": "State your chief complaint naturally: explain that you've been feeling very overwhelmed, down, and anxious for about the past 5 months and are struggling to cope. Since this is your first turn, focus only on this main issue and avoid detailing all other symptoms or diagnostic criteria yet."}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Adjustment Disorder.\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ adjustment_symptoms\n  - With Depressed Mood: Symptoms mainly include low mood, tearfulness, or feelings of hopelessness.\n  - With Anxiety: Symptoms mainly include nervousness, worry, jitteriness, or separation anxiety.\n  - With Mixed Anxiety and Depressed Mood: A combination of depression and anxiety symptoms appears.\n  - With Disturbance of Conduct: Symptoms mainly involve violation of rules, truancy, vandalism, reckless driving, or fighting.\n  - With Mixed Disturbance of Emotions and Conduct: Both emotional symptoms (depression, anxiety) and behavioral problems appear together.\n  - Unspecified: Maladaptive reactions not classified into the above types (e.g., physical complaints, social withdrawal).\n▸ Critical Diagnostic Criteria\n  - Duration: 5 months\n  - Additional: Symptoms must develop within 3 months of the onset of the stressor\n  - Additional: Within 6 months of the termination of the stressor or its consequences\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Stress_Related_Maladaptive_Response\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(Matched with profile)\nRelated sections: adjustment_symptoms, Critical Diagnostic Criteria\nAnswer strategy: State your chief complaint naturally: explain that you've been feeling very overwhelmed, down, and anxious for about the past 5 months and are struggling to cope. Since this is your first turn, focus only on this main issue and avoid detailing all other symptoms or diagnostic criteria yet."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello, I’m glad you came in. What brings you in today?"
+  }
+]
+========== OUTPUT [patient] ==========
+Honestly, I've just been feeling incredibly overwhelmed, down, and anxious for the past five months. I'm really struggling to cope with daily life right now because of all the stress. I just don't know how to handle it anymore.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Interview Transcript:\n\nDoctor: Hello, I’m glad you came in. What brings you in today?\n\nPatient: Honestly, I've just been feeling incredibly overwhelmed, down, and anxious for the past five months. I'm really struggling to cope with daily life right now because of all the stress. I just don't know how to handle it anymore."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates":["Major Depressive Disorder","Generalized Anxiety Disorder","Adjustment Disorder"],"note":"Previously there were no candidates. Based on this initial report of five months of feeling overwhelmed, down, and anxious in the context of stress, the main possibilities are Major Depressive Disorder, Generalized Anxiety Disorder, and Adjustment Disorder. Adjustment Disorder is supported by the clear stress-related onset, while Major Depressive Disorder and Generalized Anxiety Disorder remain possible because the patient describes persistent low mood and anxiety affecting daily functioning. There is not enough information yet to narrow further."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n[Current Candidate Diagnoses]\n- Major Depressive Disorder\n- Generalized Anxiety Disorder\n- Adjustment Disorder\n\n[Already Asked Questions]\n\n[Already Asked Questions]\n- Hello, I’m glad you came in. What brings you in today?\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"opening question\",\n  \"subcategory\": null,\n  \"question\": \"Hello, I’m glad you came in. What brings you in today?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Major Depressive Disorder\", \"Generalized Anxiety Disorder\", \"Adjustment Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I’m glad you came in. What brings you in today?\n\nPatient: Honestly, I've just been feeling incredibly overwhelmed, down, and anxious for the past five months. I'm really struggling to cope with daily life right now because of all the stress. I just don't know how to handle it anymore.\n\nPatient: Honestly, I've just been feeling incredibly overwhelmed, down, and anxious for the past five months. I'm really struggling to cope with daily life right now because of all the stress. I just don't know how to handle it anymore."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "stressor timing and relationship",
+  "question": "Did these symptoms start after a specific stressful event or life change, or did they come on without a clear trigger?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ adjustment_symptoms\n  - With Depressed Mood: Symptoms mainly include low mood, tearfulness, or feelings of hopelessness.\n  - With Anxiety: Symptoms mainly include nervousness, worry, jitteriness, or separation anxiety.\n  - With Mixed Anxiety and Depressed Mood: A combination of depression and anxiety symptoms appears.\n  - With Disturbance of Conduct: Symptoms mainly involve violation of rules, truancy, vandalism, reckless driving, or fighting.\n  - With Mixed Disturbance of Emotions and Conduct: Both emotional symptoms (depression, anxiety) and behavioral problems appear together.\n  - Unspecified: Maladaptive reactions not classified into the above types (e.g., physical complaints, social withdrawal).\n▸ Critical Diagnostic Criteria\n  - Duration: 5 months\n  - Additional: Symptoms must develop within 3 months of the onset of the stressor\n  - Additional: Within 6 months of the termination of the stressor or its consequences\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 2\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nDid these symptoms start after a specific stressful event or life change, or did they come on without a clear trigger?"
+  }
+]
+========== OUTPUT [patient] ==========
+```json
+{"matched": true, "matched_sections": ["Critical Diagnostic Criteria"], "answer_strategy": "Confirm that the symptoms started after a specific stressful event or life change, noting that they developed within three months of that stressor."}
+```
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Adjustment Disorder.\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ adjustment_symptoms\n  - With Depressed Mood: Symptoms mainly include low mood, tearfulness, or feelings of hopelessness.\n  - With Anxiety: Symptoms mainly include nervousness, worry, jitteriness, or separation anxiety.\n  - With Mixed Anxiety and Depressed Mood: A combination of depression and anxiety symptoms appears.\n  - With Disturbance of Conduct: Symptoms mainly involve violation of rules, truancy, vandalism, reckless driving, or fighting.\n  - With Mixed Disturbance of Emotions and Conduct: Both emotional symptoms (depression, anxiety) and behavioral problems appear together.\n  - Unspecified: Maladaptive reactions not classified into the above types (e.g., physical complaints, social withdrawal).\n▸ Critical Diagnostic Criteria\n  - Duration: 5 months\n  - Additional: Symptoms must develop within 3 months of the onset of the stressor\n  - Additional: Within 6 months of the termination of the stressor or its consequences\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Stress_Related_Maladaptive_Response\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(Matched with profile)\nRelated sections: Critical Diagnostic Criteria\nAnswer strategy: Confirm that the symptoms started after a specific stressful event or life change, noting that they developed within three months of that stressor."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello, I’m glad you came in. What brings you in today?\n\nPatient: Honestly, I've just been feeling incredibly overwhelmed, down, and anxious for the past five months. I'm really struggling to cope with daily life right now because of all the stress. I just don't know how to handle it anymore.\n\nDoctor: Did these symptoms start after a specific stressful event or life change, or did they come on without a clear trigger?"
+  }
+]
+========== OUTPUT [patient] ==========
+Yes, they started right after I was laid off from my job about six months ago. Within a month of losing my position, all of this anxiety and sadness just hit me and I haven't been able to shake it since.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Previous Candidates:\n[\"Major Depressive Disorder\", \"Generalized Anxiety Disorder\", \"Adjustment Disorder\"]\n\nInterview Transcript:\n\nDoctor: Hello, I’m glad you came in. What brings you in today?\n\nPatient: Honestly, I've just been feeling incredibly overwhelmed, down, and anxious for the past five months. I'm really struggling to cope with daily life right now because of all the stress. I just don't know how to handle it anymore.\n\nDoctor: Did these symptoms start after a specific stressful event or life change, or did they come on without a clear trigger?\n\nPatient: Yes, they started right after I was laid off from my job about six months ago. Within a month of losing my position, all of this anxiety and sadness just hit me and I haven't been able to shake it since."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates":["Adjustment Disorder","Major Depressive Disorder","Generalized Anxiety Disorder"],"note":"Previously the candidates were [Major Depressive Disorder, Generalized Anxiety Disorder, Adjustment Disorder]. The new information shows symptoms began within a month of a clear stressor (job loss) and have persisted for about five months, which supports Adjustment Disorder and makes it more likely. However, the patient also describes persistent depressed mood and anxiety, so Major Depressive Disorder and Generalized Anxiety Disorder remain possible based on the limited symptom details provided."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n[Current Candidate Diagnoses]\n- Adjustment Disorder\n- Major Depressive Disorder\n- Generalized Anxiety Disorder\n\n[Already Asked Questions]\n\n[Already Asked Questions]\n- Hello, I’m glad you came in. What brings you in today?\n- Did these symptoms start after a specific stressful event or life change, or did they come on without a clear trigger?\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"opening question\",\n  \"subcategory\": null,\n  \"question\": \"Hello, I’m glad you came in. What brings you in today?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Major Depressive Disorder\", \"Generalized Anxiety Disorder\", \"Adjustment Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I’m glad you came in. What brings you in today?\n\nPatient: Honestly, I've just been feeling incredibly overwhelmed, down, and anxious for the past five months. I'm really struggling to cope with daily life right now because of all the stress. I just don't know how to handle it anymore.\n\nPatient: Honestly, I've just been feeling incredibly overwhelmed, down, and anxious for the past five months. I'm really struggling to cope with daily life right now because of all the stress. I just don't know how to handle it anymore."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"differential point\",\n  \"subcategory\": \"stressor timing and relationship\",\n  \"question\": \"Did these symptoms start after a specific stressful event or life change, or did they come on without a clear trigger?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Adjustment Disorder\", \"Major Depressive Disorder\", \"Generalized Anxiety Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I’m glad you came in. What brings you in today?\n\nPatient: Honestly, I've just been feeling incredibly overwhelmed, down, and anxious for the past five months. I'm really struggling to cope with daily life right now because of all the stress. I just don't know how to handle it anymore.\n\nDoctor: Did these symptoms start after a specific stressful event or life change, or did they come on without a clear trigger?\n\nPatient: Yes, they started right after I was laid off from my job about six months ago. Within a month of losing my position, all of this anxiety and sadness just hit me and I haven't been able to shake it since.\n\nPatient: Yes, they started right after I was laid off from my job about six months ago. Within a month of losing my position, all of this anxiety and sadness just hit me and I haven't been able to shake it since."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "symptom presence",
+  "subcategory": "depressive symptoms",
+  "question": "Have you also had a loss of interest or pleasure in things you usually enjoy, or any thoughts that life is not worth living?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ adjustment_symptoms\n  - With Depressed Mood: Symptoms mainly include low mood, tearfulness, or feelings of hopelessness.\n  - With Anxiety: Symptoms mainly include nervousness, worry, jitteriness, or separation anxiety.\n  - With Mixed Anxiety and Depressed Mood: A combination of depression and anxiety symptoms appears.\n  - With Disturbance of Conduct: Symptoms mainly involve violation of rules, truancy, vandalism, reckless driving, or fighting.\n  - With Mixed Disturbance of Emotions and Conduct: Both emotional symptoms (depression, anxiety) and behavioral problems appear together.\n  - Unspecified: Maladaptive reactions not classified into the above types (e.g., physical complaints, social withdrawal).\n▸ Critical Diagnostic Criteria\n  - Duration: 5 months\n  - Additional: Symptoms must develop within 3 months of the onset of the stressor\n  - Additional: Within 6 months of the termination of the stressor or its consequences\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 3\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nHave you also had a loss of interest or pleasure in things you usually enjoy, or any thoughts that life is not worth living?"
+  }
+]
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["adjustment_symptoms.With Depressed Mood"], "answer_strategy": "Confirm that you have been experiencing a low mood and feelings of hopelessness (such as thinking life isn't worth living), matching the symptoms described under 'With Depressed Mood'."}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Adjustment Disorder.\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ adjustment_symptoms\n  - With Depressed Mood: Symptoms mainly include low mood, tearfulness, or feelings of hopelessness.\n  - With Anxiety: Symptoms mainly include nervousness, worry, jitteriness, or separation anxiety.\n  - With Mixed Anxiety and Depressed Mood: A combination of depression and anxiety symptoms appears.\n  - With Disturbance of Conduct: Symptoms mainly involve violation of rules, truancy, vandalism, reckless driving, or fighting.\n  - With Mixed Disturbance of Emotions and Conduct: Both emotional symptoms (depression, anxiety) and behavioral problems appear together.\n  - Unspecified: Maladaptive reactions not classified into the above types (e.g., physical complaints, social withdrawal).\n▸ Critical Diagnostic Criteria\n  - Duration: 5 months\n  - Additional: Symptoms must develop within 3 months of the onset of the stressor\n  - Additional: Within 6 months of the termination of the stressor or its consequences\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Stress_Related_Maladaptive_Response\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(Matched with profile)\nRelated sections: adjustment_symptoms.With Depressed Mood\nAnswer strategy: Confirm that you have been experiencing a low mood and feelings of hopelessness (such as thinking life isn't worth living), matching the symptoms described under 'With Depressed Mood'."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello, I’m glad you came in. What brings you in today?\n\nPatient: Honestly, I've just been feeling incredibly overwhelmed, down, and anxious for the past five months. I'm really struggling to cope with daily life right now because of all the stress. I just don't know how to handle it anymore.\n\nDoctor: Did these symptoms start after a specific stressful event or life change, or did they come on without a clear trigger?\n\nPatient: Yes, they started right after I was laid off from my job about six months ago. Within a month of losing my position, all of this anxiety and sadness just hit me and I haven't been able to shake it since.\n\nDoctor: Have you also had a loss of interest or pleasure in things you usually enjoy, or any thoughts that life is not worth living?"
+  }
+]
+========== OUTPUT [patient] ==========
+Yes, I've completely lost interest in the things I used to enjoy, and I just don't have the energy for them anymore. Lately, I've also had this overwhelming sense of hopelessness, and there have been times where I've felt like life isn't even worth living anymore.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Previous Candidates:\n[\"Adjustment Disorder\", \"Major Depressive Disorder\", \"Generalized Anxiety Disorder\"]\n\nInterview Transcript:\n\nDoctor: Hello, I’m glad you came in. What brings you in today?\n\nPatient: Honestly, I've just been feeling incredibly overwhelmed, down, and anxious for the past five months. I'm really struggling to cope with daily life right now because of all the stress. I just don't know how to handle it anymore.\n\nDoctor: Did these symptoms start after a specific stressful event or life change, or did they come on without a clear trigger?\n\nPatient: Yes, they started right after I was laid off from my job about six months ago. Within a month of losing my position, all of this anxiety and sadness just hit me and I haven't been able to shake it since.\n\nDoctor: Have you also had a loss of interest or pleasure in things you usually enjoy, or any thoughts that life is not worth living?\n\nPatient: Yes, I've completely lost interest in the things I used to enjoy, and I just don't have the energy for them anymore. Lately, I've also had this overwhelming sense of hopelessness, and there have been times where I've felt like life isn't even worth living anymore."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates":["Major Depressive Disorder","Adjustment Disorder"],"note":"Previously the candidates were [Adjustment Disorder, Major Depressive Disorder, Generalized Anxiety Disorder]. Based on the interview, Generalized Anxiety Disorder is less likely because the symptoms began clearly after a specific stressor (job loss) rather than being a pervasive, free-floating anxiety pattern. Adjustment Disorder remains possible because the symptoms started within a month of the stressor and are causing significant distress. Major Depressive Disorder is now more strongly supported because the patient reports persistent depressed mood, marked loss of interest, low energy, hopelessness, and passive suicidal thoughts, which suggest a depressive episode beyond a simple stress response."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n[Current Candidate Diagnoses]\n- Major Depressive Disorder\n- Adjustment Disorder\n\n[Already Asked Questions]\n\n[Already Asked Questions]\n- Hello, I’m glad you came in. What brings you in today?\n- Did these symptoms start after a specific stressful event or life change, or did they come on without a clear trigger?\n- Have you also had a loss of interest or pleasure in things you usually enjoy, or any thoughts that life is not worth living?\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"opening question\",\n  \"subcategory\": null,\n  \"question\": \"Hello, I’m glad you came in. What brings you in today?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Major Depressive Disorder\", \"Generalized Anxiety Disorder\", \"Adjustment Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I’m glad you came in. What brings you in today?\n\nPatient: Honestly, I've just been feeling incredibly overwhelmed, down, and anxious for the past five months. I'm really struggling to cope with daily life right now because of all the stress. I just don't know how to handle it anymore.\n\nPatient: Honestly, I've just been feeling incredibly overwhelmed, down, and anxious for the past five months. I'm really struggling to cope with daily life right now because of all the stress. I just don't know how to handle it anymore."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"differential point\",\n  \"subcategory\": \"stressor timing and relationship\",\n  \"question\": \"Did these symptoms start after a specific stressful event or life change, or did they come on without a clear trigger?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Adjustment Disorder\", \"Major Depressive Disorder\", \"Generalized Anxiety Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I’m glad you came in. What brings you in today?\n\nPatient: Honestly, I've just been feeling incredibly overwhelmed, down, and anxious for the past five months. I'm really struggling to cope with daily life right now because of all the stress. I just don't know how to handle it anymore.\n\nDoctor: Did these symptoms start after a specific stressful event or life change, or did they come on without a clear trigger?\n\nPatient: Yes, they started right after I was laid off from my job about six months ago. Within a month of losing my position, all of this anxiety and sadness just hit me and I haven't been able to shake it since.\n\nPatient: Yes, they started right after I was laid off from my job about six months ago. Within a month of losing my position, all of this anxiety and sadness just hit me and I haven't been able to shake it since."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"symptom presence\",\n  \"subcategory\": \"depressive symptoms\",\n  \"question\": \"Have you also had a loss of interest or pleasure in things you usually enjoy, or any thoughts that life is not worth living?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Major Depressive Disorder\", \"Adjustment Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I’m glad you came in. What brings you in today?\n\nPatient: Honestly, I've just been feeling incredibly overwhelmed, down, and anxious for the past five months. I'm really struggling to cope with daily life right now because of all the stress. I just don't know how to handle it anymore.\n\nDoctor: Did these symptoms start after a specific stressful event or life change, or did they come on without a clear trigger?\n\nPatient: Yes, they started right after I was laid off from my job about six months ago. Within a month of losing my position, all of this anxiety and sadness just hit me and I haven't been able to shake it since.\n\nDoctor: Have you also had a loss of interest or pleasure in things you usually enjoy, or any thoughts that life is not worth living?\n\nPatient: Yes, I've completely lost interest in the things I used to enjoy, and I just don't have the energy for them anymore. Lately, I've also had this overwhelming sense of hopelessness, and there have been times where I've felt like life isn't even worth living anymore.\n\nPatient: Yes, I've completely lost interest in the things I used to enjoy, and I just don't have the energy for them anymore. Lately, I've also had this overwhelming sense of hopelessness, and there have been times where I've felt like life isn't even worth living anymore."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "symptom presence",
+  "subcategory": "duration",
+  "question": "Have these symptoms been present most days for at least two weeks, or have they been happening only on and off?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ adjustment_symptoms\n  - With Depressed Mood: Symptoms mainly include low mood, tearfulness, or feelings of hopelessness.\n  - With Anxiety: Symptoms mainly include nervousness, worry, jitteriness, or separation anxiety.\n  - With Mixed Anxiety and Depressed Mood: A combination of depression and anxiety symptoms appears.\n  - With Disturbance of Conduct: Symptoms mainly involve violation of rules, truancy, vandalism, reckless driving, or fighting.\n  - With Mixed Disturbance of Emotions and Conduct: Both emotional symptoms (depression, anxiety) and behavioral problems appear together.\n  - Unspecified: Maladaptive reactions not classified into the above types (e.g., physical complaints, social withdrawal).\n▸ Critical Diagnostic Criteria\n  - Duration: 5 months\n  - Additional: Symptoms must develop within 3 months of the onset of the stressor\n  - Additional: Within 6 months of the termination of the stressor or its consequences\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 4\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nHave these symptoms been present most days for at least two weeks, or have they been happening only on and off?"
+  }
+]
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["Critical Diagnostic Criteria"], "answer_strategy": "Confirm that the symptoms have been present continuously and consistently for about 5 months now, rather than just being on and off or only lasting for two weeks."}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Adjustment Disorder.\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ adjustment_symptoms\n  - With Depressed Mood: Symptoms mainly include low mood, tearfulness, or feelings of hopelessness.\n  - With Anxiety: Symptoms mainly include nervousness, worry, jitteriness, or separation anxiety.\n  - With Mixed Anxiety and Depressed Mood: A combination of depression and anxiety symptoms appears.\n  - With Disturbance of Conduct: Symptoms mainly involve violation of rules, truancy, vandalism, reckless driving, or fighting.\n  - With Mixed Disturbance of Emotions and Conduct: Both emotional symptoms (depression, anxiety) and behavioral problems appear together.\n  - Unspecified: Maladaptive reactions not classified into the above types (e.g., physical complaints, social withdrawal).\n▸ Critical Diagnostic Criteria\n  - Duration: 5 months\n  - Additional: Symptoms must develop within 3 months of the onset of the stressor\n  - Additional: Within 6 months of the termination of the stressor or its consequences\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Stress_Related_Maladaptive_Response\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(Matched with profile)\nRelated sections: Critical Diagnostic Criteria\nAnswer strategy: Confirm that the symptoms have been present continuously and consistently for about 5 months now, rather than just being on and off or only lasting for two weeks."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello, I’m glad you came in. What brings you in today?\n\nPatient: Honestly, I've just been feeling incredibly overwhelmed, down, and anxious for the past five months. I'm really struggling to cope with daily life right now because of all the stress. I just don't know how to handle it anymore.\n\nDoctor: Did these symptoms start after a specific stressful event or life change, or did they come on without a clear trigger?\n\nPatient: Yes, they started right after I was laid off from my job about six months ago. Within a month of losing my position, all of this anxiety and sadness just hit me and I haven't been able to shake it since.\n\nDoctor: Have you also had a loss of interest or pleasure in things you usually enjoy, or any thoughts that life is not worth living?\n\nPatient: Yes, I've completely lost interest in the things I used to enjoy, and I just don't have the energy for them anymore. Lately, I've also had this overwhelming sense of hopelessness, and there have been times where I've felt like life isn't even worth living anymore.\n\nDoctor: Have these symptoms been present most days for at least two weeks, or have they been happening only on and off?"
+  }
+]
+========== OUTPUT [patient] ==========
+They have actually been present almost every single day for the past five months. It hasn't been an on-and-off thing at all; it's been a constant, heavy feeling ever since it started.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Previous Candidates:\n[\"Major Depressive Disorder\", \"Adjustment Disorder\"]\n\nInterview Transcript:\n\nDoctor: Hello, I’m glad you came in. What brings you in today?\n\nPatient: Honestly, I've just been feeling incredibly overwhelmed, down, and anxious for the past five months. I'm really struggling to cope with daily life right now because of all the stress. I just don't know how to handle it anymore.\n\nDoctor: Did these symptoms start after a specific stressful event or life change, or did they come on without a clear trigger?\n\nPatient: Yes, they started right after I was laid off from my job about six months ago. Within a month of losing my position, all of this anxiety and sadness just hit me and I haven't been able to shake it since.\n\nDoctor: Have you also had a loss of interest or pleasure in things you usually enjoy, or any thoughts that life is not worth living?\n\nPatient: Yes, I've completely lost interest in the things I used to enjoy, and I just don't have the energy for them anymore. Lately, I've also had this overwhelming sense of hopelessness, and there have been times where I've felt like life isn't even worth living anymore.\n\nDoctor: Have these symptoms been present most days for at least two weeks, or have they been happening only on and off?\n\nPatient: They have actually been present almost every single day for the past five months. It hasn't been an on-and-off thing at all; it's been a constant, heavy feeling ever since it started."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates":["Major Depressive Disorder"],"note":"Previously the candidates were [Major Depressive Disorder, Adjustment Disorder]. Adjustment Disorder is now less likely because the symptoms have persisted continuously for five months with clear major depressive features (anhedonia, hopelessness, low energy, near-daily depressed mood), which is more consistent with a Major Depressive Episode. The depressive syndrome appears to be the primary current diagnosis, so the list is narrowed to Major Depressive Disorder."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the full interview transcript and the differential diagnosis candidates,\nwrite the final diagnosis report.\n\n[Constraint: Allowed Candidate List]\nBoth the \"diagnosis\" and \"candidates\" fields MUST ONLY contain items from the following list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\nOutput Format (JSON only, no other text):\n{\"diagnosis\": \"Final Diagnosis Name\", \"candidates\": [\"Candidate1\", \"Candidate2\"], \"reason\": \"Brief summary of key collected symptoms supporting this diagnosis\"}\n\n[Field Instructions]\n- diagnosis: The single diagnosis name from the allowed list you are most confident about.\n- candidates: Top 2–3 differential candidates from the allowed list considered until the end.\n- reason: Brief diagnostic rationale.\n"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Major Depressive Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I’m glad you came in. What brings you in today?\n\nPatient: Honestly, I've just been feeling incredibly overwhelmed, down, and anxious for the past five months. I'm really struggling to cope with daily life right now because of all the stress. I just don't know how to handle it anymore.\n\nDoctor: Did these symptoms start after a specific stressful event or life change, or did they come on without a clear trigger?\n\nPatient: Yes, they started right after I was laid off from my job about six months ago. Within a month of losing my position, all of this anxiety and sadness just hit me and I haven't been able to shake it since.\n\nDoctor: Have you also had a loss of interest or pleasure in things you usually enjoy, or any thoughts that life is not worth living?\n\nPatient: Yes, I've completely lost interest in the things I used to enjoy, and I just don't have the energy for them anymore. Lately, I've also had this overwhelming sense of hopelessness, and there have been times where I've felt like life isn't even worth living anymore.\n\nDoctor: Have these symptoms been present most days for at least two weeks, or have they been happening only on and off?\n\nPatient: They have actually been present almost every single day for the past five months. It hasn't been an on-and-off thing at all; it's been a constant, heavy feeling ever since it started."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"diagnosis":"Major Depressive Disorder","candidates":["Adjustment Disorder","Persistent Depressive Disorder"],"reason":"Patient has a 5-month history of near-daily depressed mood, marked anhedonia, low energy, hopelessness, and passive suicidal ideation, with clear functional impairment. Symptoms began after a job loss, but the severity, persistence, and full depressive syndrome are more consistent with Major Depressive Disorder than Adjustment Disorder; Persistent Depressive Disorder is less likely because duration is under 2 years."}
+=====================================
+

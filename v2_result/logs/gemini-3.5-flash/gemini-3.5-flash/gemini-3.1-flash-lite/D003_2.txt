@@ -1,0 +1,240 @@
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n\n[Already Asked Questions]\n\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "Chief complaint",
+  "subcategory": null,
+  "question": "Hello, I am Dr. Smith. Could you please tell me a little bit about what has been bothering you and what brings you in to see me today?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ hyperactivity_impulsivity\n  - Fidgeting: Often fidgets with or taps hands or feet or squirms in seat.\n  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.\n  - Waiting_Turn_Difficulty: Often has difficulty waiting his or her turn.\n▸ inattention\n  - Detail_Inattention_Errors: Often fails to give close attention to details or makes careless mistakes.\n  - Listening_Difficulty: Often does not seem to listen when spoken to directly.\n▸ Critical Diagnostic Criteria\n  - Duration: 1 year and 7 months\n  - Additional: Onset prior to age 12 years\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 1\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nHello, I am Dr. Smith. Could you please tell me a little bit about what has been bothering you and what brings you in to see me today?"
+  }
+]
+========== OUTPUT [patient] ==========
+```json
+{
+  "matched": true,
+  "matched_sections": [
+    "hyperactivity_impulsivity",
+    "inattention"
+  ],
+  "answer_strategy": "Introduce your chief complaint naturally. Mention that you've been struggling with feeling constantly restless, fidgety, and 'on the go' as if driven by a motor, alongside having a hard time focusing and making careless mistakes. Keep the response focused purely on these core complaints and do not reveal other details like duration or onset age yet."
+}
+```
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation).\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ hyperactivity_impulsivity\n  - Fidgeting: Often fidgets with or taps hands or feet or squirms in seat.\n  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.\n  - Waiting_Turn_Difficulty: Often has difficulty waiting his or her turn.\n▸ inattention\n  - Detail_Inattention_Errors: Often fails to give close attention to details or makes careless mistakes.\n  - Listening_Difficulty: Often does not seem to listen when spoken to directly.\n▸ Critical Diagnostic Criteria\n  - Duration: 1 year and 7 months\n  - Additional: Onset prior to age 12 years\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Fidgeting\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(Matched with profile)\nRelated sections: hyperactivity_impulsivity, inattention\nAnswer strategy: Introduce your chief complaint naturally. Mention that you've been struggling with feeling constantly restless, fidgety, and 'on the go' as if driven by a motor, alongside having a hard time focusing and making careless mistakes. Keep the response focused purely on these core complaints and do not reveal other details like duration or onset age yet."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello, I am Dr. Smith. Could you please tell me a little bit about what has been bothering you and what brings you in to see me today?"
+  }
+]
+========== OUTPUT [patient] ==========
+I'm here today because I've been struggling a lot with constant fidgeting and restlessness. I feel like I'm always "on the go" and just can't seem to sit still. It's really starting to make it hard for me to focus on my daily tasks.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Interview Transcript:\n\nDoctor: Hello, I am Dr. Smith. Could you please tell me a little bit about what has been bothering you and what brings you in to see me today?\n\nPatient: I'm here today because I've been struggling a lot with constant fidgeting and restlessness. I feel like I'm always \"on the go\" and just can't seem to sit still. It's really starting to make it hard for me to focus on my daily tasks."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["Attention-Deficit/Hyperactivity Disorder (Combined Presentation)", "Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)", "Generalized Anxiety Disorder"], "note": "The patient reports symptoms of restlessness, fidgeting, and difficulty focusing. These are consistent with ADHD (Combined or Hyperactive/Impulsive presentations). Generalized Anxiety Disorder is also included in the differential as it can present with psychomotor agitation and difficulty concentrating. Previous candidates were not provided, so this is the initial assessment."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n[Current Candidate Diagnoses]\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Generalized Anxiety Disorder\n\n[Already Asked Questions]\n\n[Already Asked Questions]\n- Hello, I am Dr. Smith. Could you please tell me a little bit about what has been bothering you and what brings you in to see me today?\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"Chief complaint\",\n  \"subcategory\": null,\n  \"question\": \"Hello, I am Dr. Smith. Could you please tell me a little bit about what has been bothering you and what brings you in to see me today?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\", \"Generalized Anxiety Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me a little bit about what has been bothering you and what brings you in to see me today?\n\nPatient: I'm here today because I've been struggling a lot with constant fidgeting and restlessness. I feel like I'm always \"on the go\" and just can't seem to sit still. It's really starting to make it hard for me to focus on my daily tasks.\n\nPatient: I'm here today because I've been struggling a lot with constant fidgeting and restlessness. I feel like I'm always \"on the go\" and just can't seem to sit still. It's really starting to make it hard for me to focus on my daily tasks."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "inattention",
+  "question": "Do you find that this difficulty in focusing is primarily due to your restlessness, or do you also frequently struggle with being forgetful, losing things, or failing to pay close attention to details?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ hyperactivity_impulsivity\n  - Fidgeting: Often fidgets with or taps hands or feet or squirms in seat.\n  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.\n  - Waiting_Turn_Difficulty: Often has difficulty waiting his or her turn.\n▸ inattention\n  - Detail_Inattention_Errors: Often fails to give close attention to details or makes careless mistakes.\n  - Listening_Difficulty: Often does not seem to listen when spoken to directly.\n▸ Critical Diagnostic Criteria\n  - Duration: 1 year and 7 months\n  - Additional: Onset prior to age 12 years\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 2\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nDo you find that this difficulty in focusing is primarily due to your restlessness, or do you also frequently struggle with being forgetful, losing things, or failing to pay close attention to details?"
+  }
+]
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["hyperactivity_impulsivity.Constant_Activity", "hyperactivity_impulsivity.Fidgeting", "inattention.Detail_Inattention_Errors"], "answer_strategy": "Confirm that you struggle with both aspects. Explain that you feel a constant restlessness, often fidgeting or feeling 'on the go' as if driven by a motor. At the same time, confirm that you struggle with paying close attention to details and often make careless mistakes, though you don't particularly experience losing things or forgetfulness as major issues."}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation).\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ hyperactivity_impulsivity\n  - Fidgeting: Often fidgets with or taps hands or feet or squirms in seat.\n  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.\n  - Waiting_Turn_Difficulty: Often has difficulty waiting his or her turn.\n▸ inattention\n  - Detail_Inattention_Errors: Often fails to give close attention to details or makes careless mistakes.\n  - Listening_Difficulty: Often does not seem to listen when spoken to directly.\n▸ Critical Diagnostic Criteria\n  - Duration: 1 year and 7 months\n  - Additional: Onset prior to age 12 years\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Fidgeting\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(Matched with profile)\nRelated sections: hyperactivity_impulsivity.Constant_Activity, hyperactivity_impulsivity.Fidgeting, inattention.Detail_Inattention_Errors\nAnswer strategy: Confirm that you struggle with both aspects. Explain that you feel a constant restlessness, often fidgeting or feeling 'on the go' as if driven by a motor. At the same time, confirm that you struggle with paying close attention to details and often make careless mistakes, though you don't particularly experience losing things or forgetfulness as major issues."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello, I am Dr. Smith. Could you please tell me a little bit about what has been bothering you and what brings you in to see me today?\n\nPatient: I'm here today because I've been struggling a lot with constant fidgeting and restlessness. I feel like I'm always \"on the go\" and just can't seem to sit still. It's really starting to make it hard for me to focus on my daily tasks.\n\nDoctor: Do you find that this difficulty in focusing is primarily due to your restlessness, or do you also frequently struggle with being forgetful, losing things, or failing to pay close attention to details?"
+  }
+]
+========== OUTPUT [patient] ==========
+It's definitely a mix of both. I constantly feel restless and fidgety, almost like I'm driven by a motor and always have to be on the go. While I don't really struggle with losing things or being forgetful, I definitely make a lot of careless mistakes because I fail to pay close attention to details.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Previous Candidates:\n[\"Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\", \"Generalized Anxiety Disorder\"]\n\nInterview Transcript:\n\nDoctor: Hello, I am Dr. Smith. Could you please tell me a little bit about what has been bothering you and what brings you in to see me today?\n\nPatient: I'm here today because I've been struggling a lot with constant fidgeting and restlessness. I feel like I'm always \"on the go\" and just can't seem to sit still. It's really starting to make it hard for me to focus on my daily tasks.\n\nDoctor: Do you find that this difficulty in focusing is primarily due to your restlessness, or do you also frequently struggle with being forgetful, losing things, or failing to pay close attention to details?\n\nPatient: It's definitely a mix of both. I constantly feel restless and fidgety, almost like I'm driven by a motor and always have to be on the go. While I don't really struggle with losing things or being forgetful, I definitely make a lot of careless mistakes because I fail to pay close attention to details."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["Attention-Deficit/Hyperactivity Disorder (Combined Presentation)", "Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)"], "note": "The patient explicitly denies forgetfulness and losing things, which are hallmarks of the inattentive presentation, but acknowledges careless mistakes due to a lack of attention to detail alongside clear hyperactive/impulsive symptoms. Generalized Anxiety Disorder was removed as a candidate because the patient's primary complaints are specific to hyperactivity and focus, rather than excessive worry or physiological anxiety symptoms."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n[Current Candidate Diagnoses]\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n\n[Already Asked Questions]\n\n[Already Asked Questions]\n- Hello, I am Dr. Smith. Could you please tell me a little bit about what has been bothering you and what brings you in to see me today?\n- Do you find that this difficulty in focusing is primarily due to your restlessness, or do you also frequently struggle with being forgetful, losing things, or failing to pay close attention to details?\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"Chief complaint\",\n  \"subcategory\": null,\n  \"question\": \"Hello, I am Dr. Smith. Could you please tell me a little bit about what has been bothering you and what brings you in to see me today?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\", \"Generalized Anxiety Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me a little bit about what has been bothering you and what brings you in to see me today?\n\nPatient: I'm here today because I've been struggling a lot with constant fidgeting and restlessness. I feel like I'm always \"on the go\" and just can't seem to sit still. It's really starting to make it hard for me to focus on my daily tasks.\n\nPatient: I'm here today because I've been struggling a lot with constant fidgeting and restlessness. I feel like I'm always \"on the go\" and just can't seem to sit still. It's really starting to make it hard for me to focus on my daily tasks."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"differential point\",\n  \"subcategory\": \"inattention\",\n  \"question\": \"Do you find that this difficulty in focusing is primarily due to your restlessness, or do you also frequently struggle with being forgetful, losing things, or failing to pay close attention to details?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me a little bit about what has been bothering you and what brings you in to see me today?\n\nPatient: I'm here today because I've been struggling a lot with constant fidgeting and restlessness. I feel like I'm always \"on the go\" and just can't seem to sit still. It's really starting to make it hard for me to focus on my daily tasks.\n\nDoctor: Do you find that this difficulty in focusing is primarily due to your restlessness, or do you also frequently struggle with being forgetful, losing things, or failing to pay close attention to details?\n\nPatient: It's definitely a mix of both. I constantly feel restless and fidgety, almost like I'm driven by a motor and always have to be on the go. While I don't really struggle with losing things or being forgetful, I definitely make a lot of careless mistakes because I fail to pay close attention to details.\n\nPatient: It's definitely a mix of both. I constantly feel restless and fidgety, almost like I'm driven by a motor and always have to be on the go. While I don't really struggle with losing things or being forgetful, I definitely make a lot of careless mistakes because I fail to pay close attention to details."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "inattention",
+  "question": "Besides making careless mistakes, do you often find it difficult to sustain your attention when listening to others or when you are working on longer, more boring tasks?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ hyperactivity_impulsivity\n  - Fidgeting: Often fidgets with or taps hands or feet or squirms in seat.\n  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.\n  - Waiting_Turn_Difficulty: Often has difficulty waiting his or her turn.\n▸ inattention\n  - Detail_Inattention_Errors: Often fails to give close attention to details or makes careless mistakes.\n  - Listening_Difficulty: Often does not seem to listen when spoken to directly.\n▸ Critical Diagnostic Criteria\n  - Duration: 1 year and 7 months\n  - Additional: Onset prior to age 12 years\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 3\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nBesides making careless mistakes, do you often find it difficult to sustain your attention when listening to others or when you are working on longer, more boring tasks?"
+  }
+]
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["inattention.Listening_Difficulty"], "answer_strategy": "Confirm that you often find it very difficult to stay focused when people are speaking to you, feeling as though you zone out or don't register what they are saying directly to you."}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation).\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ hyperactivity_impulsivity\n  - Fidgeting: Often fidgets with or taps hands or feet or squirms in seat.\n  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.\n  - Waiting_Turn_Difficulty: Often has difficulty waiting his or her turn.\n▸ inattention\n  - Detail_Inattention_Errors: Often fails to give close attention to details or makes careless mistakes.\n  - Listening_Difficulty: Often does not seem to listen when spoken to directly.\n▸ Critical Diagnostic Criteria\n  - Duration: 1 year and 7 months\n  - Additional: Onset prior to age 12 years\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Fidgeting\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(Matched with profile)\nRelated sections: inattention.Listening_Difficulty\nAnswer strategy: Confirm that you often find it very difficult to stay focused when people are speaking to you, feeling as though you zone out or don't register what they are saying directly to you."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello, I am Dr. Smith. Could you please tell me a little bit about what has been bothering you and what brings you in to see me today?\n\nPatient: I'm here today because I've been struggling a lot with constant fidgeting and restlessness. I feel like I'm always \"on the go\" and just can't seem to sit still. It's really starting to make it hard for me to focus on my daily tasks.\n\nDoctor: Do you find that this difficulty in focusing is primarily due to your restlessness, or do you also frequently struggle with being forgetful, losing things, or failing to pay close attention to details?\n\nPatient: It's definitely a mix of both. I constantly feel restless and fidgety, almost like I'm driven by a motor and always have to be on the go. While I don't really struggle with losing things or being forgetful, I definitely make a lot of careless mistakes because I fail to pay close attention to details.\n\nDoctor: Besides making careless mistakes, do you often find it difficult to sustain your attention when listening to others or when you are working on longer, more boring tasks?"
+  }
+]
+========== OUTPUT [patient] ==========
+Yes, I definitely find it really hard to stay focused when people are speaking directly to me. I often feel like I completely zone out and just don't register what they are saying, even if I'm trying to pay attention.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Previous Candidates:\n[\"Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\"]\n\nInterview Transcript:\n\nDoctor: Hello, I am Dr. Smith. Could you please tell me a little bit about what has been bothering you and what brings you in to see me today?\n\nPatient: I'm here today because I've been struggling a lot with constant fidgeting and restlessness. I feel like I'm always \"on the go\" and just can't seem to sit still. It's really starting to make it hard for me to focus on my daily tasks.\n\nDoctor: Do you find that this difficulty in focusing is primarily due to your restlessness, or do you also frequently struggle with being forgetful, losing things, or failing to pay close attention to details?\n\nPatient: It's definitely a mix of both. I constantly feel restless and fidgety, almost like I'm driven by a motor and always have to be on the go. While I don't really struggle with losing things or being forgetful, I definitely make a lot of careless mistakes because I fail to pay close attention to details.\n\nDoctor: Besides making careless mistakes, do you often find it difficult to sustain your attention when listening to others or when you are working on longer, more boring tasks?\n\nPatient: Yes, I definitely find it really hard to stay focused when people are speaking directly to me. I often feel like I completely zone out and just don't register what they are saying, even if I'm trying to pay attention."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["Attention-Deficit/Hyperactivity Disorder (Combined Presentation)"], "note": "The patient reports significant symptoms of both hyperactivity/impulsivity (restlessness, 'on the go') and inattentiveness (making careless mistakes, difficulty sustaining attention during conversations). As the patient meets criteria for both domains, the diagnosis is narrowed to the Combined Presentation."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the full interview transcript and the differential diagnosis candidates,\nwrite the final diagnosis report.\n\n[Constraint: Allowed Candidate List]\nBoth the \"diagnosis\" and \"candidates\" fields MUST ONLY contain items from the following list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\nOutput Format (JSON only, no other text):\n{\"diagnosis\": \"Final Diagnosis Name\", \"candidates\": [\"Candidate1\", \"Candidate2\"], \"reason\": \"Brief summary of key collected symptoms supporting this diagnosis\"}\n\n[Field Instructions]\n- diagnosis: The single diagnosis name from the allowed list you are most confident about.\n- candidates: Top 2–3 differential candidates from the allowed list considered until the end.\n- reason: Brief diagnostic rationale.\n"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me a little bit about what has been bothering you and what brings you in to see me today?\n\nPatient: I'm here today because I've been struggling a lot with constant fidgeting and restlessness. I feel like I'm always \"on the go\" and just can't seem to sit still. It's really starting to make it hard for me to focus on my daily tasks.\n\nDoctor: Do you find that this difficulty in focusing is primarily due to your restlessness, or do you also frequently struggle with being forgetful, losing things, or failing to pay close attention to details?\n\nPatient: It's definitely a mix of both. I constantly feel restless and fidgety, almost like I'm driven by a motor and always have to be on the go. While I don't really struggle with losing things or being forgetful, I definitely make a lot of careless mistakes because I fail to pay close attention to details.\n\nDoctor: Besides making careless mistakes, do you often find it difficult to sustain your attention when listening to others or when you are working on longer, more boring tasks?\n\nPatient: Yes, I definitely find it really hard to stay focused when people are speaking directly to me. I often feel like I completely zone out and just don't register what they are saying, even if I'm trying to pay attention."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"diagnosis": "Attention-Deficit/Hyperactivity Disorder (Combined Presentation)", "candidates": ["Attention-Deficit/Hyperactivity Disorder (Combined Presentation)"], "reason": "The patient exhibits a significant number of symptoms from both the inattentive domain (careless mistakes, difficulty sustaining attention, zoning out) and the hyperactive/impulsive domain (constant fidgeting, feeling 'on the go', restlessness), meeting criteria for the Combined Presentation."}
+=====================================
+

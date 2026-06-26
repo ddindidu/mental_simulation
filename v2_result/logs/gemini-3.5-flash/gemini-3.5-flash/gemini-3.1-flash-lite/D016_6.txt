@@ -1,0 +1,231 @@
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n\n[Already Asked Questions]\n\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "Chief complaint",
+  "subcategory": null,
+  "question": "Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ obsessive_compulsive_symptoms\n  - Contamination Obsessions: Recurrent and intrusive worries about contamination, germs, or dirt.\n  - Pathological Doubt: Pathological doubt regarding safety or mistakes, such as whether doors are locked or gas valves are closed.\n  - Symmetry and Exactness Obsessions: A strong urge that items must be lined up exactly or be symmetrical.\n  - Forbidden or Taboo Thoughts: Intrusive thoughts involving aggressive (harming others), sexual, or religious content that are prohibited.\n  - Somatic Obsessions: Persistent and specific fear that one might have a serious disease.\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 1\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nHello, I am Dr. Smith. Could you please tell me what brings you in to see me today?"
+  }
+]
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["obsessive_compulsive_symptoms"], "answer_strategy": "Introduce yourself and state your chief complaint: you are seeking help because you've been struggling with overwhelming, intrusive thoughts and constant worries (such as fears of contamination or doubting whether you've done things correctly) that you cannot seem to control."}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Obsessive-Compulsive Disorder.\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ obsessive_compulsive_symptoms\n  - Contamination Obsessions: Recurrent and intrusive worries about contamination, germs, or dirt.\n  - Pathological Doubt: Pathological doubt regarding safety or mistakes, such as whether doors are locked or gas valves are closed.\n  - Symmetry and Exactness Obsessions: A strong urge that items must be lined up exactly or be symmetrical.\n  - Forbidden or Taboo Thoughts: Intrusive thoughts involving aggressive (harming others), sexual, or religious content that are prohibited.\n  - Somatic Obsessions: Persistent and specific fear that one might have a serious disease.\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Obsessions\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(Matched with profile)\nRelated sections: obsessive_compulsive_symptoms\nAnswer strategy: Introduce yourself and state your chief complaint: you are seeking help because you've been struggling with overwhelming, intrusive thoughts and constant worries (such as fears of contamination or doubting whether you've done things correctly) that you cannot seem to control."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?"
+  }
+]
+========== OUTPUT [patient] ==========
+Hello, Dr. Smith. I'm seeking help because I've been struggling with overwhelming, intrusive thoughts and constant worries that I just can't seem to control. It's mostly fears about contamination or constantly doubting whether I've done things correctly, and it's becoming too much to handle.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Interview Transcript:\n\nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: Hello, Dr. Smith. I'm seeking help because I've been struggling with overwhelming, intrusive thoughts and constant worries that I just can't seem to control. It's mostly fears about contamination or constantly doubting whether I've done things correctly, and it's becoming too much to handle."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["Generalized Anxiety Disorder", "Obsessive-Compulsive Disorder"], "note": "The patient's report of intrusive, uncontrollable thoughts regarding contamination and doubt is highly suggestive of Obsessive-Compulsive Disorder. Generalized Anxiety Disorder remains a candidate as a broader differential for excessive worry, though the specific nature of these thoughts points more strongly toward OCD."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n[Current Candidate Diagnoses]\n- Generalized Anxiety Disorder\n- Obsessive-Compulsive Disorder\n\n[Already Asked Questions]\n\n[Already Asked Questions]\n- Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"Chief complaint\",\n  \"subcategory\": null,\n  \"question\": \"Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Generalized Anxiety Disorder\", \"Obsessive-Compulsive Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: Hello, Dr. Smith. I'm seeking help because I've been struggling with overwhelming, intrusive thoughts and constant worries that I just can't seem to control. It's mostly fears about contamination or constantly doubting whether I've done things correctly, and it's becoming too much to handle.\n\nPatient: Hello, Dr. Smith. I'm seeking help because I've been struggling with overwhelming, intrusive thoughts and constant worries that I just can't seem to control. It's mostly fears about contamination or constantly doubting whether I've done things correctly, and it's becoming too much to handle."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "compulsive behaviors",
+  "question": "When you have these intrusive thoughts or worries, do you feel an urge to perform specific repetitive actions or rituals to relieve your anxiety?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ obsessive_compulsive_symptoms\n  - Contamination Obsessions: Recurrent and intrusive worries about contamination, germs, or dirt.\n  - Pathological Doubt: Pathological doubt regarding safety or mistakes, such as whether doors are locked or gas valves are closed.\n  - Symmetry and Exactness Obsessions: A strong urge that items must be lined up exactly or be symmetrical.\n  - Forbidden or Taboo Thoughts: Intrusive thoughts involving aggressive (harming others), sexual, or religious content that are prohibited.\n  - Somatic Obsessions: Persistent and specific fear that one might have a serious disease.\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 2\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nWhen you have these intrusive thoughts or worries, do you feel an urge to perform specific repetitive actions or rituals to relieve your anxiety?"
+  }
+]
+========== OUTPUT [patient] ==========
+{"matched": false, "matched_sections": [], "answer_strategy": "State that you are not sure or don't really perform specific repetitive actions or rituals to relieve the anxiety, keeping the response brief."}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Obsessive-Compulsive Disorder.\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ obsessive_compulsive_symptoms\n  - Contamination Obsessions: Recurrent and intrusive worries about contamination, germs, or dirt.\n  - Pathological Doubt: Pathological doubt regarding safety or mistakes, such as whether doors are locked or gas valves are closed.\n  - Symmetry and Exactness Obsessions: A strong urge that items must be lined up exactly or be symmetrical.\n  - Forbidden or Taboo Thoughts: Intrusive thoughts involving aggressive (harming others), sexual, or religious content that are prohibited.\n  - Somatic Obsessions: Persistent and specific fear that one might have a serious disease.\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Obsessions\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(No match in profile or inference only)\nAnswer strategy: State that you are not sure or don't really perform specific repetitive actions or rituals to relieve the anxiety, keeping the response brief."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: Hello, Dr. Smith. I'm seeking help because I've been struggling with overwhelming, intrusive thoughts and constant worries that I just can't seem to control. It's mostly fears about contamination or constantly doubting whether I've done things correctly, and it's becoming too much to handle.\n\nDoctor: When you have these intrusive thoughts or worries, do you feel an urge to perform specific repetitive actions or rituals to relieve your anxiety?"
+  }
+]
+========== OUTPUT [patient] ==========
+I'm not really sure, to be honest. I don't think I perform any specific repetitive actions or rituals to make the anxiety go away; I just feel completely trapped by the overwhelming thoughts.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Previous Candidates:\n[\"Generalized Anxiety Disorder\", \"Obsessive-Compulsive Disorder\"]\n\nInterview Transcript:\n\nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: Hello, Dr. Smith. I'm seeking help because I've been struggling with overwhelming, intrusive thoughts and constant worries that I just can't seem to control. It's mostly fears about contamination or constantly doubting whether I've done things correctly, and it's becoming too much to handle.\n\nDoctor: When you have these intrusive thoughts or worries, do you feel an urge to perform specific repetitive actions or rituals to relieve your anxiety?\n\nPatient: I'm not really sure, to be honest. I don't think I perform any specific repetitive actions or rituals to make the anxiety go away; I just feel completely trapped by the overwhelming thoughts."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["Generalized Anxiety Disorder", "Obsessive-Compulsive Disorder"], "note": "The patient reports intrusive thoughts and doubts, which are common in both OCD and GAD. However, the patient explicitly denies the performance of repetitive rituals or behaviors to neutralize the anxiety. While this makes OCD less likely, it is too early to rule it out entirely as the patient may not yet recognize their internal mental compulsions. Therefore, both remain in the differential until further clarification on the nature of these thoughts."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n[Current Candidate Diagnoses]\n- Generalized Anxiety Disorder\n- Obsessive-Compulsive Disorder\n\n[Already Asked Questions]\n\n[Already Asked Questions]\n- Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n- When you have these intrusive thoughts or worries, do you feel an urge to perform specific repetitive actions or rituals to relieve your anxiety?\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"Chief complaint\",\n  \"subcategory\": null,\n  \"question\": \"Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Generalized Anxiety Disorder\", \"Obsessive-Compulsive Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: Hello, Dr. Smith. I'm seeking help because I've been struggling with overwhelming, intrusive thoughts and constant worries that I just can't seem to control. It's mostly fears about contamination or constantly doubting whether I've done things correctly, and it's becoming too much to handle.\n\nPatient: Hello, Dr. Smith. I'm seeking help because I've been struggling with overwhelming, intrusive thoughts and constant worries that I just can't seem to control. It's mostly fears about contamination or constantly doubting whether I've done things correctly, and it's becoming too much to handle."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"differential point\",\n  \"subcategory\": \"compulsive behaviors\",\n  \"question\": \"When you have these intrusive thoughts or worries, do you feel an urge to perform specific repetitive actions or rituals to relieve your anxiety?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Generalized Anxiety Disorder\", \"Obsessive-Compulsive Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: Hello, Dr. Smith. I'm seeking help because I've been struggling with overwhelming, intrusive thoughts and constant worries that I just can't seem to control. It's mostly fears about contamination or constantly doubting whether I've done things correctly, and it's becoming too much to handle.\n\nDoctor: When you have these intrusive thoughts or worries, do you feel an urge to perform specific repetitive actions or rituals to relieve your anxiety?\n\nPatient: I'm not really sure, to be honest. I don't think I perform any specific repetitive actions or rituals to make the anxiety go away; I just feel completely trapped by the overwhelming thoughts.\n\nPatient: I'm not really sure, to be honest. I don't think I perform any specific repetitive actions or rituals to make the anxiety go away; I just feel completely trapped by the overwhelming thoughts."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "worry content",
+  "question": "Are these worries primarily focused on various everyday life events—like your health, finances, work performance, or family responsibilities—rather than being limited to specific themes like contamination?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ obsessive_compulsive_symptoms\n  - Contamination Obsessions: Recurrent and intrusive worries about contamination, germs, or dirt.\n  - Pathological Doubt: Pathological doubt regarding safety or mistakes, such as whether doors are locked or gas valves are closed.\n  - Symmetry and Exactness Obsessions: A strong urge that items must be lined up exactly or be symmetrical.\n  - Forbidden or Taboo Thoughts: Intrusive thoughts involving aggressive (harming others), sexual, or religious content that are prohibited.\n  - Somatic Obsessions: Persistent and specific fear that one might have a serious disease.\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 3\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nAre these worries primarily focused on various everyday life events—like your health, finances, work performance, or family responsibilities—rather than being limited to specific themes like contamination?"
+  }
+]
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["obsessive_compulsive_symptoms"], "answer_strategy": "Explain that your worries are not about general everyday life events like finances or work. Instead, clarify that they are very specific and intrusive themes, such as constant worries about contamination and germs, persistent doubts about safety (like whether doors are locked), a strong need for symmetry, and disturbing taboo thoughts."}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Obsessive-Compulsive Disorder.\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ obsessive_compulsive_symptoms\n  - Contamination Obsessions: Recurrent and intrusive worries about contamination, germs, or dirt.\n  - Pathological Doubt: Pathological doubt regarding safety or mistakes, such as whether doors are locked or gas valves are closed.\n  - Symmetry and Exactness Obsessions: A strong urge that items must be lined up exactly or be symmetrical.\n  - Forbidden or Taboo Thoughts: Intrusive thoughts involving aggressive (harming others), sexual, or religious content that are prohibited.\n  - Somatic Obsessions: Persistent and specific fear that one might have a serious disease.\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Obsessions\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(Matched with profile)\nRelated sections: obsessive_compulsive_symptoms\nAnswer strategy: Explain that your worries are not about general everyday life events like finances or work. Instead, clarify that they are very specific and intrusive themes, such as constant worries about contamination and germs, persistent doubts about safety (like whether doors are locked), a strong need for symmetry, and disturbing taboo thoughts."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: Hello, Dr. Smith. I'm seeking help because I've been struggling with overwhelming, intrusive thoughts and constant worries that I just can't seem to control. It's mostly fears about contamination or constantly doubting whether I've done things correctly, and it's becoming too much to handle.\n\nDoctor: When you have these intrusive thoughts or worries, do you feel an urge to perform specific repetitive actions or rituals to relieve your anxiety?\n\nPatient: I'm not really sure, to be honest. I don't think I perform any specific repetitive actions or rituals to make the anxiety go away; I just feel completely trapped by the overwhelming thoughts.\n\nDoctor: Are these worries primarily focused on various everyday life events—like your health, finances, work performance, or family responsibilities—rather than being limited to specific themes like contamination?"
+  }
+]
+========== OUTPUT [patient] ==========
+No, my worries aren't about everyday things like finances or work. Instead, they are very specific and intrusive, like a constant fear of germs, persistent doubts about whether I locked the doors, a strong need for things to be perfectly symmetrical, and even disturbing, taboo thoughts.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Previous Candidates:\n[\"Generalized Anxiety Disorder\", \"Obsessive-Compulsive Disorder\"]\n\nInterview Transcript:\n\nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: Hello, Dr. Smith. I'm seeking help because I've been struggling with overwhelming, intrusive thoughts and constant worries that I just can't seem to control. It's mostly fears about contamination or constantly doubting whether I've done things correctly, and it's becoming too much to handle.\n\nDoctor: When you have these intrusive thoughts or worries, do you feel an urge to perform specific repetitive actions or rituals to relieve your anxiety?\n\nPatient: I'm not really sure, to be honest. I don't think I perform any specific repetitive actions or rituals to make the anxiety go away; I just feel completely trapped by the overwhelming thoughts.\n\nDoctor: Are these worries primarily focused on various everyday life events—like your health, finances, work performance, or family responsibilities—rather than being limited to specific themes like contamination?\n\nPatient: No, my worries aren't about everyday things like finances or work. Instead, they are very specific and intrusive, like a constant fear of germs, persistent doubts about whether I locked the doors, a strong need for things to be perfectly symmetrical, and even disturbing, taboo thoughts."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["Obsessive-Compulsive Disorder"], "note": "Previously the candidates were [Generalized Anxiety Disorder, Obsessive-Compulsive Disorder]. The patient specifically denied that their worries are focused on everyday life events (which is characteristic of Generalized Anxiety Disorder) and instead described classic symptoms of OCD, including contamination fears, checking behaviors, symmetry needs, and intrusive taboo thoughts. Therefore, Generalized Anxiety Disorder has been excluded."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the full interview transcript and the differential diagnosis candidates,\nwrite the final diagnosis report.\n\n[Constraint: Allowed Candidate List]\nBoth the \"diagnosis\" and \"candidates\" fields MUST ONLY contain items from the following list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\nOutput Format (JSON only, no other text):\n{\"diagnosis\": \"Final Diagnosis Name\", \"candidates\": [\"Candidate1\", \"Candidate2\"], \"reason\": \"Brief summary of key collected symptoms supporting this diagnosis\"}\n\n[Field Instructions]\n- diagnosis: The single diagnosis name from the allowed list you are most confident about.\n- candidates: Top 2–3 differential candidates from the allowed list considered until the end.\n- reason: Brief diagnostic rationale.\n"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Obsessive-Compulsive Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: Hello, Dr. Smith. I'm seeking help because I've been struggling with overwhelming, intrusive thoughts and constant worries that I just can't seem to control. It's mostly fears about contamination or constantly doubting whether I've done things correctly, and it's becoming too much to handle.\n\nDoctor: When you have these intrusive thoughts or worries, do you feel an urge to perform specific repetitive actions or rituals to relieve your anxiety?\n\nPatient: I'm not really sure, to be honest. I don't think I perform any specific repetitive actions or rituals to make the anxiety go away; I just feel completely trapped by the overwhelming thoughts.\n\nDoctor: Are these worries primarily focused on various everyday life events—like your health, finances, work performance, or family responsibilities—rather than being limited to specific themes like contamination?\n\nPatient: No, my worries aren't about everyday things like finances or work. Instead, they are very specific and intrusive, like a constant fear of germs, persistent doubts about whether I locked the doors, a strong need for things to be perfectly symmetrical, and even disturbing, taboo thoughts."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"diagnosis": "Obsessive-Compulsive Disorder", "candidates": ["Obsessive-Compulsive Disorder", "Generalized Anxiety Disorder"], "reason": "The patient presents with classic obsessions (contamination, doubt, symmetry, and taboo thoughts) that are distinct from the generalized worry associated with GAD. Although the patient denied overt ritualistic behaviors, the nature and content of the intrusive thoughts are pathognomonic for OCD."}
+=====================================
+

@@ -1,0 +1,231 @@
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n\n[Already Asked Questions]\n\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "initial_intake",
+  "subcategory": null,
+  "question": "Hello. What brings you in to see me today?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ hyperactivity_impulsivity\n  - Fidgeting: Often fidgets with or taps hands or feet or squirms in seat.\n  - Blurting_Answers: Often blurts out an answer before a question has been completed.\n▸ Critical Diagnostic Criteria\n  - Duration: 10 months\n  - Additional: Onset prior to age 12 years\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 1\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nHello. What brings you in to see me today?"
+  }
+]
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["hyperactivity_impulsivity"], "answer_strategy": "Explain that you are visiting because you've been struggling with constantly fidgeting, tapping your hands and feet, and squirming in your seat, as well as impulsively blurting out answers before people finish their questions. Focus only on these core issues as your main complaint, keeping the tone natural and slightly frustrated by these behaviors."}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation).\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ hyperactivity_impulsivity\n  - Fidgeting: Often fidgets with or taps hands or feet or squirms in seat.\n  - Blurting_Answers: Often blurts out an answer before a question has been completed.\n▸ Critical Diagnostic Criteria\n  - Duration: 10 months\n  - Additional: Onset prior to age 12 years\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Fidgeting\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(Matched with profile)\nRelated sections: hyperactivity_impulsivity\nAnswer strategy: Explain that you are visiting because you've been struggling with constantly fidgeting, tapping your hands and feet, and squirming in your seat, as well as impulsively blurting out answers before people finish their questions. Focus only on these core issues as your main complaint, keeping the tone natural and slightly frustrated by these behaviors."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello. What brings you in to see me today?"
+  }
+]
+========== OUTPUT [patient] ==========
+I'm here because I can't seem to stop fidgeting and tapping my hands and feet all the time. I'm constantly squirming in my seat, and it's getting really frustrating.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Interview Transcript:\n\nDoctor: Hello. What brings you in to see me today?\n\nPatient: I'm here because I can't seem to stop fidgeting and tapping my hands and feet all the time. I'm constantly squirming in my seat, and it's getting really frustrating."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["Attention-Deficit/Hyperactivity Disorder (Combined Presentation)", "Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)", "Generalized Anxiety Disorder"], "note": "The patient presents with prominent symptoms of physical restlessness, including constant fidgeting, tapping of hands and feet, and squirming. This initial presentation strongly suggests symptoms of hyperactivity, making Attention-Deficit/Hyperactivity Disorder (either Combined or Predominantly Hyperactive/Impulsive Presentation) a primary consideration. Generalized Anxiety Disorder is also included in the differential as physical tension and restlessness can be manifestations of severe anxiety."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n[Current Candidate Diagnoses]\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Generalized Anxiety Disorder\n\n[Already Asked Questions]\n\n[Already Asked Questions]\n- Hello. What brings you in to see me today?\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"initial_intake\",\n  \"subcategory\": null,\n  \"question\": \"Hello. What brings you in to see me today?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\", \"Generalized Anxiety Disorder\"]\n\nInterview Transcript: \nDoctor: Hello. What brings you in to see me today?\n\nPatient: I'm here because I can't seem to stop fidgeting and tapping my hands and feet all the time. I'm constantly squirming in my seat, and it's getting really frustrating.\n\nPatient: I'm here because I can't seem to stop fidgeting and tapping my hands and feet all the time. I'm constantly squirming in my seat, and it's getting really frustrating."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential_point",
+  "subcategory": "anxiety_vs_adhd",
+  "question": "Do you also find yourself constantly worrying about a lot of different everyday things, or is this restlessness more of a physical need to keep moving?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ hyperactivity_impulsivity\n  - Fidgeting: Often fidgets with or taps hands or feet or squirms in seat.\n  - Blurting_Answers: Often blurts out an answer before a question has been completed.\n▸ Critical Diagnostic Criteria\n  - Duration: 10 months\n  - Additional: Onset prior to age 12 years\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 2\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nDo you also find yourself constantly worrying about a lot of different everyday things, or is this restlessness more of a physical need to keep moving?"
+  }
+]
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["hyperactivity_impulsivity.Fidgeting"], "answer_strategy": "Confirm that the restlessness is a physical need to keep moving rather than mental worry. Mention that you constantly feel the need to fidget, tap your hands or feet, or squirm in your seat."}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation).\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ hyperactivity_impulsivity\n  - Fidgeting: Often fidgets with or taps hands or feet or squirms in seat.\n  - Blurting_Answers: Often blurts out an answer before a question has been completed.\n▸ Critical Diagnostic Criteria\n  - Duration: 10 months\n  - Additional: Onset prior to age 12 years\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Fidgeting\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(Matched with profile)\nRelated sections: hyperactivity_impulsivity.Fidgeting\nAnswer strategy: Confirm that the restlessness is a physical need to keep moving rather than mental worry. Mention that you constantly feel the need to fidget, tap your hands or feet, or squirm in your seat."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello. What brings you in to see me today?\n\nPatient: I'm here because I can't seem to stop fidgeting and tapping my hands and feet all the time. I'm constantly squirming in my seat, and it's getting really frustrating.\n\nDoctor: Do you also find yourself constantly worrying about a lot of different everyday things, or is this restlessness more of a physical need to keep moving?"
+  }
+]
+========== OUTPUT [patient] ==========
+It's definitely more of a physical need to keep moving rather than any kind of mental worry. I just constantly feel this overwhelming urge to fidget, tap my hands or feet, and squirm in my seat. It feels like my body just has to be in motion all the time.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Previous Candidates:\n[\"Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\", \"Generalized Anxiety Disorder\"]\n\nInterview Transcript:\n\nDoctor: Hello. What brings you in to see me today?\n\nPatient: I'm here because I can't seem to stop fidgeting and tapping my hands and feet all the time. I'm constantly squirming in my seat, and it's getting really frustrating.\n\nDoctor: Do you also find yourself constantly worrying about a lot of different everyday things, or is this restlessness more of a physical need to keep moving?\n\nPatient: It's definitely more of a physical need to keep moving rather than any kind of mental worry. I just constantly feel this overwhelming urge to fidget, tap my hands or feet, and squirm in my seat. It feels like my body just has to be in motion all the time."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["Attention-Deficit/Hyperactivity Disorder (Combined Presentation)", "Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)"], "note": "Previously, the candidates included Generalized Anxiety Disorder alongside ADHD presentations. However, the patient explicitly clarified that their restlessness is purely a physical urge to move rather than being driven by mental worry or anxiety. Therefore, Generalized Anxiety Disorder has been ruled out, leaving the ADHD presentations (Combined and Predominantly Hyperactive/Impulsive) as the remaining candidates."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n[Current Candidate Diagnoses]\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n\n[Already Asked Questions]\n\n[Already Asked Questions]\n- Hello. What brings you in to see me today?\n- Do you also find yourself constantly worrying about a lot of different everyday things, or is this restlessness more of a physical need to keep moving?\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"initial_intake\",\n  \"subcategory\": null,\n  \"question\": \"Hello. What brings you in to see me today?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\", \"Generalized Anxiety Disorder\"]\n\nInterview Transcript: \nDoctor: Hello. What brings you in to see me today?\n\nPatient: I'm here because I can't seem to stop fidgeting and tapping my hands and feet all the time. I'm constantly squirming in my seat, and it's getting really frustrating.\n\nPatient: I'm here because I can't seem to stop fidgeting and tapping my hands and feet all the time. I'm constantly squirming in my seat, and it's getting really frustrating."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"differential_point\",\n  \"subcategory\": \"anxiety_vs_adhd\",\n  \"question\": \"Do you also find yourself constantly worrying about a lot of different everyday things, or is this restlessness more of a physical need to keep moving?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\"]\n\nInterview Transcript: \nDoctor: Hello. What brings you in to see me today?\n\nPatient: I'm here because I can't seem to stop fidgeting and tapping my hands and feet all the time. I'm constantly squirming in my seat, and it's getting really frustrating.\n\nDoctor: Do you also find yourself constantly worrying about a lot of different everyday things, or is this restlessness more of a physical need to keep moving?\n\nPatient: It's definitely more of a physical need to keep moving rather than any kind of mental worry. I just constantly feel this overwhelming urge to fidget, tap my hands or feet, and squirm in my seat. It feels like my body just has to be in motion all the time.\n\nPatient: It's definitely more of a physical need to keep moving rather than any kind of mental worry. I just constantly feel this overwhelming urge to fidget, tap my hands or feet, and squirm in my seat. It feels like my body just has to be in motion all the time."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential_point",
+  "subcategory": "inattention_symptoms",
+  "question": "Aside from the physical restlessness, do you also frequently struggle with paying attention, staying organized, or forgetting daily tasks?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ hyperactivity_impulsivity\n  - Fidgeting: Often fidgets with or taps hands or feet or squirms in seat.\n  - Blurting_Answers: Often blurts out an answer before a question has been completed.\n▸ Critical Diagnostic Criteria\n  - Duration: 10 months\n  - Additional: Onset prior to age 12 years\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 3\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nAside from the physical restlessness, do you also frequently struggle with paying attention, staying organized, or forgetting daily tasks?"
+  }
+]
+========== OUTPUT [patient] ==========
+{"matched": false, "matched_sections": [], "answer_strategy": "State briefly that you don't really struggle with those specific issues (paying attention, organizing, or forgetting tasks), as your main challenges are more about physical restlessness."}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation).\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ hyperactivity_impulsivity\n  - Fidgeting: Often fidgets with or taps hands or feet or squirms in seat.\n  - Blurting_Answers: Often blurts out an answer before a question has been completed.\n▸ Critical Diagnostic Criteria\n  - Duration: 10 months\n  - Additional: Onset prior to age 12 years\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Fidgeting\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(No match in profile or inference only)\nAnswer strategy: State briefly that you don't really struggle with those specific issues (paying attention, organizing, or forgetting tasks), as your main challenges are more about physical restlessness."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello. What brings you in to see me today?\n\nPatient: I'm here because I can't seem to stop fidgeting and tapping my hands and feet all the time. I'm constantly squirming in my seat, and it's getting really frustrating.\n\nDoctor: Do you also find yourself constantly worrying about a lot of different everyday things, or is this restlessness more of a physical need to keep moving?\n\nPatient: It's definitely more of a physical need to keep moving rather than any kind of mental worry. I just constantly feel this overwhelming urge to fidget, tap my hands or feet, and squirm in my seat. It feels like my body just has to be in motion all the time.\n\nDoctor: Aside from the physical restlessness, do you also frequently struggle with paying attention, staying organized, or forgetting daily tasks?"
+  }
+]
+========== OUTPUT [patient] ==========
+I don't really struggle with those things, to be honest. My focus and organization are usually fine, and my main challenge is definitely just this constant physical restlessness.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Previous Candidates:\n[\"Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\"]\n\nInterview Transcript:\n\nDoctor: Hello. What brings you in to see me today?\n\nPatient: I'm here because I can't seem to stop fidgeting and tapping my hands and feet all the time. I'm constantly squirming in my seat, and it's getting really frustrating.\n\nDoctor: Do you also find yourself constantly worrying about a lot of different everyday things, or is this restlessness more of a physical need to keep moving?\n\nPatient: It's definitely more of a physical need to keep moving rather than any kind of mental worry. I just constantly feel this overwhelming urge to fidget, tap my hands or feet, and squirm in my seat. It feels like my body just has to be in motion all the time.\n\nDoctor: Aside from the physical restlessness, do you also frequently struggle with paying attention, staying organized, or forgetting daily tasks?\n\nPatient: I don't really struggle with those things, to be honest. My focus and organization are usually fine, and my main challenge is definitely just this constant physical restlessness."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)"], "note": "Previously, the candidates included both Attention-Deficit/Hyperactivity Disorder (Combined Presentation) and Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation). Since the patient explicitly denied having difficulties with attention, organization, or forgetfulness, the Combined Presentation is ruled out, leaving Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation) as the sole diagnosis."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the full interview transcript and the differential diagnosis candidates,\nwrite the final diagnosis report.\n\n[Constraint: Allowed Candidate List]\nBoth the \"diagnosis\" and \"candidates\" fields MUST ONLY contain items from the following list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\nOutput Format (JSON only, no other text):\n{\"diagnosis\": \"Final Diagnosis Name\", \"candidates\": [\"Candidate1\", \"Candidate2\"], \"reason\": \"Brief summary of key collected symptoms supporting this diagnosis\"}\n\n[Field Instructions]\n- diagnosis: The single diagnosis name from the allowed list you are most confident about.\n- candidates: Top 2–3 differential candidates from the allowed list considered until the end.\n- reason: Brief diagnostic rationale.\n"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\"]\n\nInterview Transcript: \nDoctor: Hello. What brings you in to see me today?\n\nPatient: I'm here because I can't seem to stop fidgeting and tapping my hands and feet all the time. I'm constantly squirming in my seat, and it's getting really frustrating.\n\nDoctor: Do you also find yourself constantly worrying about a lot of different everyday things, or is this restlessness more of a physical need to keep moving?\n\nPatient: It's definitely more of a physical need to keep moving rather than any kind of mental worry. I just constantly feel this overwhelming urge to fidget, tap my hands or feet, and squirm in my seat. It feels like my body just has to be in motion all the time.\n\nDoctor: Aside from the physical restlessness, do you also frequently struggle with paying attention, staying organized, or forgetting daily tasks?\n\nPatient: I don't really struggle with those things, to be honest. My focus and organization are usually fine, and my main challenge is definitely just this constant physical restlessness."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"diagnosis": "Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)", "candidates": ["Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)"], "reason": "The patient reports significant physical restlessness, constant fidgeting, tapping, and squirming, describing a physical urge to stay in motion. They explicitly deny difficulties with focus, attention, or organization, pointing to a predominantly hyperactive/impulsive presentation of ADHD."}
+=====================================
+

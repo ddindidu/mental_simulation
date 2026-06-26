@@ -1,0 +1,231 @@
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n\n[Already Asked Questions]\n\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "Chief complaint",
+  "subcategory": null,
+  "question": "Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ inattention\n  - Listening_Difficulty: Often does not seem to listen when spoken to directly.\n  - Organization_Difficulty: Often has difficulty organizing tasks and activities.\n▸ hyperactivity_impulsivity\n  - Fidgeting: Often fidgets with or taps hands or feet or squirms in seat.\n  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.\n▸ Critical Diagnostic Criteria\n  - Duration: 1 year and 1 months\n  - Additional: Onset prior to age 12 years\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 1\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nHello, I am Dr. Smith. Could you please tell me what brings you in to see me today?"
+  }
+]
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["inattention"], "answer_strategy": "State that you have been struggling with significant inattention, specifically mentioning that you have constant difficulty staying organized with your daily tasks and activities."}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Combined Presentation).\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ inattention\n  - Listening_Difficulty: Often does not seem to listen when spoken to directly.\n  - Organization_Difficulty: Often has difficulty organizing tasks and activities.\n▸ hyperactivity_impulsivity\n  - Fidgeting: Often fidgets with or taps hands or feet or squirms in seat.\n  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.\n▸ Critical Diagnostic Criteria\n  - Duration: 1 year and 1 months\n  - Additional: Onset prior to age 12 years\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Listening_Difficulty\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(Matched with profile)\nRelated sections: inattention\nAnswer strategy: State that you have been struggling with significant inattention, specifically mentioning that you have constant difficulty staying organized with your daily tasks and activities."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?"
+  }
+]
+========== OUTPUT [patient] ==========
+Hi, Dr. Smith. I’ve been struggling a lot lately because I have constant difficulty staying organized with my daily tasks and activities. It’s making it really hard for me to keep up with everything I need to do.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Interview Transcript:\n\nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: Hi, Dr. Smith. I’ve been struggling a lot lately because I have constant difficulty staying organized with my daily tasks and activities. It’s making it really hard for me to keep up with everything I need to do."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["Attention-Deficit/Hyperactivity Disorder (Combined Presentation)", "Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)", "Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)", "Generalized Anxiety Disorder", "Major Depressive Disorder"], "note": "The patient's initial complaint of difficulty with organization is a common feature of ADHD, but it can also be a symptom of mood or anxiety disorders. I need to gather more information regarding the duration, onset, and presence of other symptoms to narrow these down."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n[Current Candidate Diagnoses]\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Generalized Anxiety Disorder\n- Major Depressive Disorder\n\n[Already Asked Questions]\n\n[Already Asked Questions]\n- Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"Chief complaint\",\n  \"subcategory\": null,\n  \"question\": \"Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\", \"Generalized Anxiety Disorder\", \"Major Depressive Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: Hi, Dr. Smith. I’ve been struggling a lot lately because I have constant difficulty staying organized with my daily tasks and activities. It’s making it really hard for me to keep up with everything I need to do.\n\nPatient: Hi, Dr. Smith. I’ve been struggling a lot lately because I have constant difficulty staying organized with my daily tasks and activities. It’s making it really hard for me to keep up with everything I need to do."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "inattention vs. mood/anxiety",
+  "question": "Have you noticed these difficulties with organization since you were a child, or is this a more recent change in your life?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ inattention\n  - Listening_Difficulty: Often does not seem to listen when spoken to directly.\n  - Organization_Difficulty: Often has difficulty organizing tasks and activities.\n▸ hyperactivity_impulsivity\n  - Fidgeting: Often fidgets with or taps hands or feet or squirms in seat.\n  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.\n▸ Critical Diagnostic Criteria\n  - Duration: 1 year and 1 months\n  - Additional: Onset prior to age 12 years\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 2\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nHave you noticed these difficulties with organization since you were a child, or is this a more recent change in your life?"
+  }
+]
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["Critical Diagnostic Criteria"], "answer_strategy": "Confirm that these difficulties have been present since childhood, specifically mentioning that the onset occurred prior to age 12 as noted in the diagnostic criteria."}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Combined Presentation).\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ inattention\n  - Listening_Difficulty: Often does not seem to listen when spoken to directly.\n  - Organization_Difficulty: Often has difficulty organizing tasks and activities.\n▸ hyperactivity_impulsivity\n  - Fidgeting: Often fidgets with or taps hands or feet or squirms in seat.\n  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.\n▸ Critical Diagnostic Criteria\n  - Duration: 1 year and 1 months\n  - Additional: Onset prior to age 12 years\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Listening_Difficulty\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(Matched with profile)\nRelated sections: Critical Diagnostic Criteria\nAnswer strategy: Confirm that these difficulties have been present since childhood, specifically mentioning that the onset occurred prior to age 12 as noted in the diagnostic criteria."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: Hi, Dr. Smith. I’ve been struggling a lot lately because I have constant difficulty staying organized with my daily tasks and activities. It’s making it really hard for me to keep up with everything I need to do.\n\nDoctor: Have you noticed these difficulties with organization since you were a child, or is this a more recent change in your life?"
+  }
+]
+========== OUTPUT [patient] ==========
+These issues with organizing my tasks have definitely been present since I was a child. I can clearly recall struggling with this way back in elementary school, well before I turned twelve.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Previous Candidates:\n[\"Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\", \"Generalized Anxiety Disorder\", \"Major Depressive Disorder\"]\n\nInterview Transcript:\n\nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: Hi, Dr. Smith. I’ve been struggling a lot lately because I have constant difficulty staying organized with my daily tasks and activities. It’s making it really hard for me to keep up with everything I need to do.\n\nDoctor: Have you noticed these difficulties with organization since you were a child, or is this a more recent change in your life?\n\nPatient: These issues with organizing my tasks have definitely been present since I was a child. I can clearly recall struggling with this way back in elementary school, well before I turned twelve."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["Attention-Deficit/Hyperactivity Disorder (Combined Presentation)", "Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)", "Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)"], "note": "The patient's report that these symptoms of organization difficulties have been present since childhood (well before age 12) strongly supports an ADHD diagnosis and significantly decreases the likelihood that the symptoms are primarily due to Major Depressive Disorder or Generalized Anxiety Disorder, which typically have a later or more episodic onset. I have narrowed the candidates to the three ADHD presentations to focus on differentiating the specific symptom profile."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n[Current Candidate Diagnoses]\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n\n[Already Asked Questions]\n\n[Already Asked Questions]\n- Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n- Have you noticed these difficulties with organization since you were a child, or is this a more recent change in your life?\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"Chief complaint\",\n  \"subcategory\": null,\n  \"question\": \"Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\", \"Generalized Anxiety Disorder\", \"Major Depressive Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: Hi, Dr. Smith. I’ve been struggling a lot lately because I have constant difficulty staying organized with my daily tasks and activities. It’s making it really hard for me to keep up with everything I need to do.\n\nPatient: Hi, Dr. Smith. I’ve been struggling a lot lately because I have constant difficulty staying organized with my daily tasks and activities. It’s making it really hard for me to keep up with everything I need to do."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"differential point\",\n  \"subcategory\": \"inattention vs. mood/anxiety\",\n  \"question\": \"Have you noticed these difficulties with organization since you were a child, or is this a more recent change in your life?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: Hi, Dr. Smith. I’ve been struggling a lot lately because I have constant difficulty staying organized with my daily tasks and activities. It’s making it really hard for me to keep up with everything I need to do.\n\nDoctor: Have you noticed these difficulties with organization since you were a child, or is this a more recent change in your life?\n\nPatient: These issues with organizing my tasks have definitely been present since I was a child. I can clearly recall struggling with this way back in elementary school, well before I turned twelve.\n\nPatient: These issues with organizing my tasks have definitely been present since I was a child. I can clearly recall struggling with this way back in elementary school, well before I turned twelve."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "hyperactivity and impulsivity",
+  "question": "Beyond the difficulty with organization, do you often find yourself feeling restless, fidgety, or acting impulsively without thinking things through?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ inattention\n  - Listening_Difficulty: Often does not seem to listen when spoken to directly.\n  - Organization_Difficulty: Often has difficulty organizing tasks and activities.\n▸ hyperactivity_impulsivity\n  - Fidgeting: Often fidgets with or taps hands or feet or squirms in seat.\n  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.\n▸ Critical Diagnostic Criteria\n  - Duration: 1 year and 1 months\n  - Additional: Onset prior to age 12 years\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 3\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nBeyond the difficulty with organization, do you often find yourself feeling restless, fidgety, or acting impulsively without thinking things through?"
+  }
+]
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["hyperactivity_impulsivity", "Fidgeting", "Constant_Activity"], "answer_strategy": "Confirm the symptoms by describing the restlessness and fidgeting mentioned in the profile. Maintain a cooperative and direct tone, acknowledging that you often fidget with your hands or feet and feel like you are 'on the go' or driven by a motor."}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Combined Presentation).\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ inattention\n  - Listening_Difficulty: Often does not seem to listen when spoken to directly.\n  - Organization_Difficulty: Often has difficulty organizing tasks and activities.\n▸ hyperactivity_impulsivity\n  - Fidgeting: Often fidgets with or taps hands or feet or squirms in seat.\n  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.\n▸ Critical Diagnostic Criteria\n  - Duration: 1 year and 1 months\n  - Additional: Onset prior to age 12 years\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Listening_Difficulty\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(Matched with profile)\nRelated sections: hyperactivity_impulsivity, Fidgeting, Constant_Activity\nAnswer strategy: Confirm the symptoms by describing the restlessness and fidgeting mentioned in the profile. Maintain a cooperative and direct tone, acknowledging that you often fidget with your hands or feet and feel like you are 'on the go' or driven by a motor."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: Hi, Dr. Smith. I’ve been struggling a lot lately because I have constant difficulty staying organized with my daily tasks and activities. It’s making it really hard for me to keep up with everything I need to do.\n\nDoctor: Have you noticed these difficulties with organization since you were a child, or is this a more recent change in your life?\n\nPatient: These issues with organizing my tasks have definitely been present since I was a child. I can clearly recall struggling with this way back in elementary school, well before I turned twelve.\n\nDoctor: Beyond the difficulty with organization, do you often find yourself feeling restless, fidgety, or acting impulsively without thinking things through?"
+  }
+]
+========== OUTPUT [patient] ==========
+Yes, that sounds exactly like me. I find myself constantly fidgeting with my hands or feet, and I often feel like I'm "on the go," almost as if I'm driven by a motor.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Previous Candidates:\n[\"Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\"]\n\nInterview Transcript:\n\nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: Hi, Dr. Smith. I’ve been struggling a lot lately because I have constant difficulty staying organized with my daily tasks and activities. It’s making it really hard for me to keep up with everything I need to do.\n\nDoctor: Have you noticed these difficulties with organization since you were a child, or is this a more recent change in your life?\n\nPatient: These issues with organizing my tasks have definitely been present since I was a child. I can clearly recall struggling with this way back in elementary school, well before I turned twelve.\n\nDoctor: Beyond the difficulty with organization, do you often find yourself feeling restless, fidgety, or acting impulsively without thinking things through?\n\nPatient: Yes, that sounds exactly like me. I find myself constantly fidgeting with my hands or feet, and I often feel like I'm \"on the go,\" almost as if I'm driven by a motor."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["Attention-Deficit/Hyperactivity Disorder (Combined Presentation)"], "note": "The patient confirmed the presence of both inattentive symptoms (difficulty with organization since childhood) and hyperactive/impulsive symptoms (fidgeting, feeling driven by a motor), which aligns with the criteria for the Combined Presentation of ADHD."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the full interview transcript and the differential diagnosis candidates,\nwrite the final diagnosis report.\n\n[Constraint: Allowed Candidate List]\nBoth the \"diagnosis\" and \"candidates\" fields MUST ONLY contain items from the following list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\nOutput Format (JSON only, no other text):\n{\"diagnosis\": \"Final Diagnosis Name\", \"candidates\": [\"Candidate1\", \"Candidate2\"], \"reason\": \"Brief summary of key collected symptoms supporting this diagnosis\"}\n\n[Field Instructions]\n- diagnosis: The single diagnosis name from the allowed list you are most confident about.\n- candidates: Top 2–3 differential candidates from the allowed list considered until the end.\n- reason: Brief diagnostic rationale.\n"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me what brings you in to see me today?\n\nPatient: Hi, Dr. Smith. I’ve been struggling a lot lately because I have constant difficulty staying organized with my daily tasks and activities. It’s making it really hard for me to keep up with everything I need to do.\n\nDoctor: Have you noticed these difficulties with organization since you were a child, or is this a more recent change in your life?\n\nPatient: These issues with organizing my tasks have definitely been present since I was a child. I can clearly recall struggling with this way back in elementary school, well before I turned twelve.\n\nDoctor: Beyond the difficulty with organization, do you often find yourself feeling restless, fidgety, or acting impulsively without thinking things through?\n\nPatient: Yes, that sounds exactly like me. I find myself constantly fidgeting with my hands or feet, and I often feel like I'm \"on the go,\" almost as if I'm driven by a motor."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"diagnosis": "Attention-Deficit/Hyperactivity Disorder (Combined Presentation)", "candidates": ["Attention-Deficit/Hyperactivity Disorder (Combined Presentation)"], "reason": "The patient exhibits chronic, childhood-onset symptoms of inattention (difficulty with organization) and hyperactivity/impulsivity (fidgeting, feeling 'on the go'), meeting the diagnostic criteria for the combined presentation."}
+=====================================
+

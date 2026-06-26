@@ -1,0 +1,231 @@
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n\n[Already Asked Questions]\n\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "Chief complaint",
+  "subcategory": null,
+  "question": "Hello, I am Dr. Smith. Could you please tell me a bit about what has been bringing you in to see me today?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ inattention\n  - Sustained_Mental_Effort_Avoidance: Often avoids, dislikes, or is reluctant to engage in tasks that require sustained mental effort.\n  - Losing_Items: Often loses things necessary for tasks or activities.\n  - Distractibility: Often easily distracted by extraneous stimuli (for older adolescents and adults, may include unrelated thoughts).\n▸ Critical Diagnostic Criteria\n  - Duration: 1 year and 7 months\n  - Additional: Onset prior to age 12 years\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 1\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nHello, I am Dr. Smith. Could you please tell me a bit about what has been bringing you in to see me today?"
+  }
+]
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["inattention"], "answer_strategy": "State clearly that you have been struggling significantly with inattention. Keep the response focused on the difficulty of maintaining focus and how it affects your daily tasks, without mentioning specific symptoms like losing items or distractibility yet."}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation).\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ inattention\n  - Sustained_Mental_Effort_Avoidance: Often avoids, dislikes, or is reluctant to engage in tasks that require sustained mental effort.\n  - Losing_Items: Often loses things necessary for tasks or activities.\n  - Distractibility: Often easily distracted by extraneous stimuli (for older adolescents and adults, may include unrelated thoughts).\n▸ Critical Diagnostic Criteria\n  - Duration: 1 year and 7 months\n  - Additional: Onset prior to age 12 years\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Sustained_Mental_Effort_Avoidance\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(Matched with profile)\nRelated sections: inattention\nAnswer strategy: State clearly that you have been struggling significantly with inattention. Keep the response focused on the difficulty of maintaining focus and how it affects your daily tasks, without mentioning specific symptoms like losing items or distractibility yet."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello, I am Dr. Smith. Could you please tell me a bit about what has been bringing you in to see me today?"
+  }
+]
+========== OUTPUT [patient] ==========
+Hi, Dr. Smith. I’ve been struggling a lot lately because I find it incredibly difficult to start or finish tasks that require any real mental effort. It’s been really affecting my work and daily life for quite a while now.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Interview Transcript:\n\nDoctor: Hello, I am Dr. Smith. Could you please tell me a bit about what has been bringing you in to see me today?\n\nPatient: Hi, Dr. Smith. I’ve been struggling a lot lately because I find it incredibly difficult to start or finish tasks that require any real mental effort. It’s been really affecting my work and daily life for quite a while now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["Attention-Deficit/Hyperactivity Disorder (Combined Presentation)", "Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)", "Major Depressive Disorder"], "note": "The patient reports significant executive dysfunction and difficulty with task initiation and completion. While these symptoms are highly suggestive of ADHD (Inattentive or Combined presentations), they are also hallmark features of Major Depressive Disorder. Further assessment is required to determine the presence of mood symptoms, duration of impairment, and hyperactivity/impulsivity to narrow down the differential."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n[Current Candidate Diagnoses]\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Major Depressive Disorder\n\n[Already Asked Questions]\n\n[Already Asked Questions]\n- Hello, I am Dr. Smith. Could you please tell me a bit about what has been bringing you in to see me today?\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"Chief complaint\",\n  \"subcategory\": null,\n  \"question\": \"Hello, I am Dr. Smith. Could you please tell me a bit about what has been bringing you in to see me today?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\", \"Major Depressive Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me a bit about what has been bringing you in to see me today?\n\nPatient: Hi, Dr. Smith. I’ve been struggling a lot lately because I find it incredibly difficult to start or finish tasks that require any real mental effort. It’s been really affecting my work and daily life for quite a while now.\n\nPatient: Hi, Dr. Smith. I’ve been struggling a lot lately because I find it incredibly difficult to start or finish tasks that require any real mental effort. It’s been really affecting my work and daily life for quite a while now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "symptom onset and history",
+  "question": "Have you struggled with these difficulties in organizing and completing tasks since you were a child, or is this a more recent change in your life?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ inattention\n  - Sustained_Mental_Effort_Avoidance: Often avoids, dislikes, or is reluctant to engage in tasks that require sustained mental effort.\n  - Losing_Items: Often loses things necessary for tasks or activities.\n  - Distractibility: Often easily distracted by extraneous stimuli (for older adolescents and adults, may include unrelated thoughts).\n▸ Critical Diagnostic Criteria\n  - Duration: 1 year and 7 months\n  - Additional: Onset prior to age 12 years\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 2\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nHave you struggled with these difficulties in organizing and completing tasks since you were a child, or is this a more recent change in your life?"
+  }
+]
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["Critical Diagnostic Criteria"], "answer_strategy": "Confirm that you have experienced these difficulties since childhood, specifically mentioning that the onset was prior to age 12, as this aligns with the diagnostic criteria in your profile."}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation).\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ inattention\n  - Sustained_Mental_Effort_Avoidance: Often avoids, dislikes, or is reluctant to engage in tasks that require sustained mental effort.\n  - Losing_Items: Often loses things necessary for tasks or activities.\n  - Distractibility: Often easily distracted by extraneous stimuli (for older adolescents and adults, may include unrelated thoughts).\n▸ Critical Diagnostic Criteria\n  - Duration: 1 year and 7 months\n  - Additional: Onset prior to age 12 years\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Sustained_Mental_Effort_Avoidance\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(Matched with profile)\nRelated sections: Critical Diagnostic Criteria\nAnswer strategy: Confirm that you have experienced these difficulties since childhood, specifically mentioning that the onset was prior to age 12, as this aligns with the diagnostic criteria in your profile."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello, I am Dr. Smith. Could you please tell me a bit about what has been bringing you in to see me today?\n\nPatient: Hi, Dr. Smith. I’ve been struggling a lot lately because I find it incredibly difficult to start or finish tasks that require any real mental effort. It’s been really affecting my work and daily life for quite a while now.\n\nDoctor: Have you struggled with these difficulties in organizing and completing tasks since you were a child, or is this a more recent change in your life?"
+  }
+]
+========== OUTPUT [patient] ==========
+I’ve definitely struggled with this for a long time, even back when I was in elementary school. It’s been happening since I was well under 12 years old, and it just never really went away.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Previous Candidates:\n[\"Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\", \"Major Depressive Disorder\"]\n\nInterview Transcript:\n\nDoctor: Hello, I am Dr. Smith. Could you please tell me a bit about what has been bringing you in to see me today?\n\nPatient: Hi, Dr. Smith. I’ve been struggling a lot lately because I find it incredibly difficult to start or finish tasks that require any real mental effort. It’s been really affecting my work and daily life for quite a while now.\n\nDoctor: Have you struggled with these difficulties in organizing and completing tasks since you were a child, or is this a more recent change in your life?\n\nPatient: I’ve definitely struggled with this for a long time, even back when I was in elementary school. It’s been happening since I was well under 12 years old, and it just never really went away."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["Attention-Deficit/Hyperactivity Disorder (Combined Presentation)", "Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)"], "note": "The patient's report of symptoms beginning in childhood (prior to age 12) and persisting into adulthood strongly supports an ADHD presentation over Major Depressive Disorder. I have removed Major Depressive Disorder as a primary candidate for now, though it remains a possible comorbidity, the core clinical presentation described is consistent with the ADHD spectrum."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview so far and the current differential diagnosis candidates,\nask one follow-up question to narrow down the diagnosis.\n\n[Candidate Diseases]\n\n[Current Candidate Diagnoses]\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n\n[Already Asked Questions]\n\n[Already Asked Questions]\n- Hello, I am Dr. Smith. Could you please tell me a bit about what has been bringing you in to see me today?\n- Have you struggled with these difficulties in organizing and completing tasks since you were a child, or is this a more recent change in your life?\n\n[Interview Strategy]\n- Review the conversation and the candidate disease list.\n- Ask exactly one follow-up question that best differentiates among the candidates.\n- Keep the question clear and easy for the patient to understand. Two sentences at most.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\n  \"category\": \"Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)\",\n  \"subcategory\": \"Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.\",\n  \"question\": \"The actual question to say to the patient (only this field is delivered to the patient)\"\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"Chief complaint\",\n  \"subcategory\": null,\n  \"question\": \"Hello, I am Dr. Smith. Could you please tell me a bit about what has been bringing you in to see me today?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\", \"Major Depressive Disorder\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me a bit about what has been bringing you in to see me today?\n\nPatient: Hi, Dr. Smith. I’ve been struggling a lot lately because I find it incredibly difficult to start or finish tasks that require any real mental effort. It’s been really affecting my work and daily life for quite a while now.\n\nPatient: Hi, Dr. Smith. I’ve been struggling a lot lately because I find it incredibly difficult to start or finish tasks that require any real mental effort. It’s been really affecting my work and daily life for quite a while now."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"category\": \"differential point\",\n  \"subcategory\": \"symptom onset and history\",\n  \"question\": \"Have you struggled with these difficulties in organizing and completing tasks since you were a child, or is this a more recent change in your life?\"\n}"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me a bit about what has been bringing you in to see me today?\n\nPatient: Hi, Dr. Smith. I’ve been struggling a lot lately because I find it incredibly difficult to start or finish tasks that require any real mental effort. It’s been really affecting my work and daily life for quite a while now.\n\nDoctor: Have you struggled with these difficulties in organizing and completing tasks since you were a child, or is this a more recent change in your life?\n\nPatient: I’ve definitely struggled with this for a long time, even back when I was in elementary school. It’s been happening since I was well under 12 years old, and it just never really went away.\n\nPatient: I’ve definitely struggled with this for a long time, even back when I was in elementary school. It’s been happening since I was well under 12 years old, and it just never really went away."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "hyperactivity and impulsivity",
+  "question": "Beyond these difficulties with focus, do you frequently feel restless, find it hard to sit still for long periods, or often act or speak without thinking first?"
+}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are an assistant analyst connecting the [Symptom Profile] with the doctor's question.\nDetermine which part of the profile (chief complaint, associated symptoms, social history, etc.)\nthe doctor's **last question** is related to.\n\n[Symptom Profile]\n▸ inattention\n  - Sustained_Mental_Effort_Avoidance: Often avoids, dislikes, or is reluctant to engage in tasks that require sustained mental effort.\n  - Losing_Items: Often loses things necessary for tasks or activities.\n  - Distractibility: Often easily distracted by extraneous stimuli (for older adolescents and adults, may include unrelated thoughts).\n▸ Critical Diagnostic Criteria\n  - Duration: 1 year and 7 months\n  - Additional: Onset prior to age 12 years\n\nRules:\n- If the patient can specifically answer based on the profile, set matched=true, list related\n  sections/items in matched_sections, and write a short English strategy in answer_strategy\n  on what tone and content the patient should reply with.\n- If the question is not in the profile or can only be inferred, set matched=false and instruct\n  in answer_strategy to respond briefly (e.g., \"I'm not sure\", \"I haven't thought about it\").\n- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint\n  (do NOT reveal other symptoms).\n\n[Output Format — JSON only, no other text]\n{\"matched\": true|false, \"matched_sections\": [\"...\"], \"answer_strategy\": \"...\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 3\n(If 1, this is the patient's first reply — focus strategy on chief complaint only.)\n\nDoctor's question:\nBeyond these difficulties with focus, do you frequently feel restless, find it hard to sit still for long periods, or often act or speak without thinking first?"
+  }
+]
+========== OUTPUT [patient] ==========
+{"matched": false, "matched_sections": [], "answer_strategy": "Since these symptoms (hyperactivity/impulsivity) are not present in the provided profile, state that you haven't noticed those specific behaviors or that they aren't a primary concern for you."}
+=====================================
+
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation).\nRespond to the doctor's questions based on the symptom profile provided below.\n\n[Symptom Profile]\n▸ inattention\n  - Sustained_Mental_Effort_Avoidance: Often avoids, dislikes, or is reluctant to engage in tasks that require sustained mental effort.\n  - Losing_Items: Often loses things necessary for tasks or activities.\n  - Distractibility: Often easily distracted by extraneous stimuli (for older adolescents and adults, may include unrelated thoughts).\n▸ Critical Diagnostic Criteria\n  - Duration: 1 year and 7 months\n  - Additional: Onset prior to age 12 years\n\n[Behavioral Guidelines]\n- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.\n- Chief complaint for the first turn: Sustained_Mental_Effort_Avoidance\n- Answer only what the doctor asks. Do not list your symptoms unprompted.\n- Speak naturally and briefly, as a real patient would (2–3 sentences max).\n- Do not mention symptoms that the doctor has not asked about.\n- If asked about a symptom not in your profile, say you are not sure.\n- Respond in English.\n\n\n[This Turn: Profile Alignment Result — Follow Strictly]\n(No match in profile or inference only)\nAnswer strategy: Since these symptoms (hyperactivity/impulsivity) are not present in the provided profile, state that you haven't noticed those specific behaviors or that they aren't a primary concern for you."
+  },
+  {
+    "role": "user",
+    "content": "Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.\nAnswer only the question, in 2–3 sentences maximum.\n\n[Dialogue]\nDoctor: Hello, I am Dr. Smith. Could you please tell me a bit about what has been bringing you in to see me today?\n\nPatient: Hi, Dr. Smith. I’ve been struggling a lot lately because I find it incredibly difficult to start or finish tasks that require any real mental effort. It’s been really affecting my work and daily life for quite a while now.\n\nDoctor: Have you struggled with these difficulties in organizing and completing tasks since you were a child, or is this a more recent change in your life?\n\nPatient: I’ve definitely struggled with this for a long time, even back when I was in elementary school. It’s been happening since I was well under 12 years old, and it just never really went away.\n\nDoctor: Beyond these difficulties with focus, do you frequently feel restless, find it hard to sit still for long periods, or often act or speak without thinking first?"
+  }
+]
+========== OUTPUT [patient] ==========
+I haven't really noticed those kinds of behaviors, and they aren't really a concern for me. I mostly just struggle with keeping my focus on tasks that require a lot of mental energy.
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the interview conversation so far and the Previous Candidates (if provided),\ninfer the current differential diagnosis candidates.\n\n[Constraint: Allowed Candidate List]\nYou MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\n[Important — Note Field Formatting]\nIn the \"note\" field, you MUST explain WHY the candidate list has changed or remained the same\ncompared to the previous candidates.\nFor example: \"Previously the candidates were [A, B, C], but based on this conversation,\nC seems unlikely because [reason], so the current candidates are [A, B].\"\n\nOutput Format (JSON only, no other text):\n{\"candidates\": [\"Disease1\", \"Disease2\"], \"note\": \"Explanation of changes from previous candidates\"}\n\nIf the candidates have been narrowed down to one, present only one element in candidates.\nIf information is insufficient, present two or more candidates from the allowed list.\n"
+  },
+  {
+    "role": "user",
+    "content": "Previous Candidates:\n[\"Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\", \"Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\"]\n\nInterview Transcript:\n\nDoctor: Hello, I am Dr. Smith. Could you please tell me a bit about what has been bringing you in to see me today?\n\nPatient: Hi, Dr. Smith. I’ve been struggling a lot lately because I find it incredibly difficult to start or finish tasks that require any real mental effort. It’s been really affecting my work and daily life for quite a while now.\n\nDoctor: Have you struggled with these difficulties in organizing and completing tasks since you were a child, or is this a more recent change in your life?\n\nPatient: I’ve definitely struggled with this for a long time, even back when I was in elementary school. It’s been happening since I was well under 12 years old, and it just never really went away.\n\nDoctor: Beyond these difficulties with focus, do you frequently feel restless, find it hard to sit still for long periods, or often act or speak without thinking first?\n\nPatient: I haven't really noticed those kinds of behaviors, and they aren't really a concern for me. I mostly just struggle with keeping my focus on tasks that require a lot of mental energy."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)"], "note": "The patient explicitly denied symptoms of hyperactivity and impulsivity, which were previously considered as part of the Combined Presentation. Given the long-standing history of inattention starting before age 12, the diagnosis is now narrowed to Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)."}
+=====================================
+
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a board-certified psychiatrist.\nYour goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the full interview transcript and the differential diagnosis candidates,\nwrite the final diagnosis report.\n\n[Constraint: Allowed Candidate List]\nBoth the \"diagnosis\" and \"candidates\" fields MUST ONLY contain items from the following list:\n- Attention-Deficit/Hyperactivity Disorder (Combined Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\n- Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)\n- Delusional Disorder\n- Schizophrenia\n- Schizoaffective Disorder (Bipolar Type)\n- Schizoaffective Disorder (Depressive Type)\n- Bipolar I Disorder\n- Bipolar II Disorder\n- Bipolar I Disorder with Psychotic Features\n- Generalized Anxiety Disorder\n- Specific Phobia\n- Major Depressive Disorder\n- Persistent Depressive Disorder\n- Major Depressive Disorder with Psychotic Features\n- Obsessive-Compulsive Disorder\n- Body Dysmorphic Disorder\n- Posttraumatic Stress Disorder\n- Acute Stress Disorder\n- Adjustment Disorder\n- Anorexia Nervosa\n- Bulimia Nervosa\n- Binge-Eating Disorder\n\nOutput Format (JSON only, no other text):\n{\"diagnosis\": \"Final Diagnosis Name\", \"candidates\": [\"Candidate1\", \"Candidate2\"], \"reason\": \"Brief summary of key collected symptoms supporting this diagnosis\"}\n\n[Field Instructions]\n- diagnosis: The single diagnosis name from the allowed list you are most confident about.\n- candidates: Top 2–3 differential candidates from the allowed list considered until the end.\n- reason: Brief diagnostic rationale.\n"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)\"]\n\nInterview Transcript: \nDoctor: Hello, I am Dr. Smith. Could you please tell me a bit about what has been bringing you in to see me today?\n\nPatient: Hi, Dr. Smith. I’ve been struggling a lot lately because I find it incredibly difficult to start or finish tasks that require any real mental effort. It’s been really affecting my work and daily life for quite a while now.\n\nDoctor: Have you struggled with these difficulties in organizing and completing tasks since you were a child, or is this a more recent change in your life?\n\nPatient: I’ve definitely struggled with this for a long time, even back when I was in elementary school. It’s been happening since I was well under 12 years old, and it just never really went away.\n\nDoctor: Beyond these difficulties with focus, do you frequently feel restless, find it hard to sit still for long periods, or often act or speak without thinking first?\n\nPatient: I haven't really noticed those kinds of behaviors, and they aren't really a concern for me. I mostly just struggle with keeping my focus on tasks that require a lot of mental energy."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"diagnosis": "Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)", "candidates": ["Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)"], "reason": "The patient reports a chronic history of difficulty maintaining focus on mentally demanding tasks dating back to childhood (well before age 12), while explicitly denying symptoms of hyperactivity or impulsivity, consistent with the diagnostic criteria for the Predominantly Inattentive Presentation."}
+=====================================
+
