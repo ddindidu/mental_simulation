@@ -69,6 +69,10 @@ _openai_error: str | None = None
 _gemini_ready = threading.Event()
 _gemini_error: str | None = None
 
+_openrouter_client: Any | None = None
+_openrouter_ready = threading.Event()
+_openrouter_error: str | None = None
+
 # Local: one bundle per HuggingFace model id (supports patient/doctor different models)
 _local_bundles: dict[str, dict[str, Any]] = {}
 _local_events: dict[str, threading.Event] = {}
@@ -256,9 +260,10 @@ def _unique_local_model_names() -> list[str]:
 def get_status() -> dict[str, Any]:
     p, d, j = _patient_cfg, _doctor_cfg, _judge_cfg
     all_cfgs = (p, d, j)
-    needs_openai = any(c["provider"] == "openai" for c in all_cfgs)
-    needs_vllm   = any(c["provider"] == "vllm"   for c in all_cfgs)
-    needs_gemini = any(c["provider"] == "gemini"  for c in all_cfgs)
+    needs_openai      = any(c["provider"] == "openai"      for c in all_cfgs)
+    needs_vllm        = any(c["provider"] == "vllm"        for c in all_cfgs)
+    needs_gemini      = any(c["provider"] == "gemini"      for c in all_cfgs)
+    needs_openrouter  = any(c["provider"] == "openrouter"  for c in all_cfgs)
     loading = False
     err: str | None = None
 
@@ -279,6 +284,12 @@ def get_status() -> dict[str, Any]:
             loading = True
         elif _gemini_error:
             err = _gemini_error
+
+    if needs_openrouter:
+        if not _openrouter_ready.is_set():
+            loading = True
+        elif _openrouter_error:
+            err = _openrouter_error
 
     for name in _unique_local_model_names():
         ev = _local_events.get(name)
@@ -308,6 +319,32 @@ def _init_openai() -> None:
     else:
         _openai_error = None
     _openai_ready.set()
+
+
+def _init_openrouter() -> None:
+    global _openrouter_error, _openrouter_client
+    key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+    if not key:
+        _openrouter_error = "OPENROUTER_API_KEY is missing; add it to .env"
+        _openrouter_ready.set()
+        return
+    try:
+        from openai import OpenAI
+        or_cfg = (_LLM.get("openrouter") or {}) if isinstance(_LLM.get("openrouter"), dict) else {}
+        base_url = or_cfg.get("base_url", "https://openrouter.ai/api/v1")
+        timeout  = float(or_cfg.get("timeout_seconds", 600))
+        _openrouter_client = OpenAI(
+            api_key=key,
+            base_url=base_url,
+            timeout=timeout,
+        )
+        _openrouter_error = None
+        print(f"[INFO] OpenRouter client ready → {base_url}", flush=True)
+    except Exception as e:
+        _openrouter_error = str(e)
+        print(f"[ERROR] OpenRouter client init failed: {e}", flush=True)
+    finally:
+        _openrouter_ready.set()
 
 
 def _init_gemini() -> None:
@@ -555,6 +592,32 @@ def _chat_openai(messages: list[dict], max_new_tokens: int, role: Role) -> str:
     return _message_content_text(resp.choices[0].message)
 
 
+# ── OpenRouter (OpenAI-compatible proxy) ──────────────────────────────────────
+
+def _chat_openrouter(messages: list[dict], max_new_tokens: int, role: Role) -> str:
+    _openrouter_ready.wait()
+    if _openrouter_error:
+        raise RuntimeError(f"OpenRouter not available: {_openrouter_error}")
+
+    cfg = _cfg_for_role(role)
+    g   = _gen_for_role(role)
+    model = str(cfg["model"])
+
+    resp = _openrouter_client.chat.completions.create(  # type: ignore[union-attr]
+        model=model,
+        messages=messages,
+        max_tokens=max_new_tokens,
+        temperature=float(g["temperature"]),
+        top_p=float(g["top_p"]),
+    )
+    _log_openai_response_object(resp)
+    if not getattr(resp, "choices", None):
+        return ""
+    result = _message_content_text(resp.choices[0].message)
+    # Strip <think>…</think> blocks emitted by reasoning models (e.g. Qwen3)
+    return re.sub(r"<think>.*?</think>", "", result, flags=re.DOTALL).strip()
+
+
 # ── Gemini ────────────────────────────────────────────────────────────────────
 
 def _messages_to_gemini(messages: list[dict]) -> tuple[str | None, list[dict]]:
@@ -696,6 +759,11 @@ def chat(
         if _openai_error:
             raise RuntimeError(_openai_error)
         result = _chat_openai(messages, max_new_tokens, role)
+    elif prov == "openrouter":
+        _openrouter_ready.wait()
+        if _openrouter_error:
+            raise RuntimeError(_openrouter_error)
+        result = _chat_openrouter(messages, max_new_tokens, role)
     elif prov == "gemini":
         _gemini_ready.wait()
         if _gemini_error:
@@ -710,7 +778,7 @@ def chat(
     else:
         raise ValueError(
             f"Unknown llm provider for role {role!r}: {prov!r}; "
-            "use 'vllm', 'openai', 'gemini', or 'local'"
+            "use 'vllm', 'openai', 'openrouter', 'gemini', or 'local'"
         )
 
     _append_to_log(role, messages, result)
@@ -719,10 +787,11 @@ def chat(
 
 def _bootstrap() -> None:
     all_cfgs = (_patient_cfg, _doctor_cfg, _judge_cfg)
-    need_openai = any(c["provider"] == "openai" for c in all_cfgs)
-    need_local  = any(c["provider"] == "local"  for c in all_cfgs)
-    need_vllm   = any(c["provider"] == "vllm"   for c in all_cfgs)
-    need_gemini = any(c["provider"] == "gemini"  for c in all_cfgs)
+    need_openai     = any(c["provider"] == "openai"      for c in all_cfgs)
+    need_local      = any(c["provider"] == "local"       for c in all_cfgs)
+    need_vllm       = any(c["provider"] == "vllm"        for c in all_cfgs)
+    need_gemini     = any(c["provider"] == "gemini"      for c in all_cfgs)
+    need_openrouter = any(c["provider"] == "openrouter"  for c in all_cfgs)
 
     if need_openai:
         _init_openai()
@@ -739,10 +808,15 @@ def _bootstrap() -> None:
     else:
         _gemini_ready.set()
 
-    if not any((need_openai, need_local, need_vllm, need_gemini)):
+    if need_openrouter:
+        _init_openrouter()
+    else:
+        _openrouter_ready.set()
+
+    if not any((need_openai, need_local, need_vllm, need_gemini, need_openrouter)):
         global _openai_error
         _openai_error = (
-            'No llm role uses "openai", "vllm", "gemini", or "local"; '
+            'No llm role uses "openai", "vllm", "openrouter", "gemini", or "local"; '
             "check config.json"
         )
 

@@ -58,11 +58,15 @@ compared to the previous candidates.
 For example: "Previously the candidates were [A, B, C], but based on this conversation,
 C seems unlikely because [reason], so the current candidates are [A, B]."
 
-Output Format (JSON only, no other text):
-{{"candidates": ["Disease1", "Disease2"], "note": "Explanation of changes from previous candidates"}}
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident
+final diagnosis and no further questioning is needed. You may set is_final=true with one
+OR multiple candidates still listed (the final diagnosis call will select among them).
+Continue the interview (is_final: false) if uncertainty remains, even if only one candidate
+is currently listed.
 
-If the candidates have been narrowed down to one, present only one element in candidates.
-If information is insufficient, present two or more candidates from the allowed list.
+Output Format (JSON only, no other text):
+{{"candidates": ["Disease1", "Disease2"], "note": "Explanation of changes from previous candidates", "is_final": false}}
 """
 
 
@@ -209,20 +213,22 @@ def questioning_followup_user_payload(  # constructing scripts for questioning p
     )
 
 
-def parse_inference_result(raw: str) -> tuple[list[str], str | None]:
+def parse_inference_result(raw: str) -> tuple[list[str], str | None, bool]:
+    """Return (candidates, note, is_final)."""
     text = (raw or "").strip()
     if not text:
-        return [], None
+        return [], None, False
     m = re.search(r"\{[\s\S]*\}", text)
     if not m:
-        return [], None
+        return [], None, False
     try:
         data: Any = json.loads(m.group())
     except json.JSONDecodeError:
-        return [], None
+        return [], None, False
 
     out: list[str] = []
     note: str | None = None
+    is_final: bool = False
     if isinstance(data, dict):
         c = data.get("candidates")
         if isinstance(c, list):
@@ -233,8 +239,9 @@ def parse_inference_result(raw: str) -> tuple[list[str], str | None]:
         n = data.get("note")
         if isinstance(n, str) and n.strip():
             note = n.strip()
+        is_final = bool(data.get("is_final", False))
 
-    return out, note
+    return out, note, is_final
 
 
 def parse_final_diagnosis_result(raw: str) -> dict[str, Any]:
@@ -309,6 +316,7 @@ def update_doctor_memory_after_inference(  # updating doctor memory with inferen
     candidates: list[str],
     note: str | None,
     raw_model: str,
+    is_final: bool = False,
 ) -> dict[str, Any]:
     """Append inference result to history and update latest_inference."""
     preview = (raw_model or "").strip()
@@ -319,6 +327,7 @@ def update_doctor_memory_after_inference(  # updating doctor memory with inferen
         "turn": turn,
         "candidates": list(candidates),
         "note": note,
+        "is_final": is_final,
         "raw_preview": preview,
     }
     state["inference_history"].append(entry)
@@ -407,12 +416,12 @@ def persist_interview_transcript_json(
 
 
 def should_finish_interview(
-    candidates: list[str],
+    is_final: bool,
     patient_turn_index: int,
     max_turns: int,
 ) -> bool:
+    """End the interview when the doctor signals is_final=True or max_turns is reached.
+    No longer ends automatically when candidate list narrows to one."""
     if patient_turn_index >= max_turns:
         return True
-    if len(candidates) == 1:
-        return True
-    return False
+    return is_final

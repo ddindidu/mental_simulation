@@ -322,6 +322,8 @@ def evaluate() -> tuple[list[dict], dict, int]:
     turn_stats = defaultdict(lambda: {
         "tp": 0, "fp": 0, "fn": 0, "tn": 0, "n": 0,
         "total_pred": 0, "total_truth": 0,
+        "strict_acc_sum": 0.0, "jaccard_sum": 0.0,
+        "wr_penalty": 0, "wr_max_penalty": 0,
     })
     sample_turns: list[dict] = []
     skipped = 0
@@ -376,10 +378,29 @@ def evaluate() -> tuple[list[dict], dict, int]:
             )
             prev_truth_set = truth_set
 
-            tp = len(preds & truth_set)
+            intersection = preds & truth_set
+            tp = len(intersection)
             fp = len(preds - truth_set)
             fn = len(truth_set - preds)
             tn = n_classes - len(preds | truth_set)
+
+            prec = tp / len(preds) if preds else 0.0
+            rec = tp / len(truth_set) if truth_set else 0.0
+            # TN-inclusive accuracy retained as accuracy_tn (Method B specific)
+            accuracy_tn = (tp + tn) / n_classes
+            # strict set-equality accuracy — spec §4.3
+            accuracy = 1.0 if preds == truth_set else 0.0
+            # Jaccard — spec §4.3
+            union = preds | truth_set
+            jaccard = tp / len(union) if union else 1.0
+            # weighted recall: gt always treated as high_likely; other truth as moderate — spec §4.3
+            missed_high = {gt} - preds
+            high_likely = {gt}
+            moderate_likely = truth_set - high_likely
+            missed_mod = moderate_likely - preds
+            wr_penalty = 2 * len(missed_high) + len(missed_mod)
+            wr_max = 2 * len(high_likely) + len(moderate_likely)
+            weighted_recall = 1.0 - wr_penalty / wr_max if wr_max else 1.0
 
             stats = turn_stats[t]
             stats["tp"] += tp
@@ -389,10 +410,10 @@ def evaluate() -> tuple[list[dict], dict, int]:
             stats["n"] += 1
             stats["total_pred"] += len(preds)
             stats["total_truth"] += len(truth_set)
-
-            prec = tp / len(preds) if preds else 0.0
-            rec = tp / len(truth_set) if truth_set else 0.0
-            acc = (tp + tn) / n_classes
+            stats["strict_acc_sum"] += accuracy
+            stats["jaccard_sum"] += jaccard
+            stats["wr_penalty"] += wr_penalty
+            stats["wr_max_penalty"] += wr_max
 
             sample_turns.append({
                 "log_file": log_name,
@@ -408,15 +429,18 @@ def evaluate() -> tuple[list[dict], dict, int]:
                 "predicted": sorted(preds),
                 "predicted_names": raw_candidates,
                 "tp": tp, "fp": fp, "fn": fn, "tn": tn,
-                "precision": round(prec, 4),
-                "recall":    round(rec, 4),
-                "accuracy":  round(acc, 4),
+                "precision":       round(prec, 4),
+                "recall":          round(rec, 4),
+                "accuracy_tn":     round(accuracy_tn, 4),
+                "accuracy":        round(accuracy, 4),
+                "jaccard":         round(jaccard, 4),
+                "weighted_recall": round(weighted_recall, 4),
             })
 
     # ── Print table ────────────────────────────────────────────────────────
     header = (
-        f"{'Turn':>5}  {'N':>5}  {'Acc(TN)':>9}  {'Prec':>8}  {'Recall':>8}  "
-        f"{'|Truth|':>8}  {'TP':>5}  {'FP':>5}  {'FN':>5}"
+        f"{'Turn':>5}  {'N':>5}  {'Acc(TN)':>9}  {'Acc':>6}  {'Prec':>8}  {'Recall':>8}  "
+        f"{'Jaccard':>8}  {'WtdRec':>8}  {'|Truth|':>8}  {'TP':>5}  {'FP':>5}  {'FN':>5}"
     )
     sep = "-" * len(header)
     print(sep)
@@ -429,13 +453,16 @@ def evaluate() -> tuple[list[dict], dict, int]:
         if n == 0:
             continue
         denom = s["tp"] + s["fp"] + s["fn"] + s["tn"]
-        acc = (s["tp"] + s["tn"]) / denom if denom else 0.0
+        acc_tn = (s["tp"] + s["tn"]) / denom if denom else 0.0
+        acc = s["strict_acc_sum"] / n
         prec = s["tp"] / s["total_pred"] if s["total_pred"] > 0 else 0.0
         rec = s["tp"] / s["total_truth"] if s["total_truth"] > 0 else 0.0
+        jac = s["jaccard_sum"] / n
+        wr = 1.0 - s["wr_penalty"] / s["wr_max_penalty"] if s["wr_max_penalty"] else 1.0
         avg_truth = s["total_truth"] / n
         print(
-            f"{t:>5}  {n:>5}  {acc:>9.4f}  {prec:>8.4f}  {rec:>8.4f}  "
-            f"{avg_truth:>8.2f}  {s['tp']:>5}  {s['fp']:>5}  {s['fn']:>5}"
+            f"{t:>5}  {n:>5}  {acc_tn:>9.4f}  {acc:>6.3f}  {prec:>8.4f}  {rec:>8.4f}  "
+            f"{jac:>8.4f}  {wr:>8.4f}  {avg_truth:>8.2f}  {s['tp']:>5}  {s['fp']:>5}  {s['fn']:>5}"
         )
     print(sep)
 
@@ -446,14 +473,21 @@ def evaluate() -> tuple[list[dict], dict, int]:
     all_n  = sum(s["n"]  for s in turn_stats.values())
     all_pred = sum(s["total_pred"] for s in turn_stats.values())
     all_truth = sum(s["total_truth"] for s in turn_stats.values())
+    all_acc = sum(s["strict_acc_sum"] for s in turn_stats.values())
+    all_jac = sum(s["jaccard_sum"] for s in turn_stats.values())
+    all_wr_pen = sum(s["wr_penalty"] for s in turn_stats.values())
+    all_wr_max = sum(s["wr_max_penalty"] for s in turn_stats.values())
     denom = all_tp + all_fp + all_fn + all_tn
-    overall_acc = (all_tp + all_tn) / denom if denom else 0.0
+    overall_acc_tn = (all_tp + all_tn) / denom if denom else 0.0
+    overall_acc = all_acc / all_n if all_n else 0.0
     overall_prec = all_tp / all_pred if all_pred else 0.0
     overall_rec = all_tp / all_truth if all_truth else 0.0
+    overall_jac = all_jac / all_n if all_n else 0.0
+    overall_wr = 1.0 - all_wr_pen / all_wr_max if all_wr_max else 1.0
     print(
-        f"{'ALL':>5}  {all_n:>5}  {overall_acc:>9.4f}  {overall_prec:>8.4f}  "
-        f"{overall_rec:>8.4f}  {all_truth/max(all_n,1):>8.2f}  "
-        f"{all_tp:>5}  {all_fp:>5}  {all_fn:>5}"
+        f"{'ALL':>5}  {all_n:>5}  {overall_acc_tn:>9.4f}  {overall_acc:>6.3f}  "
+        f"{overall_prec:>8.4f}  {overall_rec:>8.4f}  {overall_jac:>8.4f}  {overall_wr:>8.4f}  "
+        f"{all_truth/max(all_n,1):>8.2f}  {all_tp:>5}  {all_fp:>5}  {all_fn:>5}"
     )
     print(sep)
     if skipped:
@@ -472,7 +506,9 @@ def evaluate() -> tuple[list[dict], dict, int]:
 def plot(sample_turns: list[dict], criteria: dict) -> None:
     id2name = {did: v["name"] for did, v in criteria.items()}
 
-    stats: dict = defaultdict(lambda: defaultdict(lambda: {"acc": [], "prec": [], "recall": []}))
+    stats: dict = defaultdict(lambda: defaultdict(lambda: {
+        "acc": [], "prec": [], "recall": [], "jaccard": [], "weighted_recall": [],
+    }))
     case_series: dict = defaultdict(lambda: defaultdict(list))
     for e in sample_turns:
         m = re.match(r"(D\d+)", e["log_file"])
@@ -481,21 +517,35 @@ def plot(sample_turns: list[dict], criteria: dict) -> None:
         stats[did][t]["acc"].append(e["accuracy"])
         stats[did][t]["prec"].append(e["precision"])
         stats[did][t]["recall"].append(e["recall"])
-        case_series[did][e["log_file"]].append((t, e["accuracy"], e["precision"], e["recall"]))
+        stats[did][t]["jaccard"].append(e.get("jaccard", 0.0))
+        stats[did][t]["weighted_recall"].append(e.get("weighted_recall", 0.0))
+        case_series[did][e["log_file"]].append(
+            (t, e["accuracy"], e["precision"], e["recall"],
+             e.get("jaccard", 0.0), e.get("weighted_recall", 0.0))
+        )
 
     disease_ids = sorted(stats.keys(), key=lambda x: int(x[1:]))
 
-    overall: dict = defaultdict(lambda: {"acc": [], "prec": [], "recall": []})
+    overall: dict = defaultdict(lambda: {
+        "acc": [], "prec": [], "recall": [], "jaccard": [], "weighted_recall": [],
+    })
     overall_series: dict = defaultdict(list)
     for e in sample_turns:
         t = e["turn"]
         overall[t]["acc"].append(e["accuracy"])
         overall[t]["prec"].append(e["precision"])
         overall[t]["recall"].append(e["recall"])
-        overall_series[e["log_file"]].append((t, e["accuracy"], e["precision"], e["recall"]))
+        overall[t]["jaccard"].append(e.get("jaccard", 0.0))
+        overall[t]["weighted_recall"].append(e.get("weighted_recall", 0.0))
+        overall_series[e["log_file"]].append(
+            (t, e["accuracy"], e["precision"], e["recall"],
+             e.get("jaccard", 0.0), e.get("weighted_recall", 0.0))
+        )
 
-    colors  = {"acc": "#1f77b4", "prec": "#ff7f0e", "recall": "#2ca02c"}
-    markers = {"acc": "o",       "prec": "s",        "recall": "^"}
+    colors  = {"acc": "#1f77b4", "prec": "#ff7f0e", "recall": "#2ca02c",
+               "jaccard": "#9467bd", "weighted_recall": "#8c564b"}
+    markers = {"acc": "o",       "prec": "s",        "recall": "^",
+               "jaccard": "D",    "weighted_recall": "v"}
     n_dis   = len(disease_ids)
     n_cols  = 6
     n_rows  = (n_dis + 1 + n_cols - 1) // n_cols
@@ -536,12 +586,21 @@ def plot(sample_turns: list[dict], criteria: dict) -> None:
             _case_lines(ax, series, key, colors[key])
             _scatter(ax, turn_data, key, colors[key], markers[key])
 
-        ax.plot(turns, mean_acc,  color=colors["acc"],    marker=markers["acc"],
-                label="Accuracy (TN)", linewidth=1.5, markersize=5, zorder=3)
-        ax.plot(turns, mean_prec, color=colors["prec"],   marker=markers["prec"],
-                label="Precision",     linewidth=1.5, markersize=5, zorder=3)
-        ax.plot(turns, mean_rec,  color=colors["recall"], marker=markers["recall"],
-                label="Recall",        linewidth=1.5, markersize=5, zorder=3)
+        ax.plot(turns, mean_acc,  color=colors["acc"],             marker=markers["acc"],
+                label="Accuracy (strict)",  linewidth=1.5, markersize=5, zorder=3)
+        ax.plot(turns, mean_prec, color=colors["prec"],            marker=markers["prec"],
+                label="Precision",          linewidth=1.5, markersize=5, zorder=3)
+        ax.plot(turns, mean_rec,  color=colors["recall"],          marker=markers["recall"],
+                label="Recall",             linewidth=1.5, markersize=5, zorder=3)
+        if "jaccard" in turn_data[turns[0]]:
+            mean_jac = [np.mean(turn_data[t]["jaccard"])         for t in turns]
+            mean_wr  = [np.mean(turn_data[t]["weighted_recall"]) for t in turns]
+            ax.plot(turns, mean_jac,  color=colors["jaccard"],
+                    marker=markers["jaccard"],         label="Jaccard",    linewidth=1.5,
+                    markersize=5, zorder=3, linestyle="--")
+            ax.plot(turns, mean_wr,   color=colors["weighted_recall"],
+                    marker=markers["weighted_recall"], label="Wtd Recall", linewidth=1.5,
+                    markersize=5, zorder=3, linestyle="--")
 
         ax.set_ylim(0.0, 1.1)
         ax.set_yticks(np.arange(0.0, 1.2, 0.2))
@@ -597,9 +656,11 @@ def plot(sample_turns: list[dict], criteria: dict) -> None:
 
     # ── Per-metric plots ──
     metric_cfgs = [
-        ("acc",    "#1f77b4", "o", "Accuracy (TN)", "turn_eval_plot_strict_accuracy.png"),
-        ("prec",   "#ff7f0e", "s", "Precision",     "turn_eval_plot_strict_precision.png"),
-        ("recall", "#2ca02c", "^", "Recall",        "turn_eval_plot_strict_recall.png"),
+        ("acc",             "#1f77b4", "o", "Accuracy (strict)", "turn_eval_plot_strict_accuracy.png"),
+        ("prec",            "#ff7f0e", "s", "Precision",         "turn_eval_plot_strict_precision.png"),
+        ("recall",          "#2ca02c", "^", "Recall",            "turn_eval_plot_strict_recall.png"),
+        ("jaccard",         "#9467bd", "D", "Jaccard",           "turn_eval_plot_strict_jaccard.png"),
+        ("weighted_recall", "#8c564b", "v", "Weighted Recall",   "turn_eval_plot_strict_weighted_recall.png"),
     ]
     for metric_key, color, marker, label, out_name in metric_cfgs:
         def _fn(ax, td, ser, title, _m=metric_key, _c=color, _mk=marker, _l=label):
