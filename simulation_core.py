@@ -110,9 +110,9 @@ def run_interview_simulation(
         ]
         _log(verbose, "Doctor LLM (inference)", f"turn {t}", inf_messages)
         inf_raw = llm_chat(inf_messages, max_new_tokens=inf_tokens, role="doctor")
-        candidates, inf_note = doctor.parse_inference_result(inf_raw)
+        candidates, inf_note, is_final = doctor.parse_inference_result(inf_raw)
         if verbose:
-            print(f"[turn {t}] inference candidates: {candidates}", flush=True)
+            print(f"[turn {t}] inference candidates: {candidates}, is_final={is_final}", flush=True)
 
         doctor.update_doctor_memory_after_inference(
             doctor_memory,
@@ -120,9 +120,10 @@ def run_interview_simulation(
             candidates=candidates,
             note=inf_note,
             raw_model=inf_raw,
+            is_final=is_final,
         )
 
-        if doctor.should_finish_interview(candidates, t, max_turns):
+        if doctor.should_finish_interview(is_final, t, max_turns):
             fin_messages = [
                 {"role": "system", "content": final_system},
                 {
