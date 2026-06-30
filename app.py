@@ -36,6 +36,7 @@ _batch_state: dict = {
     "current": "",   # e.g. "D009 run 3/10"
     "results": {},   # { "D001": {"correct": 0, "total": 10, "runs": [...]} }
     "error": None,
+    "format_failures": 0,   # spec §3: Doctor format-violation count across the batch
 }
 
 
@@ -215,6 +216,28 @@ def _run_eval_pipeline() -> None:
         _tb.print_exc()
 
     with _batch_lock:
+        _batch_state["current"] = "[pipeline] efficiency eval"
+    try:
+        ee = _load("evaluate_efficiency")
+        ee.evaluate()
+    except SystemExit:
+        print("[pipeline] evaluate_efficiency: no result files, skipping.", flush=True)
+    except Exception as _e:
+        print(f"[pipeline] evaluate_efficiency failed: {_e}", flush=True)
+        _tb.print_exc()
+
+    with _batch_lock:
+        _batch_state["current"] = "[pipeline] question reasonability eval"
+    try:
+        eq = _load("evaluate_question")
+        eq.evaluate()
+    except SystemExit:
+        print("[pipeline] evaluate_question: no result files, skipping.", flush=True)
+    except Exception as _e:
+        print(f"[pipeline] evaluate_question failed: {_e}", flush=True)
+        _tb.print_exc()
+
+    with _batch_lock:
         _batch_state["current"] = "Done"
     print("[pipeline] All done.", flush=True)
 
@@ -238,6 +261,7 @@ def _run_batch_evaluation(
         _batch_state["done"] = 0
         _batch_state["results"] = {}
         _batch_state["error"] = None
+        _batch_state["format_failures"] = 0
 
     # symptom_diagnosis 리소스를 배치 내에서 한 번만 로드하는 lazy cache
     _sd_cache: list = []  # [module, all_symptoms, diagnostic_criteria]
@@ -405,9 +429,20 @@ def _run_batch_evaluation(
         with _batch_lock:
             results_snapshot = dict(_batch_state["results"])
 
+        with _batch_lock:
+            batch_format_failures = _batch_state["format_failures"]
+
+        total_simulations = sum(r["total"] for r in results_snapshot.values())
+        fmt_compliance = (
+            round(1.0 - batch_format_failures / total_simulations, 4)
+            if total_simulations > 0 else 1.0
+        )
+
         lines: list[str] = [
             "=" * 60,
             f"Batch Evaluation Results  (difficulty={difficulty}, runs={runs_per_disorder})",
+            f"Format compliance rate: {fmt_compliance:.2%}  "
+            f"({batch_format_failures} format failures / {total_simulations} simulations)",
             "=" * 60,
             f"{'Code':<8} {'Accuracy':>10}  {'Correct':>8}  Disease Name",
             "-" * 60,
@@ -464,6 +499,19 @@ def batch_eval():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
+    # config.json "batch.disease_codes" 로 필터링
+    # 예: [1, 3, 9]  →  D001, D003, D009 만 실행; 빈 리스트 = 전체
+    selected_codes: list = (CONFIG.get("batch") or {}).get("disease_codes") or []
+    if selected_codes:
+        allowed = {f"D{int(n):03d}" for n in selected_codes}
+        disorder_map = {k: v for k, v in disorder_map.items() if k in allowed}
+        if not disorder_map:
+            return jsonify({
+                "ok": False,
+                "error": f"No matching disease codes for {selected_codes}",
+            }), 400
+        print(f"[batch] disease filter → {sorted(disorder_map.keys())}", flush=True)
+
     from utils.paths import PROJECT_ROOT
     run_dir = get_run_dir()
     logs_dir = PROJECT_ROOT / "logs" / run_dir
@@ -494,6 +542,8 @@ def batch_eval():
 def batch_status():
     """배치 평가 진행 상황 조회."""
     with _batch_lock:
+        total_sims = sum(r["total"] for r in _batch_state["results"].values())
+        ff = _batch_state["format_failures"]
         snapshot = {
             "running": _batch_state["running"],
             "total": _batch_state["total"],
@@ -501,6 +551,8 @@ def batch_status():
             "current": _batch_state["current"],
             "error": _batch_state["error"],
             "results_count": len(_batch_state["results"]),
+            "format_failures": ff,
+            "format_compliance_rate": round(1.0 - ff / total_sims, 4) if total_sims else 1.0,
             "results": {
                 code: {k: v for k, v in info.items() if k != "runs"}
                 for code, info in _batch_state["results"].items()
@@ -623,7 +675,7 @@ def simulate(): # prompts loading
                 ]
                 _log_llm_history("Doctor LLM (inference)", f"turn {t}", inf_messages)
                 inf_raw = llm_chat(inf_messages, max_new_tokens=inf_tokens, role="doctor")
-                candidates, inf_note = doctor.parse_inference_result(inf_raw)
+                candidates, inf_note, is_final = doctor.parse_inference_result(inf_raw)
 
                 doctor.update_doctor_memory_after_inference(
                     doctor_memory,
@@ -631,6 +683,7 @@ def simulate(): # prompts loading
                     candidates=candidates,
                     note=inf_note,
                     raw_model=inf_raw,
+                    is_final=is_final,
                 )
                 doctor.persist_doctor_memory_json(doctor_memory)
                 yield emit({"event": "doctor_memory", "state": doctor_memory})
@@ -641,11 +694,12 @@ def simulate(): # prompts loading
                         "turn": t,
                         "candidates": candidates,
                         "note": inf_note,
+                        "is_final": is_final,
                         "raw": inf_raw,
                     }
                 )
 
-                if doctor.should_finish_interview(candidates, t, MAX_TURNS):
+                if doctor.should_finish_interview(is_final, t, MAX_TURNS):
                     fin_messages = [
                         {"role": "system", "content": final_system},
                         {
