@@ -30,6 +30,8 @@ from pathlib import Path
 BASE_DIR = Path(__file__).parent.parent
 ANALYSIS_ROOT = BASE_DIR / "analysis" / "gemini-3.5-flash" / "gemini-3.5-flash"
 LOGS_ROOT = BASE_DIR / "logs" / "gemini-3.5-flash" / "gemini-3.5-flash"
+RESULTS_ROOT = BASE_DIR / "results" / "gemini-3.5-flash" / "gemini-3.5-flash"
+SYMPTOM_DIR = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "symptom"
 OUT_ROOT = BASE_DIR / "case_studies"
 
 MODELS = [
@@ -59,6 +61,31 @@ def load_transcript(model: str, log_file: str) -> dict | None:
     return json.loads(p.read_text(encoding="utf-8"))
 
 
+def load_symptom_result(model: str, log_file: str) -> dict | None:
+    p = RESULTS_ROOT / model / f"{log_file}_result.json"
+    if not p.exists():
+        return None
+    return json.loads(p.read_text(encoding="utf-8"))
+
+
+def load_symptom_names() -> dict[str, str]:
+    names: dict[str, str] = {}
+    for p in sorted(SYMPTOM_DIR.glob("*.json")):
+        data = json.loads(p.read_text(encoding="utf-8"))
+        for sid, info in data.items():
+            names[sid] = info.get("name", sid)
+    return names
+
+
+SYMPTOM_NAMES = load_symptom_names()
+
+
+def fmt_symptoms(ids: list[str]) -> str:
+    if not ids:
+        return "(none)"
+    return ", ".join(f"{sid} {SYMPTOM_NAMES.get(sid, '?')}" for sid in ids)
+
+
 def aggregate_cases() -> list[dict]:
     """Return one record per (model, log_file) with mean precision/recall/jaccard/composite."""
     cases: dict[tuple[str, str], dict] = {}
@@ -78,6 +105,7 @@ def aggregate_cases() -> list[dict]:
                 "mean_recall": statistics.fmean(r["recall"] for r in rows),
                 "mean_jaccard": statistics.fmean(r["jaccard"] for r in rows),
                 "n_turns_inference": len(rows),
+                "turn_eval_rows": rows,
             }
 
         q_rows = load_question_eval(model)
@@ -200,6 +228,29 @@ def render_case_md(c: dict, med: dict[str, float], axis_note: str) -> str:
             inf["turn"]: inf
             for inf in tx.get("doctor_memory", {}).get("inference_history", [])
         }
+        turn_eval_by_turn = {r["turn"]: r for r in c.get("turn_eval_rows", [])}
+        question_by_turn = {t["turn"]: t for t in c.get("question_turns", [])}
+        symptom_result = load_symptom_result(c["model"], c["log_file"])
+        symptom_by_turn = (
+            {t["turn"]: t for t in symptom_result.get("turns", [])}
+            if symptom_result
+            else {}
+        )
+
+        def render_symptom_judge(k: int) -> None:
+            s = symptom_by_turn.get(k)
+            if s is None:
+                return
+            lines.append(
+                f"> **Judge (symptom extraction)** — confirmed: {fmt_symptoms(s.get('new_confirmed_symptoms', []))}"
+            )
+            lines.append(
+                f"> denied: {fmt_symptoms(s.get('new_denied_symptoms', []))}"
+            )
+            reasoning = s.get("symptom_reasoning") or {}
+            for sid, why in reasoning.items():
+                lines.append(f"> - {sid} {SYMPTOM_NAMES.get(sid, '?')}: {why}")
+            lines.append("")
 
         def render_inference(inf: dict) -> None:
             label = "Doctor's inference (final)" if inf.get("is_final") else "Doctor's inference"
@@ -210,24 +261,67 @@ def render_case_md(c: dict, med: dict[str, float], axis_note: str) -> str:
                 lines.append(f"> {note}")
             lines.append("")
 
+        def render_inference_judge(k: int) -> None:
+            r = turn_eval_by_turn.get(k)
+            if r is None:
+                return
+            lines.append(
+                f"> **Judge (inference scoring)** — predicted: {', '.join(r['predicted'])}"
+            )
+            lines.append(f"> reference (truth) set: {', '.join(r['truth_set'])}")
+            lines.append(
+                f"> TP={r['tp']} FP={r['fp']} FN={r['fn']} | "
+                f"precision={r['precision']:.2f} recall={r['recall']:.2f} "
+                f"accuracy={r['accuracy']:.2f} jaccard={r['jaccard']:.2f} "
+                f"weighted_recall={r['weighted_recall']:.2f}"
+            )
+            lines.append("")
+
+        def render_question_judge(k: int) -> None:
+            q = question_by_turn.get(k)
+            if q is None or q.get("skipped"):
+                return
+            dcs_str = f"{q['dcs']:.2f}" if q.get("dcs") is not None else "n/a (single candidate)"
+            lines.append(
+                f"> **Judge (question scoring)** — targeted symptoms: "
+                f"{fmt_symptoms(q.get('targeted_symptoms', []))}"
+            )
+            lines.append(
+                f"> DCS={dcs_str} kg_edge_fraction={q.get('kg_edge_fraction')} "
+                f"edge_alignment={q.get('edge_alignment')} "
+                f"mandatory_first_compliance={q['mandatory_first_compliance']} "
+                f"redundancy_penalty={q['redundancy_penalty']} "
+                f"composite={q['composite_score']:.2f}"
+            )
+            lines.append("")
+
         patient_turn_count = 0
-        pending_inference: dict | None = None
+        pending_turn: int | None = None
         for turn in tx.get("transcript", []):
             role = turn.get("role", "?")
             content = turn.get("content", "")
             if role == "doctor":
-                if pending_inference is not None:
-                    render_inference(pending_inference)
-                    pending_inference = None
+                if pending_turn is not None:
+                    inf = inference_by_turn.get(pending_turn)
+                    if inf is not None:
+                        render_inference(inf)
+                    render_inference_judge(pending_turn)
                 lines.append(f"**Doctor**: {content}")
                 lines.append("")
+                if pending_turn is not None:
+                    render_question_judge(pending_turn)
+                    pending_turn = None
             else:
                 lines.append(f"**Patient**: {content}")
                 lines.append("")
                 patient_turn_count += 1
-                pending_inference = inference_by_turn.get(patient_turn_count)
-        if pending_inference is not None:
-            render_inference(pending_inference)
+                render_symptom_judge(patient_turn_count)
+                pending_turn = patient_turn_count
+        if pending_turn is not None:
+            inf = inference_by_turn.get(pending_turn)
+            if inf is not None:
+                render_inference(inf)
+            render_inference_judge(pending_turn)
     else:
         lines.append("_Transcript file not found._")
     return "\n".join(lines)
