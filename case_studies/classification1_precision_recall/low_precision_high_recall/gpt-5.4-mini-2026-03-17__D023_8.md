@@ -33,10 +33,19 @@
 
 **Patient**: I've been really struggling with my eating habits lately. I keep eating unusually large amounts of food, and it feels like I just can't control it once I start.
 
+> Doctor's inference — candidates: Binge-Eating Disorder, Bulimia Nervosa, Major Depressive Disorder, Generalized Anxiety Disorder
+> Previously there were no candidates. The patient reports recurrent episodes of eating unusually large amounts of food with loss of control, which strongly raises Binge-Eating Disorder. Bulimia Nervosa remains possible because binge eating can also occur there, but we do not yet know whether there are compensatory behaviors (vomiting, laxative use, excessive exercise). Major Depressive Disorder and Generalized Anxiety Disorder are still possible contributors or comorbidities to assess because overeating can sometimes be associated with mood or anxiety symptoms, but there is not enough information yet to confirm or exclude them.
+
 **Doctor**: After these episodes of overeating, do you ever try to make up for it by vomiting, using laxatives, fasting, or exercising excessively?
 
 **Patient**: No, I don't do any of those things. I've never tried to make myself throw up, use laxatives, or fast to make up for what I've eaten.
 
+> Doctor's inference — candidates: Binge-Eating Disorder, Major Depressive Disorder, Generalized Anxiety Disorder
+> Previously the candidates were [Binge-Eating Disorder, Bulimia Nervosa, Major Depressive Disorder, Generalized Anxiety Disorder], but the patient denies compensatory behaviors such as vomiting, laxatives, fasting, or excessive exercise, making Bulimia Nervosa unlikely. The remaining eating-pattern concern is most consistent with Binge-Eating Disorder, while Major Depressive Disorder and Generalized Anxiety Disorder remain possible comorbid or alternative explanations pending more history about mood, anxiety, and associated symptoms.
+
 **Doctor**: Over the past two weeks, have you been feeling depressed, down, or lost interest or pleasure in things you usually enjoy?
 
 **Patient**: I wouldn't say I've lost interest in my normal activities, but I do feel deeply depressed, guilty, and disgusted with myself right after I overeat. Those feelings are incredibly intense, but they specifically happen right after one of those episodes rather than being a constant state.
+
+> Doctor's inference (final) — candidates: Binge-Eating Disorder
+> Previously the candidates were [Binge-Eating Disorder, Major Depressive Disorder, Generalized Anxiety Disorder]. The patient describes recurrent episodes of eating unusually large amounts with loss of control and denies compensatory behaviors, which strongly supports Binge-Eating Disorder. Major Depressive Disorder is less likely because the depressed/guilty/disgusted feelings are brief and specifically occur after overeating rather than representing a persistent two-week depressive syndrome. Generalized Anxiety Disorder is also less likely because the interview does not describe pervasive, excessive worry across multiple domains; the distress appears tied to eating episodes.

@@ -196,12 +196,38 @@ def render_case_md(c: dict, med: dict[str, float], axis_note: str) -> str:
     lines.append("## Dialogue transcript")
     lines.append("")
     if tx:
+        inference_by_turn = {
+            inf["turn"]: inf
+            for inf in tx.get("doctor_memory", {}).get("inference_history", [])
+        }
+
+        def render_inference(inf: dict) -> None:
+            label = "Doctor's inference (final)" if inf.get("is_final") else "Doctor's inference"
+            candidates = ", ".join(inf.get("candidates", []))
+            lines.append(f"> {label} — candidates: {candidates}")
+            note = (inf.get("note") or "").strip()
+            if note:
+                lines.append(f"> {note}")
+            lines.append("")
+
+        patient_turn_count = 0
+        pending_inference: dict | None = None
         for turn in tx.get("transcript", []):
             role = turn.get("role", "?")
             content = turn.get("content", "")
-            speaker = "**Doctor**" if role == "doctor" else "**Patient**"
-            lines.append(f"{speaker}: {content}")
-            lines.append("")
+            if role == "doctor":
+                if pending_inference is not None:
+                    render_inference(pending_inference)
+                    pending_inference = None
+                lines.append(f"**Doctor**: {content}")
+                lines.append("")
+            else:
+                lines.append(f"**Patient**: {content}")
+                lines.append("")
+                patient_turn_count += 1
+                pending_inference = inference_by_turn.get(patient_turn_count)
+        if pending_inference is not None:
+            render_inference(pending_inference)
     else:
         lines.append("_Transcript file not found._")
     return "\n".join(lines)

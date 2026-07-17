@@ -38,30 +38,54 @@
 
 **Patient**: Hi Dr. Smith. I'm here today because I've been having a really hard time listening when people are talking directly to me. It often feels like I just can't focus on what they are saying, even when they are looking right at me.
 
+> Doctor's inference — candidates: Attention-Deficit/Hyperactivity Disorder (Combined Presentation), Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation), Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)
+> The patient's initial complaint of difficulty focusing and listening, even during direct conversation, is highly suggestive of inattentive symptoms. I have initiated the differential with ADHD presentations to explore this further.
+
 **Doctor**: Beyond difficulty focusing, do you also frequently find yourself feeling restless, fidgeting often, or acting without thinking before others have finished speaking?
 
 **Patient**: Yes, I definitely feel very restless, almost like I am constantly "on the go" or driven by a motor. I also tend to talk excessively quite a bit. As for fidgeting or acting without thinking, I'm not really sure about those.
+
+> Doctor's inference — candidates: Attention-Deficit/Hyperactivity Disorder (Combined Presentation), Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)
+> The patient confirmed symptoms of inattention, restlessness, and excessive talking. Given the presence of both inattentive and hyperactive symptoms, the 'Predominantly Inattentive Presentation' is now less likely, while 'Combined Presentation' and 'Predominantly Hyperactive/Impulsive Presentation' remain the primary considerations.
 
 **Doctor**: Since you mentioned having trouble listening, do you also frequently make careless mistakes in your work or struggle to keep track of your belongings and daily tasks?
 
 **Patient**: To be honest, I don't really experience making careless mistakes in my work. Losing track of my belongings or daily tasks hasn't really been a major issue for me either.
 
+> Doctor's inference — candidates: Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)
+> Previously the candidates were [Attention-Deficit/Hyperactivity Disorder (Combined Presentation), Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)]. The patient denied key inattentive symptoms such as making careless mistakes and struggling to keep track of tasks or belongings, which makes the Combined Presentation less likely. Therefore, the list has been narrowed to the Predominantly Hyperactive/Impulsive Presentation.
+
 **Doctor**: Do you often find yourself interrupting others during conversations or having significant difficulty waiting your turn in social or professional situations?
 
 **Patient**: To be honest, I don't think I do that very often. I haven't really noticed interrupting others or having trouble waiting my turn being much of an issue for me.
+
+> Doctor's inference — candidates: Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)
+> The patient reports significant restlessness and feeling 'on the go,' which aligns with the hyperactive presentation. However, they explicitly deny the inattentive symptoms (careless mistakes, losing items) and the impulsive symptoms (interrupting others, difficulty waiting turns) typically associated with the Combined or Inattentive presentations. Therefore, the focus remains on the Predominantly Hyperactive/Impulsive Presentation, though the lack of impulsive behaviors suggests I need to clarify the duration and onset of these symptoms to confirm if they meet the full diagnostic criteria.
 
 **Doctor**: Have you experienced these symptoms of restlessness and difficulty with sustained attention consistently since you were a child, or did they only begin recently?
 
 **Patient**: They actually started back when I was a kid, definitely before I was 12 years old. While I've had these struggles for a long time, they've been particularly noticeable and constant for the last year and three months.
 
+> Doctor's inference — candidates: Attention-Deficit/Hyperactivity Disorder (Combined Presentation), Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation), Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)
+> Previously the candidate was only ADHD (Predominantly Hyperactive/Impulsive), but the patient reports significant, long-standing difficulties with sustained attention alongside restlessness. Given that the patient does not clearly meet all criteria for either inattentive or hyperactive presentations exclusively, I have broadened the candidates to include all three presentations to better evaluate the symptom cluster.
+
 **Doctor**: Regarding the difficulty with sustained attention you mentioned, does this occur in multiple settings, such as both at home and at work or school, rather than just in one specific environment?
 
 **Patient**: I'm not entirely sure, to be honest. I haven't really thought about whether it happens in all of those different places or if it's just in specific situations.
+
+> Doctor's inference — candidates: Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation), Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)
+> The patient reports significant restlessness and 'on the go' behavior, but explicitly denies the core inattentive symptoms of making careless mistakes and losing track of belongings, as well as denying impulsive behaviors like interrupting others. Given the mixed report of symptoms (some inattentive, some hyperactive, but lacking the full criteria for Combined Presentation), I have narrowed the candidates to the specific presentations to further investigate symptom clusters across settings.
 
 **Doctor**: When you are in a situation that requires intense focus, like a meeting or a long lecture, do you find that your mind wanders frequently or that you struggle to stay engaged even when you are trying your hardest?
 
 **Patient**: Yes, definitely. My mind constantly wanders during those times, and I find it incredibly hard to stay engaged in long meetings or lectures. Because of that, I often dread and try to avoid tasks that require that kind of sustained mental effort.
 
+> Doctor's inference — candidates: Attention-Deficit/Hyperactivity Disorder (Combined Presentation), Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation), Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)
+> The patient reports significant symptoms of both inattention (mind wandering, avoiding tasks requiring sustained effort) and hyperactivity (feeling 'on the go' or driven by a motor, talking excessively). While they deny some classic symptoms like careless mistakes, losing belongings, or interrupting others, the presence of both inattentive and hyperactive symptoms suggests that the Combined Presentation must remain a candidate alongside the individual presentations. The list remains broad as I need to clarify the cross-situational nature of the symptoms to confirm the diagnosis.
+
 **Doctor**: Besides feeling restless and talking excessively, do you often find yourself unable to remain seated in situations where it is expected, such as during a meal or at your desk?
 
 **Patient**: No, I don't really experience difficulty staying seated, even during meals or at my desk. I haven't noticed that being a significant issue for me.
+
+> Doctor's inference (final) — candidates: Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)
+> Previously the candidates included all ADHD presentations. However, the patient explicitly denied significant hyperactive/impulsive behaviors such as interrupting others, trouble waiting their turn, or difficulty remaining seated, while confirming symptoms of inattention and restlessness. Given the lack of sufficient hyperactive/impulsive criteria to meet the Combined or Predominantly Hyperactive/Impulsive presentations, the diagnosis is narrowed to the Predominantly Inattentive Presentation.

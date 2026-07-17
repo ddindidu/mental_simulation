@@ -34,14 +34,26 @@
 
 **Patient**: I'm here because I've been hearing voices and seeing things that other people tell me aren't actually there. This has been happening to me for about a year and three months now. I just really need some help figuring out why this is happening to me.
 
+> Doctor's inference — candidates: Schizophrenia, Schizoaffective Disorder (Bipolar Type), Schizoaffective Disorder (Depressive Type), Bipolar I Disorder with Psychotic Features, Major Depressive Disorder with Psychotic Features
+> The patient reports persistent hallucinations (auditory and visual) for over 15 months. This necessitates a differential diagnosis that includes primary psychotic disorders, as well as mood disorders with psychotic features. I have narrowed the list to these candidates to begin exploring the presence of mood symptoms and the temporal relationship between those symptoms and the psychosis.
+
 **Doctor**: Besides the voices and visions, have you experienced any periods where your mood was unusually high, energetic, or irritable, or conversely, periods where you felt persistently sad, hopeless, or lacked energy?
 
 **Patient**: No, I haven't really experienced anything like that. I don't get those kinds of extreme highs or feel persistently sad and hopeless. My mood has been pretty much the same, it's just the things I'm seeing and hearing that trouble me.
+
+> Doctor's inference — candidates: Schizophrenia, Major Depressive Disorder with Psychotic Features
+> The patient explicitly denies symptoms of mania or hypomania, which makes Schizoaffective Disorder (Bipolar Type) and Bipolar I Disorder with Psychotic Features unlikely. They also deny persistent depressive symptoms, which makes Schizoaffective Disorder (Depressive Type) less likely. The persistent presence of hallucinations and delusions without significant mood episodes points towards Schizophrenia, though Major Depressive Disorder with Psychotic Features remains a consideration if depressive symptoms were perhaps underreported or masked.
 
 **Doctor**: Beyond the voices and visions, have you noticed a decrease in your motivation to do things, a tendency to withdraw from friends and family, or a feeling that you have less interest in your usual hobbies?
 
 **Patient**: No, I haven't really noticed any issues with that. My motivation and interest in my hobbies seem about the same as usual, and I haven't been withdrawing from my family or friends.
 
+> Doctor's inference — candidates: Schizophrenia, Delusional Disorder
+> The patient denies significant mood symptoms (ruling out mood disorders with psychotic features) and denies negative symptoms like avolition or social withdrawal, which makes Schizophrenia less definitive but still possible. Delusional Disorder is now included as a candidate because the patient reports hallucinations but lacks the full symptom cluster typically associated with a chronic schizophrenic decline.
+
 **Doctor**: Are the voices and visions you experience related to a specific, singular belief—such as the idea that someone is following you or that you have a special identity—or are your experiences more disorganized and varied in nature?
 
 **Patient**: No, they aren't tied to any specific belief like someone following me or me being someone special. It's much more jumbled and disconnected than that, and my thoughts feel really disorganized. Sometimes it is just really hard to keep my thoughts or my speech on track because everything feels so scattered.
+
+> Doctor's inference (final) — candidates: Schizophrenia
+> The patient reports persistent auditory and visual hallucinations for over a year, along with disorganized thoughts and speech. They explicitly denied mood symptoms that would suggest Bipolar or Depressive disorders, and denied the fixed, singular, non-bizarre beliefs associated with Delusional Disorder. Given the duration (exceeding 6 months) and the presence of disorganized symptoms without mood disturbance, Schizophrenia is the most appropriate remaining candidate.

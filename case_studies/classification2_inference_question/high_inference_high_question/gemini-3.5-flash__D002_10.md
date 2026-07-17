@@ -34,14 +34,26 @@
 
 **Patient**: I'm here because I've been constantly losing important things that I need for my daily life, like my keys, wallet, and work documents. It's gotten to the point where it's happening almost every day, and it's becoming a really big problem for me.
 
+> Doctor's inference — candidates: Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation), Attention-Deficit/Hyperactivity Disorder (Combined Presentation), Generalized Anxiety Disorder, Major Depressive Disorder
+> The patient presents with chronic forgetfulness and losing important items, which is a classic symptom of inattention. The initial differential diagnosis includes ADHD (Inattentive or Combined Presentations), as well as Generalized Anxiety Disorder and Major Depressive Disorder, which can both impair concentration and memory.
+
 **Doctor**: How long have you been struggling with losing things like this, and did you experience similar difficulties when you were a child or in school?
 
 **Patient**: It’s been a really consistent struggle for about two years and one month now. I also definitely remember having these same issues back in elementary school, well before I turned 12, when I would constantly lose my homework and school supplies.
+
+> Doctor's inference — candidates: Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation), Attention-Deficit/Hyperactivity Disorder (Combined Presentation), Generalized Anxiety Disorder, Major Depressive Disorder
+> The patient reports a long-standing history of losing daily items (keys, wallet, work documents) starting before age 12, which strongly aligns with ADHD. The candidates remain the same as we need to investigate other symptoms of inattention, hyperactivity/impulsivity, and rule out or identify comorbid anxiety or depressive symptoms.
 
 **Doctor**: Besides losing things, do you often feel restless, fidgety, or have a hard time sitting still, both now and when you were growing up?
 
 **Patient**: No, I don't really struggle with feeling restless or fidgety, and I've never had a hard time sitting still. Even when I was growing up, I was always pretty quiet and able to stay seated without any issues.
 
+> Doctor's inference — candidates: Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation), Generalized Anxiety Disorder, Major Depressive Disorder
+> Previously the candidates were [Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation), Attention-Deficit/Hyperactivity Disorder (Combined Presentation), Generalized Anxiety Disorder, Major Depressive Disorder]. Based on the patient's report of having no history of restlessness, fidgetiness, or difficulty sitting still either now or in childhood, we can rule out the Combined Presentation of ADHD. The remaining candidates are ADHD (Predominantly Inattentive Presentation), Generalized Anxiety Disorder, and Major Depressive Disorder.
+
 **Doctor**: Apart from losing things, have you been experiencing constant, excessive worry about various aspects of your life, or persistent feelings of sadness and low mood?
 
 **Patient**: No, I haven't been experiencing constant worry or persistent feelings of sadness. My mood is generally okay, and I don't feel anxious or depressed.
+
+> Doctor's inference (final) — candidates: Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)
+> Previously, the candidates were Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation), Generalized Anxiety Disorder, and Major Depressive Disorder. Based on the patient's explicit denial of excessive worry, anxiety, sadness, and low mood, Generalized Anxiety Disorder and Major Depressive Disorder have been ruled out. The patient meets the criteria for ADHD (Predominantly Inattentive Presentation) with childhood onset of inattentive symptoms (losing things) and no hyperactive/impulsive symptoms.

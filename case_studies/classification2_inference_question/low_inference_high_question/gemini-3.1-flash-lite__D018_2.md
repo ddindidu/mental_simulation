@@ -32,6 +32,12 @@
 
 **Patient**: I'm hoping to get some help because I keep having these really distressing, vivid memories of a terrible event that happened to me. I've also been struggling with awful nightmares about it almost every night, and it's been going on like this for about 10 months now.
 
+> Doctor's inference — candidates: Posttraumatic Stress Disorder, Adjustment Disorder
+> The patient reports intrusive memories and nightmares related to a specific distressing event lasting for 10 months. This clinical presentation strongly aligns with Posttraumatic Stress Disorder. Adjustment Disorder remains a differential as we need to further assess the full range of diagnostic criteria (avoidance, negative alterations in cognition/mood, and hyperarousal) to confirm the diagnosis.
+
 **Doctor**: Besides the nightmares and memories, have you been avoiding people or places that remind you of the event, or have you noticed a persistent negative change in your mood or how you view the world since then?
 
 **Patient**: Yes, I do everything I can to avoid places, people, or conversations that remind me of what happened. Since then, my mood has completely changed; I'm constantly living in fear and anger. I also feel totally detached from everyone, so I've just been isolating myself.
+
+> Doctor's inference (final) — candidates: Posttraumatic Stress Disorder
+> The patient reports symptoms including intrusive memories, nightmares, avoidance behavior, negative alterations in mood/cognition (fear, anger, detachment), and social isolation lasting for 10 months. These criteria strongly align with Posttraumatic Stress Disorder and exceed the typical duration or scope of an Adjustment Disorder. Therefore, Adjustment Disorder has been removed from the candidates.

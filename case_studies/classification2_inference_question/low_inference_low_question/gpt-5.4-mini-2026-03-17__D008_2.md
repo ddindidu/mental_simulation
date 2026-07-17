@@ -32,6 +32,12 @@
 
 **Patient**: For the past 10 months, I've been experiencing this incredibly high, euphoric mood and just overflowing energy, like I'm completely unstoppable! But at the same time, I've been getting extremely irritable and furious over the smallest little things. It's this weird mix of feeling absolutely amazing but also snapping at everyone.
 
+> Doctor's inference — candidates: Bipolar I Disorder, Bipolar I Disorder with Psychotic Features
+> Previously there were no candidates provided, but the new history strongly suggests a manic syndrome: 10 months of persistently elevated/euphoric mood, increased energy, and marked irritability. This makes depressive, anxiety, and trauma-related diagnoses less likely at this point. Psychotic features cannot yet be confirmed or excluded, so the current candidates are Bipolar I Disorder and Bipolar I Disorder with Psychotic Features.
+
 **Doctor**: During this time, have you had any hallucinations, such as hearing or seeing things that others do not, or beliefs that others said were clearly untrue?
 
 **Patient**: No, I haven't experienced anything like that at all. I haven't seen or heard things that aren't actually there, nor have I held any beliefs that others found untrue.
+
+> Doctor's inference (final) — candidates: Bipolar I Disorder
+> Previously the candidates were [Bipolar I Disorder, Bipolar I Disorder with Psychotic Features], but the patient now denies hallucinations and delusions, so psychotic features are not supported. The remaining candidate is Bipolar I Disorder, given the prolonged elevated/euphoric mood, increased energy, and irritability.
