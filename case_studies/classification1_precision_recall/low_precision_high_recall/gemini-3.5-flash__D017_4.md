@@ -35,18 +35,33 @@
 
 **Patient**: I'm here because I'm really distressed about how terrible my skin and face look. I have these awful acne scars and flaws all over my face that make me look hideous, and I really need to find a way to fix them.
 
+> Doctor's inference — candidates: Body Dysmorphic Disorder, Obsessive-Compulsive Disorder, Delusional Disorder
+> The patient presents with severe distress regarding perceived flaws in their physical appearance (acne scars and facial flaws) which they describe as making them look 'hideous'. This presentation is highly characteristic of Body Dysmorphic Disorder (BDD). Obsessive-Compulsive Disorder is included in the differential due to the repetitive, obsessive nature of these thoughts, and Delusional Disorder (somatic type) is considered depending on the level of insight the patient has regarding these perceived flaws.
+
 **Doctor**: Have friends, family, or doctors told you that they don't really notice these scars, or that they seem very minor to them?
 
 **Patient**: Yes, my family and even some doctors keep telling me they can barely see anything and that my skin looks fine. It's incredibly frustrating because to me, these scars are so obvious and completely ruin my face. I don't understand how they can just dismiss them like that.
+
+> Doctor's inference — candidates: Body Dysmorphic Disorder, Obsessive-Compulsive Disorder, Delusional Disorder
+> The patient describes a preoccupation with perceived physical flaws (acne scars) that others do not see or see as minor, which is highly characteristic of Body Dysmorphic Disorder. Delusional Disorder (Somatic Type) and OCD remain in the differential as we need to explore the degree of insight, repetitive behaviors (like mirror checking or skin picking), and the overall impact on functioning.
 
 **Doctor**: Do you find yourself spending a lot of time each day checking your face in the mirror, trying to hide these scars, or picking at your skin?
 
 **Patient**: Yes, I spend hours in front of the mirror every day obsessing over them, and I have to use layers of heavy makeup just to try and hide how awful I look. I also constantly pick at my skin to try and smooth out the scars, but it just makes me feel even more distressed and self-conscious.
 
+> Doctor's inference — candidates: Body Dysmorphic Disorder, Obsessive-Compulsive Disorder, Delusional Disorder
+> The patient describes a severe preoccupation with perceived physical flaws (acne scars) that others do not notice, accompanied by repetitive behaviors (mirror checking, skin picking, heavy makeup). This strongly aligns with Body Dysmorphic Disorder (BDD). However, we need to rule out Obsessive-Compulsive Disorder (by checking for non-appearance-related obsessions/compulsions) and Delusional Disorder (by assessing the degree of insight and presence of other delusions) before making a final diagnosis.
+
 **Doctor**: Aside from your concerns about your skin and appearance, do you experience other repetitive thoughts or urges to perform rituals, like excessive cleaning, checking locks, or needing things to be in a perfect order?
 
 **Patient**: No, I don't experience anything like that. I don't have any urges to constantly clean things or check locks. My worries and habits are really just focused on my face and trying to fix how I look.
 
+> Doctor's inference — candidates: Body Dysmorphic Disorder, Delusional Disorder
+> Previously, the candidates included Obsessive-Compulsive Disorder, but the patient denied having any other repetitive rituals or obsessive thoughts unrelated to their appearance, making OCD unlikely. The remaining candidates are Body Dysmorphic Disorder and Delusional Disorder (somatic type), as the patient exhibits a strong, potentially delusional conviction regarding minor or unnoticeable physical flaws.
+
 **Doctor**: Is there any part of you that thinks your view of your face might be exaggerated, or are you absolutely certain that your face is deformed and everyone else is wrong?
 
 **Patient**: I'm really not sure, and I feel very conflicted about it. When I look in the mirror, the flaws look so real and terrible to me, but everyone else keeps telling me my skin is fine. Part of me wonders if I'm exaggerating, but it's just so hard to believe they are right when I see it so clearly.
+
+> Doctor's inference (final) — candidates: Body Dysmorphic Disorder
+> Previously, the candidates were Body Dysmorphic Disorder and Delusional Disorder. The patient has now clarified that they have some insight and conflict about their appearance beliefs ('Part of me wonders if I'm exaggerating'), which rules out the fixed, unshakeable beliefs of Delusional Disorder. The patient's symptoms—excessive preoccupation with perceived physical flaws, repetitive mirror checking, skin picking, camouflaging, and distress—strongly align with Body Dysmorphic Disorder. Therefore, Delusional Disorder is removed, leaving Body Dysmorphic Disorder as the final diagnosis.

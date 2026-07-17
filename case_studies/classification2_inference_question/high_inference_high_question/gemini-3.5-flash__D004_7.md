@@ -34,14 +34,26 @@
 
 **Patient**: I'm here because I need help dealing with the people who are constantly watching and following me. I know for a fact that a certain organization has been monitoring my daily movements and tapping my phone. I just don't know how to make them stop.
 
+> Doctor's inference — candidates: Delusional Disorder, Schizophrenia, Schizoaffective Disorder (Bipolar Type), Schizoaffective Disorder (Depressive Type), Bipolar I Disorder with Psychotic Features, Major Depressive Disorder with Psychotic Features
+> The patient presents with persecutory delusions of being monitored and followed by an organization. The differential diagnosis includes Delusional Disorder, Schizophrenia, Schizoaffective Disorder, and Mood Disorders with Psychotic Features. Further exploration of mood symptoms, hallucinations, and duration is needed.
+
 **Doctor**: Besides feeling watched and followed, have you heard any voices or seen things that other people don't seem to hear or see?
 
 **Patient**: No, I don't hear any voices or see things that aren't there. My mind is completely clear, but I know for a fact that those people are physically tracking and watching me. It is actually happening in the real world, not in my head.
+
+> Doctor's inference — candidates: Delusional Disorder, Schizophrenia, Schizoaffective Disorder (Bipolar Type), Schizoaffective Disorder (Depressive Type), Bipolar I Disorder with Psychotic Features, Major Depressive Disorder with Psychotic Features
+> Previously the candidates were [Delusional Disorder, Schizophrenia, Schizoaffective Disorder (Bipolar Type), Schizoaffective Disorder (Depressive Type), Bipolar I Disorder with Psychotic Features, Major Depressive Disorder with Psychotic Features]. The patient denies auditory or visual hallucinations, which increases the likelihood of Delusional Disorder, but we must still rule out Schizophrenia (which can present with delusions and other symptoms like disorganization or negative symptoms without prominent hallucinations) and various mood disorders with psychotic features. Therefore, the candidate list remains the same while we investigate mood symptoms and other psychotic features.
 
 **Doctor**: How has your mood been overall? Have you experienced any long periods of feeling very depressed, or times when you felt unusually energetic and didn't need much sleep?
 
 **Patient**: No, my mood has been pretty normal and stable overall. I haven't experienced any deep depression or times where I felt unusually energetic and stopped sleeping. The only real stress I have is dealing with the people who are tracking me.
 
+> Doctor's inference — candidates: Delusional Disorder, Schizophrenia
+> The patient denies any significant mood symptoms (depressive or manic), which allows us to rule out Schizoaffective Disorder (Bipolar and Depressive types), Bipolar I Disorder with Psychotic Features, and Major Depressive Disorder with Psychotic Features. The primary symptoms are non-bizarre persecutory delusions without prominent auditory or visual hallucinations, making Delusional Disorder the primary suspect, though Schizophrenia remains a differential possibility pending further exploration of functioning and negative/disorganized symptoms.
+
 **Doctor**: How long has this monitoring been going on, and has it affected your ability to work, keep up with daily tasks, or maintain your relationships?
 
 **Patient**: It has been going on for about 11 months now. Even though it's stressful and I have to take precautions, I'm still able to do my job, handle my chores, and keep up with my relationships without any major issues.
+
+> Doctor's inference (final) — candidates: Delusional Disorder
+> Previously the candidates were ['Delusional Disorder', 'Schizophrenia']. Based on this conversation, Schizophrenia is unlikely because the patient does not report hallucinations, disorganized speech, or negative symptoms, and their global functioning remains relatively preserved and unimpaired apart from the impact of the delusion. This presentation fits the criteria for Delusional Disorder, which has been present for 11 months. Thus, the final diagnosis is Delusional Disorder.
