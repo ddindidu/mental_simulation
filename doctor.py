@@ -159,12 +159,32 @@ Both the "diagnosis" and "candidates" fields MUST ONLY contain items from the fo
 {candidates_bullet}
 
 Output Format (JSON only, no other text):
-{{"diagnosis": "Final Diagnosis Name", "candidates": ["Candidate1", "Candidate2"], "reason": "Brief summary of key collected symptoms supporting this diagnosis"}}
+{{
+  "diagnosis": "Final Diagnosis Name",
+  "candidates": ["Candidate1", "Candidate2"],
+  "reason": "Brief diagnostic rationale.",
+  "diagnostic_checklist": {{
+    "symptom_groups": [
+      {{
+        "group": "clinical group name (e.g., inattention, manic_episode, psychotic_symptoms)",
+        "confirmed_symptoms": ["natural language description of each confirmed symptom in this group"],
+        "count": <integer>
+      }}
+    ],
+    "duration_verified": "Description of how the duration criterion was established (e.g., 'symptoms present for over 6 months since childhood'), or null if not assessed.",
+    "functional_impairment": <true if functional impairment was confirmed, false if denied, null if not assessed>,
+    "traumatic_stressor": <true if a qualifying traumatic stressor was confirmed, null if not applicable or not assessed>,
+    "psychosocial_stressor": <true if a qualifying psychosocial stressor was confirmed, null if not applicable or not assessed>,
+    "additional_requirements": ["Each additional criterion that was explicitly verified during the interview (e.g., 'Onset prior to age 12 confirmed')"]
+  }}
+}}
 
 [Field Instructions]
 - diagnosis: The single diagnosis name from the allowed list you are most confident about.
 - candidates: Top 2–3 differential candidates from the allowed list considered until the end.
 - reason: Brief diagnostic rationale.
+- diagnostic_checklist: Structured evidence summary organized by diagnostic criterion type.
+  List only symptom groups that are relevant to your diagnosis, with the symptoms the patient actually confirmed.
 """
 
 
@@ -271,7 +291,10 @@ def parse_final_diagnosis_result(raw: str) -> dict[str, Any]:
     ).strip()
     if not diagnosis:
         diagnosis = text
-    return {"diagnosis": diagnosis, "candidates": candidates, "reason": reason}
+    checklist = data.get("diagnostic_checklist")
+    if not isinstance(checklist, dict):
+        checklist = None
+    return {"diagnosis": diagnosis, "candidates": candidates, "reason": reason, "diagnostic_checklist": checklist}
 
 
 def parse_questioning_result(raw: str) -> dict[str, Any]:

@@ -4,13 +4,13 @@ Question Metrics Evaluation Plotter  (spec §4.4)
 
 Reads *_result.json + log .txt files, runs SemanticSimilarityMapper (no LLM needed),
 computes per-turn question scores, and generates visualisations:
-  - question_eval.json
-  - question_eval_plot.png            (DCS + composite + mandatory_first + redundancy + IG combined)
-  - question_eval_plot_dcs.png
-  - question_eval_plot_composite.png
-  - question_eval_plot_mandatory.png
-  - question_eval_plot_redundancy.png
-  - question_eval_plot_ig.png
+  - question_eval_semantic.json                  (saved directly under --output)
+  - question_eval/question_eval_plot.png         (DCS + composite + mandatory_first + redundancy + IG combined)
+  - question_eval/question_eval_plot_dcs.png
+  - question_eval/question_eval_plot_composite.png
+  - question_eval/question_eval_plot_mandatory.png
+  - question_eval/question_eval_plot_redundancy.png
+  - question_eval/question_eval_plot_ig.png
 
 For LLM-based mappers (llm_judge / hybrid), run evaluate_question.py separately;
 this script is intentionally LLM-free for reproducible offline analysis.
@@ -484,7 +484,9 @@ def main():
 
     print_summary(episodes)
     print("\nGenerating plots...")
-    plot_all(episodes, args.output)
+    plots_dir = args.output / "question_eval"
+    plots_dir.mkdir(parents=True, exist_ok=True)
+    plot_all(episodes, plots_dir)
     print("Done.")
 
 

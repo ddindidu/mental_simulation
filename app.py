@@ -133,12 +133,12 @@ def _load_disorder_map() -> dict[str, str]:
 
 
 def _diagnosis_matches(final_diag: str, true_name: str) -> bool:
-    """최종 진단명이 정답(true_name)을 포함하는지 대소문자 무시 비교."""
+    """정답 질환명과 예측 진단명이 정확히 일치하는지 비교 (대소문자 무시, exact match)."""
     fd = (final_diag or "").lower().strip()
     tn = (true_name or "").lower().strip()
     if not fd or not tn:
         return False
-    return tn in fd or fd in tn
+    return fd == tn
 
 
 def _run_eval_pipeline() -> None:

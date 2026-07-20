@@ -86,10 +86,10 @@ def score_efficiency_episode(
     if T == 0:
         return {}
 
-    # Final accuracy: substring match, case-insensitive
+    # Final accuracy: exact match, case-insensitive
     fd  = final_diagnosis.lower().strip()
     gtn = ground_truth_name.lower().strip()
-    final_accuracy = 1.0 if fd and gtn and (gtn in fd or fd in gtn) else 0.0
+    final_accuracy = 1.0 if fd and gtn and fd == gtn else 0.0
 
     # CSSR
     cssr = (candidate_sizes[0] - candidate_sizes[-1]) / T

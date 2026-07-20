@@ -2,11 +2,11 @@
 """
 Turn-level Inference Evaluation Plotter
 Reads *_result.json + log .txt files and generates:
-  - turn_eval.json
-  - turn_eval_plot.png          (accuracy + precision + recall combined)
-  - turn_eval_plot_accuracy.png
-  - turn_eval_plot_precision.png
-  - turn_eval_plot_recall.png
+  - turn_eval.json                        (saved directly under --output)
+  - turn_eval/turn_eval_plot.png          (accuracy + precision + recall combined)
+  - turn_eval/turn_eval_plot_accuracy.png
+  - turn_eval/turn_eval_plot_precision.png
+  - turn_eval/turn_eval_plot_recall.png
 
 Usage:
   python plot_turn_eval.py --results results/path/to/dir --logs logs/path/to/dir
@@ -410,7 +410,9 @@ def main():
     print(f"  Saved → {out_json}  ({len(sample_turns)} entries)")
 
     print("Generating plots...")
-    plot_all(sample_turns, args.output)
+    plots_dir = args.output / "turn_eval"
+    plots_dir.mkdir(parents=True, exist_ok=True)
+    plot_all(sample_turns, plots_dir)
     print("Done.")
 
 

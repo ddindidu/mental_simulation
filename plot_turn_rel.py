@@ -13,7 +13,7 @@ Reads pre-computed JSON files from analysis/<run_dir>/:
   - turn_eval.json               → inference metrics
   - question_eval_semantic.json  → question metrics
 
-Outputs:
+Outputs (saved under --output/turn_rel/):
   turn_rel_inference.png
   turn_rel_inference_accuracy.png
   turn_rel_inference_precision.png
@@ -312,6 +312,7 @@ def main():
         args.input = BASE_DIR / "analysis" / _grd()
     if args.output is None:
         args.output = args.input
+    args.output = args.output / "turn_rel"
     args.output.mkdir(parents=True, exist_ok=True)
 
     id2name = _id2name()

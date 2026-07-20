@@ -5,7 +5,7 @@ Doctor inference confusion analysis
 FP definition: set(predicted) − set(truth_set)
 When GT = X, which wrong diseases appear in the doctor's predicted set?
 
-Outputs (saved to --output, default same as --input):
+Outputs (saved to --output/confusion/, default --input/confusion/):
   confusion_heatmap_overall.png   — 23×23 aggregated FP-rate heatmap
   confusion_heatmap_per_turn.png  — grid of per-turn 23×23 heatmaps
   confusion_trajectory.png        — top-K confused FP diseases per GT over turns
@@ -270,6 +270,7 @@ def main():
         args.input = BASE_DIR / "analysis" / _grd()
     if args.output is None:
         args.output = args.input
+    args.output = args.output / "confusion"
     args.output.mkdir(parents=True, exist_ok=True)
 
     json_path = args.input / "turn_eval.json"

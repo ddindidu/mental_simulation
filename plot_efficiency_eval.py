@@ -4,7 +4,7 @@ Efficiency Metrics Plotter  (spec §4.5)
 Reads efficiency_eval.json and generates per-disorder subplots for each
 efficiency metric — matching the grid style of turn_eval / question_eval plots.
 
-Outputs saved to analysis/<run_dir>/:
+Outputs saved to analysis/<run_dir>/efficiency/:
   efficiency_eval_plot.png            combined (accuracy + cssr + redundant_ratio)
   efficiency_eval_plot_accuracy.png
   efficiency_eval_plot_cssr.png
@@ -281,6 +281,7 @@ def main() -> None:
         except ValueError:
             args.output = args.json.parent
 
+    args.output = args.output / "efficiency"
     args.output.mkdir(parents=True, exist_ok=True)
     print(f"Input JSON : {args.json}")
     print(f"Output dir : {args.output}")
