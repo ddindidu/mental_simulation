@@ -85,12 +85,60 @@ def _mandatory_pools(did: str, criteria: dict) -> list[set[str]]:
     return pools
 
 
+def _mandatory_pools_with_count(did: str, criteria: dict) -> list[tuple[set[str], int]]:
+    pools = []
+    for grp in criteria.get(did, {}).get("required_criteria", {}).values():
+        if isinstance(grp, dict) and grp.get("relation") == "must_include":
+            pools.append((set(grp.get("symptom_pool", [])), grp.get("min_count", 1)))
+    return pools
+
+
+def _optional_symptom_ids_for_disorder(did: str, criteria: dict) -> set[str]:
+    ids: set[str] = set()
+    for grp in criteria.get(did, {}).get("required_criteria", {}).values():
+        if isinstance(grp, dict) and "symptom_pool" in grp and grp.get("relation") != "must_include":
+            ids |= set(grp["symptom_pool"])
+    return ids
+
+
 def all_symptom_ids_for_disorder(did: str, criteria: dict) -> set[str]:
     ids: set[str] = set()
     for grp in criteria.get(did, {}).get("required_criteria", {}).values():
         if isinstance(grp, dict) and "symptom_pool" in grp:
             ids |= set(grp["symptom_pool"])
     return ids
+
+
+def _candidate_set_size(
+    cumulative_confirmed: set[str],
+    cumulative_denied: set[str],
+    criteria: dict,
+) -> int:
+    """
+    Count |high_likely ∪ moderate_likely ∪ low_likely| from cumulative symptom state.
+    Mirrors compute_candidate_set() in symptom_diagnosis.py; kept local to avoid
+    importing that module's side effects.
+    """
+    count = 0
+    for did, ddata in criteria.items():
+        pools          = _mandatory_pools_with_count(did, criteria)
+        mandatory_syms = {s for pool, _ in pools for s in pool}
+        optional_syms  = _optional_symptom_ids_for_disorder(did, criteria)
+
+        if not mandatory_syms and not optional_syms:
+            continue
+
+        # excluded: any mandatory symptom denied
+        if mandatory_syms & cumulative_denied:
+            continue
+
+        mandatory_confirmed = mandatory_syms & cumulative_confirmed
+        optional_confirmed  = optional_syms  & cumulative_confirmed
+
+        if mandatory_confirmed or optional_confirmed:
+            count += 1   # high, moderate, or low — all are candidates
+
+    return count
 
 
 # ── Mappers ────────────────────────────────────────────────────────────────────
@@ -329,6 +377,58 @@ def composite_question_score(
     if edge_alignment is not None:
         score = min(1.0, score + edge_bonus * edge_alignment)
     return round(score, 4)
+
+
+# ── Information Gain (KG-based approximation) ─────────────────────────────────
+
+def score_information_gain(
+    question_symptoms: list[str],
+    cumulative_confirmed: set[str],
+    cumulative_denied: set[str],
+    criteria: dict,
+    current_candidate_size: int,
+) -> Optional[float]:
+    """
+    KG-based Information Gain approximation — spec §4.4.x.
+
+      IG = 1 − E[|C_{t+1}|] / |C_t|
+
+    Simulates two equiprobable outcomes for the unresolved targeted symptoms:
+      • Scenario A: patient confirms all targeted symptoms  → |C_confirmed|
+      • Scenario B: patient denies  all targeted symptoms  → |C_denied|
+      E[|C_{t+1}|] = 0.5 · |C_confirmed| + 0.5 · |C_denied|
+
+    Returns None  when |C_t| ≤ 1 (already determined; IG undefined).
+    Returns 0.0   when no unresolved symptoms are targeted (zero new information).
+    Positive IG   → question is expected to narrow the candidate set.
+    Negative IG   → question is expected to grow it (rare; implies KG inconsistency).
+    """
+    if current_candidate_size <= 1:
+        return None
+
+    resolved          = cumulative_confirmed | cumulative_denied
+    unresolved        = [s for s in question_symptoms if s not in resolved]
+
+    if not unresolved:
+        return 0.0
+
+    unresolved_set = set(unresolved)
+
+    # Scenario A: confirm all targeted unresolved symptoms
+    size_confirmed = _candidate_set_size(
+        cumulative_confirmed | unresolved_set,
+        cumulative_denied,
+        criteria,
+    )
+    # Scenario B: deny all targeted unresolved symptoms
+    size_denied = _candidate_set_size(
+        cumulative_confirmed,
+        cumulative_denied | unresolved_set,
+        criteria,
+    )
+
+    expected_size = 0.5 * size_confirmed + 0.5 * size_denied
+    return round(1.0 - expected_size / current_candidate_size, 4)
 
 
 # ── Safety screening compliance ────────────────────────────────────────────────
