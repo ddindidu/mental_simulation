@@ -5,11 +5,12 @@ Question Metrics Evaluation Plotter  (spec §4.4)
 Reads *_result.json + log .txt files, runs SemanticSimilarityMapper (no LLM needed),
 computes per-turn question scores, and generates visualisations:
   - question_eval.json
-  - question_eval_plot.png            (DCS + composite + mandatory_first + redundancy combined)
+  - question_eval_plot.png            (DCS + composite + mandatory_first + redundancy + IG combined)
   - question_eval_plot_dcs.png
   - question_eval_plot_composite.png
   - question_eval_plot_mandatory.png
   - question_eval_plot_redundancy.png
+  - question_eval_plot_ig.png
 
 For LLM-based mappers (llm_judge / hybrid), run evaluate_question.py separately;
 this script is intentionally LLM-free for reproducible offline analysis.
@@ -42,6 +43,7 @@ from question_score import (
     mandatory_first_compliance,
     redundancy_penalty,
     composite_question_score,
+    score_information_gain,
     safety_screening_compliance,
 )
 
@@ -137,6 +139,18 @@ def compute_question_metrics(results_dir: Path, logs_dir: Path) -> list[dict]:
             redund     = redundancy_penalty(q_syms, cumulative_confirmed, cumulative_denied)
             composite  = composite_question_score(dcs, edge_align, mand_first, redund)
 
+            # KG-based Information Gain: how much does this question narrow |C_t|?
+            cs = turn_data.get("candidate_set", {})
+            current_size = (
+                len(set(cs.get("high_likely", []))
+                    | set(cs.get("moderate_likely", []))
+                    | set(cs.get("low_likely", [])))
+                if cs else 0
+            )
+            ig = score_information_gain(
+                q_syms, cumulative_confirmed, cumulative_denied, criteria, current_size
+            )
+
             asked_per_turn.append(set(q_syms))
             turns_out.append({
                 "turn":                       t,
@@ -149,6 +163,8 @@ def compute_question_metrics(results_dir: Path, logs_dir: Path) -> list[dict]:
                 "mandatory_first_compliance": mand_first,
                 "redundancy_penalty":         redund,
                 "composite_score":            composite,
+                "information_gain":           ig,
+                "candidate_size_before":      current_size,
             })
 
         safety = safety_screening_compliance(asked_per_turn)
@@ -166,7 +182,7 @@ def compute_question_metrics(results_dir: Path, logs_dir: Path) -> list[dict]:
 
 # ── Build per-disorder stats ────────────────────────────────────────────────────
 
-QMETRICS = ("dcs", "composite_score", "mandatory_first_compliance", "redundancy_penalty")
+QMETRICS = ("dcs", "composite_score", "mandatory_first_compliance", "redundancy_penalty", "information_gain")
 
 def build_stats(episodes: list[dict]):
     stats_by_dis: dict = defaultdict(lambda: defaultdict(lambda: {m: [] for m in QMETRICS}))
@@ -216,16 +232,19 @@ COLORS  = {
     "composite_score":            "#ff7f0e",
     "mandatory_first_compliance": "#2ca02c",
     "redundancy_penalty":         "#d62728",
+    "information_gain":           "#17becf",
 }
 MARKERS = {
     "dcs": "o", "composite_score": "s",
     "mandatory_first_compliance": "^", "redundancy_penalty": "v",
+    "information_gain": "D",
 }
 YLABELS = {
     "dcs":                        "DCS",
     "composite_score":            "Composite",
     "mandatory_first_compliance": "Mandatory First",
     "redundancy_penalty":         "Redundancy Penalty",
+    "information_gain":           "Information Gain",
 }
 
 
@@ -383,6 +402,7 @@ def plot_all(episodes: list[dict], results_dir: Path) -> None:
         "composite_score":            "composite",
         "mandatory_first_compliance": "mandatory",
         "redundancy_penalty":         "redundancy",
+        "information_gain":           "ig",
     }
     for metric, fname_suffix in metric_names.items():
         def _fn(ax, td, ser, title, _m=metric):
