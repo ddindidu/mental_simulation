@@ -10,7 +10,7 @@ Groups by *absolute* turn index (1, 2, …, max_turns).
 Each subplot shows: case-level scatter + thin per-case lines + bold mean line
 + right-axis N-annotation (# cases that reached this turn).
 
-Outputs:
+Outputs (saved under --output/turn_abs/):
   turn_abs_inference.png
   turn_abs_inference_accuracy.png
   turn_abs_inference_precision.png
@@ -279,6 +279,7 @@ def main():
         args.input = BASE_DIR / "analysis" / _grd()
     if args.output is None:
         args.output = args.input
+    args.output = args.output / "turn_abs"
     args.output.mkdir(parents=True, exist_ok=True)
 
     id2name = _id2name()

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Efficiency Evaluation Summary
-Reads efficiency_eval.json and outputs:
+Reads efficiency_eval.json and outputs (to analysis/<run_dir>/efficiency/):
   - efficiency_summary.txt  : per-disorder table of all efficiency metrics
   - efficiency_eval_plot.png: grid visualization per disorder (similar to turn_eval_plot_strict.png)
 
@@ -268,6 +268,7 @@ def main() -> None:
         except ValueError:
             args.output = args.json.parent
 
+    args.output = args.output / "efficiency"
     args.output.mkdir(parents=True, exist_ok=True)
     print(f"Input JSON : {args.json}")
     print(f"Output dir : {args.output}")
