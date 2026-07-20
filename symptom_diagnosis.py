@@ -11,9 +11,10 @@ Pipeline:
   5. Save per-file (turn-level) and summary results to results/
 
 CandidateSet semantics (spec §4.2):
-  high_likely   : ALL mandatory criterion groups satisfied (count >= min_count)
-  moderate_likely: at least ONE mandatory symptom confirmed; not excluded
-  excluded      : any mandatory pool rendered impossible (len(pool − denied) < min_count)
+  high_likely   : ALL must_include groups satisfied (count >= min_count for each)
+  moderate_likely: 1+ mandatory symptom confirmed; not excluded
+  low_likely    : 0 mandatory symptoms confirmed + 1+ optional symptom confirmed; not excluded
+  excluded      : any mandatory (must_include pool) symptom denied
 """
 
 import json
@@ -209,51 +210,66 @@ def _all_symptom_ids(disease_data: dict) -> set[str]:
     return ids
 
 
+def _optional_symptom_ids(disease_data: dict) -> set[str]:
+    """Union of symptom IDs in non-must_include pools (include, etc.)."""
+    ids: set[str] = set()
+    for grp in disease_data["required_criteria"].values():
+        if isinstance(grp, dict) and "symptom_pool" in grp and grp.get("relation") != "must_include":
+            ids |= set(grp["symptom_pool"])
+    return ids
+
+
 def compute_candidate_set(
     cumulative_confirmed: set[str],
     cumulative_denied: set[str],
     diagnostic_criteria: dict,
-) -> tuple[set[str], set[str], set[str]]:
+) -> tuple[set[str], set[str], set[str], set[str]]:
     """
-    Symptom-coverage based CandidateSet — uses ALL symptom pools (not just mandatory).
+    KG-deterministic CandidateSet — distinguishes mandatory vs optional overlap.
 
-    Given patient-reported confirmed = {s1, s2, s3} and denied = {s4}:
+      high_likely   : all must_include groups satisfied (count >= min_count for each)
+      moderate_likely: 1+ mandatory (must_include) symptom confirmed; not excluded
+      low_likely    : 0 mandatory symptoms confirmed + 1+ optional symptom confirmed; not excluded
+      excluded      : any mandatory symptom denied
 
-      high_likely   : disease whose symptom pool COVERS all confirmed symptoms
-                      i.e. confirmed_set ⊆ D.all_symptoms
-      moderate_likely: disease whose symptom pool overlaps confirmed_set partially
-                      i.e. D.all_symptoms ∩ confirmed_set ≠ ∅ AND confirmed_set ⊄ D.all_symptoms
-      excluded      : disease whose symptom pool contains any denied symptom
-                      i.e. D.all_symptoms ∩ denied_set ≠ ∅
-    Diseases with zero confirmed-symptom overlap are not added to any set.
+    Diseases with zero symptom overlap (any type) are not added to any set.
     """
     high_likely: set[str]     = set()
     moderate_likely: set[str] = set()
+    low_likely: set[str]      = set()
     excluded: set[str]        = set()
 
     for did, ddata in diagnostic_criteria.items():
-        d_symptoms = _all_symptom_ids(ddata)
-        if not d_symptoms:
+        pools          = _mandatory_pools(ddata)
+        mandatory_syms = {s for pool, _ in pools for s in pool}
+        optional_syms  = _optional_symptom_ids(ddata)
+
+        if not mandatory_syms and not optional_syms:
             continue
 
-        # Excluded: any denied symptom appears in this disease's pool
-        if d_symptoms & cumulative_denied:
+        # Excluded: any mandatory symptom denied
+        if mandatory_syms & cumulative_denied:
             excluded.add(did)
             continue
 
-        overlap = d_symptoms & cumulative_confirmed
-        if not overlap:
-            # No confirmed symptom is a symptom of this disease → not a candidate
-            continue
+        mandatory_confirmed = mandatory_syms & cumulative_confirmed
+        optional_confirmed  = optional_syms  & cumulative_confirmed
 
-        if cumulative_confirmed.issubset(d_symptoms):
-            # All confirmed symptoms belong to this disease → high_likely
-            high_likely.add(did)
+        if not mandatory_confirmed and not optional_confirmed:
+            continue  # no overlap at all
+
+        if mandatory_confirmed:
+            # Check if every must_include group meets its min_count
+            all_met = all(len(pool & cumulative_confirmed) >= min_c for pool, min_c in pools)
+            if all_met:
+                high_likely.add(did)
+            else:
+                moderate_likely.add(did)
         else:
-            # Only a partial subset of confirmed symptoms → moderate_likely
-            moderate_likely.add(did)
+            # Only optional-symptom overlap → lowest evidence tier
+            low_likely.add(did)
 
-    return high_likely, moderate_likely, excluded
+    return high_likely, moderate_likely, low_likely, excluded
 
 
 # ── Disease matching (kept for backward compatibility, now uses cumulative state) ─
@@ -266,10 +282,10 @@ def match_diseases(
     """
     Produce a ranked disease list based on symptom-coverage logic.
 
-    fully_met   = high_likely  (confirmed ⊆ D.all_symptoms)
-    top_partial = moderate_likely (partial overlap, not excluded)
+    fully_met   = high_likely   (all mandatory groups satisfied)
+    top_partial = moderate_likely (1+ mandatory confirmed, not excluded)
     """
-    high_likely, moderate_likely, excluded = compute_candidate_set(
+    high_likely, moderate_likely, low_likely, excluded = compute_candidate_set(
         cumulative_confirmed, cumulative_denied, diagnostic_criteria
     )
 
@@ -308,6 +324,33 @@ def match_diseases(
     return results
 
 
+# ── Migration helpers (recompute candidate_set without LLM) ──────────────────
+
+def _needs_migration(result: dict) -> bool:
+    """True if any turn's candidate_set is missing the low_likely field."""
+    for turn in result.get("turns", []):
+        if "low_likely" not in turn.get("candidate_set", {}):
+            return True
+    return False
+
+
+def _migrate_candidate_sets(result: dict, diagnostic_criteria: dict) -> None:
+    """
+    Recompute candidate_set for every turn using stored cumulative symptom state.
+    Overwrites candidate_set in-place — no LLM calls needed.
+    """
+    for turn in result.get("turns", []):
+        confirmed = set(turn.get("cumulative_confirmed", []))
+        denied    = set(turn.get("cumulative_denied", []))
+        hl, ml, ll, ex = compute_candidate_set(confirmed, denied, diagnostic_criteria)
+        turn["candidate_set"] = {
+            "high_likely":    sorted(hl),
+            "moderate_likely": sorted(ml),
+            "low_likely":     sorted(ll),
+            "excluded":       sorted(ex),
+        }
+
+
 # ── Per-file processing (cumulative turn-level) ──────────────────────────────
 
 def process_log(log_file: Path, all_symptoms: dict, diagnostic_criteria: dict) -> dict | None:
@@ -338,7 +381,7 @@ def process_log(log_file: Path, all_symptoms: dict, diagnostic_criteria: dict) -
             label_conflict_log, turn_num,
         )
 
-        high_likely, moderate_likely, excluded = compute_candidate_set(
+        high_likely, moderate_likely, low_likely, excluded = compute_candidate_set(
             cumulative_confirmed, cumulative_denied, diagnostic_criteria
         )
 
@@ -359,6 +402,7 @@ def process_log(log_file: Path, all_symptoms: dict, diagnostic_criteria: dict) -
             "candidate_set": {
                 "high_likely":    sorted(high_likely),
                 "moderate_likely": sorted(moderate_likely),
+                "low_likely":     sorted(low_likely),
                 "excluded":       sorted(excluded),
             },
             "disease_matches": {
@@ -398,13 +442,22 @@ def main():
         out_path = OUTPUT_DIR / f"{log_file.stem}_result.json"
 
         if out_path.exists():
-            print(f"\n[{log_file.stem}] Result already exists → skip.")
             try:
                 existing = json.loads(out_path.read_text(encoding="utf-8"))
-                all_results.append(existing)
             except (json.JSONDecodeError, OSError) as e:
-                print(f"  [warn] Could not load existing result ({e}); re-processing.")
+                print(f"\n[{log_file.stem}] Could not load existing result ({e}); re-processing.")
             else:
+                if _needs_migration(existing):
+                    print(f"\n[{log_file.stem}] Migrating candidate_sets (no LLM) ...")
+                    _migrate_candidate_sets(existing, diagnostic_criteria)
+                    out_path.write_text(
+                        json.dumps(existing, indent=2, ensure_ascii=False),
+                        encoding="utf-8",
+                    )
+                    print(f"  → Migrated and saved.")
+                else:
+                    print(f"\n[{log_file.stem}] Result already up-to-date → skip.")
+                all_results.append(existing)
                 continue
 
         result = process_log(log_file, all_symptoms, diagnostic_criteria)
@@ -421,7 +474,7 @@ def main():
     summary_path.write_text(json.dumps(all_results, indent=2, ensure_ascii=False), encoding="utf-8")
 
     print("\n" + "=" * 80)
-    print(f"{'Log':<14} {'Turns':>6} {'Conf':>5} {'Denied':>6} {'HighL':>6} {'ModL':>5}  Top Disease @ final turn")
+    print(f"{'Log':<14} {'Turns':>6} {'Conf':>5} {'Denied':>6} {'HighL':>6} {'ModL':>5} {'LowL':>5}  Top Disease @ final turn")
     print("=" * 80)
     for r in all_results:
         final_turn = r["turns"][-1]
@@ -430,6 +483,7 @@ def main():
         cs       = final_turn["candidate_set"]
         n_hl     = len(cs["high_likely"])
         n_ml     = len(cs["moderate_likely"])
+        n_ll     = len(cs.get("low_likely", []))
 
         fully_met   = final_turn["disease_matches"]["fully_met"]
         top_partial = final_turn["disease_matches"]["top_partial"]
@@ -442,7 +496,7 @@ def main():
         else:
             top, tag = "No match", ""
 
-        print(f"{r['log_file']:<14} {r['total_turns']:>6} {n_conf:>5} {n_denied:>6} {n_hl:>6} {n_ml:>5}  {top} {tag}")
+        print(f"{r['log_file']:<14} {r['total_turns']:>6} {n_conf:>5} {n_denied:>6} {n_hl:>6} {n_ml:>5} {n_ll:>5}  {top} {tag}")
 
     print("=" * 80)
     print(f"\nDone. Results saved to: {OUTPUT_DIR}/")
