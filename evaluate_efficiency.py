@@ -26,13 +26,25 @@ from pathlib import Path
 
 import numpy as np
 
+import argparse
+
 from utils.llm import get_run_dir as _get_run_dir
 
-BASE_DIR    = Path(__file__).parent
+BASE_DIR = Path(__file__).parent
+KG_DIR   = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN"
+
+def _parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--results", type=Path, default=None,
+                        help="Path to results dir (default: results/<run_dir>)")
+    parser.add_argument("--logs",    type=Path, default=None,
+                        help="Path to logs dir (default: logs/<run_dir>)")
+    return parser.parse_args()
+
+_args       = _parse_args()
 _RUN_DIR    = _get_run_dir()
-RESULTS_DIR = BASE_DIR / "results" / _RUN_DIR
-LOGS_DIR    = BASE_DIR / "logs"    / _RUN_DIR
-KG_DIR      = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN"
+RESULTS_DIR = _args.results if _args.results else BASE_DIR / "results" / _RUN_DIR
+LOGS_DIR    = _args.logs    if _args.logs    else BASE_DIR / "logs"    / _RUN_DIR
 
 
 def _load_id2name() -> dict[str, str]:
@@ -157,7 +169,8 @@ def evaluate() -> list[dict]:
             cs = turn_data.get("candidate_set", {})
             hl = set(cs.get("high_likely", []))
             ml = set(cs.get("moderate_likely", []))
-            candidate_sizes.append(len(hl) + len(ml))
+            ll = set(cs.get("low_likely", []))
+            candidate_sizes.append(len(hl) + len(ml) + len(ll))
             high_likely_per_turn.append(hl)
 
         if not candidate_sizes:
@@ -245,3 +258,4 @@ def _print_summary(aggregate: dict[str, list], episode_results: list[dict]) -> N
 
 if __name__ == "__main__":
     evaluate()
+

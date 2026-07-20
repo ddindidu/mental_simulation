@@ -183,11 +183,25 @@ def evaluate():
                 preds = set()
                 raw_candidates = []
 
-            # truth tiers: fully_met ≈ high_likely, top_partial ≈ moderate_likely (spec §4.2 proxy)
+            # Candidate tiers from candidate_set (preferred) or disease_matches fallback
+            cs = turn.get("candidate_set", {})
             dm = turn["disease_matches"]
-            high_likely = {d["disease_id"] for d in dm.get("fully_met", [])} | {gt}
-            moderate_likely = {d["disease_id"] for d in dm.get("top_partial", [])} - high_likely
-            truth_set = high_likely | moderate_likely
+            if cs:
+                high_likely     = set(cs.get("high_likely",    []))
+                moderate_likely = set(cs.get("moderate_likely", []))
+                low_likely      = set(cs.get("low_likely",      []))
+            else:
+                high_likely     = {d["disease_id"] for d in dm.get("fully_met",   [])}
+                moderate_likely = {d["disease_id"] for d in dm.get("top_partial", [])}
+                low_likely      = set()
+
+            high_likely.add(gt)
+            moderate_likely -= high_likely
+            low_likely      -= high_likely | moderate_likely
+
+            strong_candidates = high_likely | moderate_likely
+            all_candidates    = strong_candidates | low_likely
+            truth_set         = all_candidates
 
             intersection = preds & truth_set
             tp = len(intersection)
@@ -198,16 +212,15 @@ def evaluate():
             # spec §4.3 metrics
             precision = tp / len(preds) if preds else 0.0
             recall = tp / n_truth if n_truth else 0.0
-            # strict set-equality accuracy (1.0 or 0.0) — spec §4.3
             accuracy = 1.0 if preds == truth_set else 0.0
-            # Jaccard (was incorrectly called "accuracy" before)
             union = preds | truth_set
             jaccard = tp / len(union) if union else 1.0
-            # weighted recall: missing high_likely costs 2x, moderate_likely 1x — spec §4.3
+            # weighted recall: high=2×, moderate=1×, low=0.5× — spec §4.3
             missed_high = high_likely - preds
-            missed_mod = moderate_likely - preds
-            wr_penalty = 2 * len(missed_high) + len(missed_mod)
-            wr_max = 2 * len(high_likely) + len(moderate_likely)
+            missed_mod  = moderate_likely - preds
+            missed_low  = low_likely - preds
+            wr_penalty  = 2 * len(missed_high) + 1 * len(missed_mod) + 0.5 * len(missed_low)
+            wr_max      = 2 * len(high_likely) + 1 * len(moderate_likely) + 0.5 * len(low_likely)
             weighted_recall = 1.0 - wr_penalty / wr_max if wr_max else 1.0
 
             stats = turn_stats[t]
@@ -222,24 +235,25 @@ def evaluate():
             stats["wr_max_penalty"] += wr_max
 
             sample_turns.append({
-                "log_file": log_name,
-                "turn": t,
-                "patient_response": turn["patient_response"],
-                "identified_symptoms": turn["identified_symptoms"],
-                "symptom_reasoning": turn["symptom_reasoning"],
-                "ground_truth": gt,
-                "high_likely": sorted(high_likely),
-                "moderate_likely": sorted(moderate_likely),
-                "predicted": sorted(preds),
-                "predicted_names": raw_candidates,
-                "tp": tp,
-                "fp": fp,
-                "fn": fn,
-                "precision": round(precision, 4),
-                "recall": round(recall, 4),
-                "accuracy": round(accuracy, 4),
-                "jaccard": round(jaccard, 4),
-                "weighted_recall": round(weighted_recall, 4),
+                "log_file":          log_name,
+                "turn":              t,
+                "patient_response":  turn["patient_response"],
+                "symptom_reasoning": turn.get("symptom_reasoning", {}),
+                "ground_truth":      gt,
+                "predicted":         sorted(preds),
+                "predicted_names":   raw_candidates,
+                "high_likely":       sorted(high_likely),
+                "moderate_likely":   sorted(moderate_likely),
+                "low_likely":        sorted(low_likely),
+                "strong_candidates": sorted(strong_candidates),
+                "all_candidates":    sorted(all_candidates),
+                "truth_set":         sorted(truth_set),
+                "tp": tp, "fp": fp, "fn": fn,
+                "precision":        round(precision, 4),
+                "recall":           round(recall, 4),
+                "accuracy":         round(accuracy, 4),
+                "jaccard":          round(jaccard, 4),
+                "weighted_recall":  round(weighted_recall, 4),
             })
 
     # Print table
