@@ -132,15 +132,6 @@ def _load_disorder_map() -> dict[str, str]:
     return {k: v["name"] for k, v in data.items()}
 
 
-def _diagnosis_matches(final_diag: str, true_name: str) -> bool:
-    """정답 질환명과 예측 진단명이 정확히 일치하는지 비교 (대소문자 무시, exact match)."""
-    fd = (final_diag or "").lower().strip()
-    tn = (true_name or "").lower().strip()
-    if not fd or not tn:
-        return False
-    return fd == tn
-
-
 def _run_eval_pipeline() -> None:
     """배치 완료 후 symptom_diagnosis → evaluate_* 파이프라인을 순서대로 실행한다.
 
@@ -248,9 +239,22 @@ def _run_batch_evaluation(
     difficulty: str,
     logs_dir: Path,
     acc_path: Path,
+    parallel_disorders: int = 4,
 ) -> None:
-    """백그라운드 스레드에서 전체 disorder × N회 시뮬레이션 실행."""
-    from simulation_core import run_interview_simulation
+    """백그라운드 스레드에서 전체 disorder × N회 시뮬레이션 실행.
+
+    disorder 단위로 최대 parallel_disorders개의 별도 프로세스(ProcessPoolExecutor,
+    spawn)를 동시에 띄운다. patient.py / utils/llm.py는 SYSTEM_PROMPT나 현재 로그
+    경로 등을 모듈 전역 변수로 관리하기 때문에, 여러 disorder를 같은 프로세스
+    안에서 스레드로 병렬 실행하면 서로의 상태를 덮어쓰는 레이스 컨디션이 생긴다.
+    프로세스를 분리하면 disorder마다 독립된 전역 상태 사본을 가지므로 안전하다.
+    실제 시뮬레이션 로직은 batch_worker.run_disorder()에 있다.
+    """
+    import queue as _queue
+    import multiprocessing as mp
+    from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
+
+    from batch_worker import run_disorder
 
     codes = sorted(disorder_map.keys())
     total = len(codes) * runs_per_disorder
@@ -263,167 +267,73 @@ def _run_batch_evaluation(
         _batch_state["error"] = None
         _batch_state["format_failures"] = 0
 
-    # symptom_diagnosis 리소스를 배치 내에서 한 번만 로드하는 lazy cache
-    _sd_cache: list = []  # [module, all_symptoms, diagnostic_criteria]
-
-    def _ensure_sd() -> tuple:
-        if not _sd_cache:
-            import importlib as _il, sys as _sys
-            name = "symptom_diagnosis"
-            mod = _il.reload(_sys.modules[name]) if name in _sys.modules else _il.import_module(name)
-            _sd_cache.extend([mod, mod.load_all_symptoms(), mod.load_diagnostic_criteria()])
-        return _sd_cache[0], _sd_cache[1], _sd_cache[2]
-
-    def _run_symptom_diagnosis(txt_path: Path, out_path: Path) -> None:
-        """시뮬레이션 직후 호출: txt_log → _result.json 즉시 생성."""
-        if not txt_path.exists():
-            return
-        try:
-            sd, sd_syms, sd_crit = _ensure_sd()
-            sd_result = sd.process_log(txt_path, sd_syms, sd_crit)
-            if sd_result is not None:
-                out_path.parent.mkdir(parents=True, exist_ok=True)
-                out_path.write_text(
-                    json.dumps(sd_result, indent=2, ensure_ascii=False),
-                    encoding="utf-8",
-                )
-                print(f"[batch] symptom_diagnosis → {out_path.name}", flush=True)
-        except Exception as _e:
-            print(f"[batch] symptom_diagnosis failed ({txt_path.stem}): {_e}", flush=True)
-
     try:
-        for code in codes:
-            true_name = disorder_map[code]
-            correct = 0
-            runs_log: list[dict] = []
+        max_workers = max(1, min(int(parallel_disorders), len(codes)))
+        print(
+            f"[batch] parallel_disorders={max_workers} (of {len(codes)} disorders)",
+            flush=True,
+        )
 
-            for run_idx in range(1, runs_per_disorder + 1):
-                with _batch_lock:
-                    _batch_state["current"] = f"{code} run {run_idx}/{runs_per_disorder}"
+        ctx = mp.get_context("spawn")
+        manager = ctx.Manager()
+        progress_queue = manager.Queue()
+        received_per_code: dict[str, int] = {code: 0 for code in codes}
 
-                json_log_path    = logs_dir / f"{code}_{run_idx}.json"
-                txt_log_path     = logs_dir / f"{code}_{run_idx}.txt"
-                result_json_path = acc_path.parent / f"{code}_{run_idx}_result.json"
-
-                has_json_log = json_log_path.exists()
-                has_result   = result_json_path.exists()
-
-                # ── Skip 조건 ────────────────────────────────────────────
-                if has_json_log or has_result:
-                    if has_json_log and not has_result:
-                        # Case 2: json_log 있고 _result.json 없음 → 즉시 생성
-                        _run_symptom_diagnosis(txt_log_path, result_json_path)
-
-                    # final_diag는 json_log에서 읽음
-                    final_diag_skip, is_correct_skip = "", False
-                    if has_json_log:
-                        try:
-                            existing = json.loads(json_log_path.read_text(encoding="utf-8"))
-                            final_diag_skip = existing.get("final_diagnosis", "")
-                            is_correct_skip = _diagnosis_matches(final_diag_skip, true_name)
-                            if is_correct_skip:
-                                correct += 1
-                        except Exception:
-                            pass
-
-                    status = (
-                        "log+result" if (has_json_log and has_result) else
-                        "log→result" if has_json_log else
-                        "result_only"
-                    )
-                    print(f"[batch] {code} run {run_idx}: skip ({status})", flush=True)
-                    runs_log.append({
-                        "run": run_idx,
-                        "final_diagnosis": final_diag_skip,
-                        "correct": is_correct_skip,
-                        "skipped": True,
-                    })
-                    with _batch_lock:
-                        _batch_state["done"] += 1
-                    continue
-
-                # ── Case 4: 둘 다 없음 → 시뮬레이션 실행 ────────────────
-                set_log_path(txt_log_path)
-
-                # 환자 프로파일 재생성 (같은 disease, 매번 랜덤 증상)
+        def _drain_progress() -> None:
+            while True:
                 try:
-                    patient.reinitialize(
-                        disease_code=code,
-                        difficulty_level=difficulty,
-                        use_knowledge_graph=True,
-                    )
-                    patient_system = patient.SYSTEM_PROMPT
-                except Exception as e:
-                    print(f"[batch] patient reinit failed {code} run {run_idx}: {e}")
-                    with _batch_lock:
-                        _batch_state["done"] += 1
-                    continue
-
-                # 시뮬레이션 실행
-                try:
-                    result = run_interview_simulation(
-                        patient_system=patient_system,
-                        max_turns=MAX_TURNS,
-                        verbose=False,
-                    )
-                    mem = result["doctor_memory"]
-                    fd = mem.get("final_diagnosis") or {}
-                    final_diag = fd.get("diagnosis", "")
-                    is_correct = _diagnosis_matches(final_diag, true_name)
-                    if is_correct:
-                        correct += 1
-                    runs_log.append({
-                        "run": run_idx,
-                        "final_diagnosis": final_diag,
-                        "correct": is_correct,
-                        "closed_at_turn": mem.get("closed_at_patient_turn"),
-                        "candidates": fd.get("candidates", []),
-                        "reason": fd.get("reason", ""),
-                    })
-
-                    # 시뮬레이션 결과 JSON 로그 저장
-                    json_log_data = {
-                        "disease_code": code,
-                        "run": run_idx,
-                        "closed_at_patient_turn": result.get("closed_at_patient_turn"),
-                        "final_diagnosis": final_diag,
-                        "is_correct": is_correct,
-                        "transcript": [
-                            {"role": r, "content": c}
-                            for r, c in result.get("transcript", [])
-                        ],
-                        "doctor_memory": mem,
-                    }
-                    json_log_path.write_text(
-                        json.dumps(json_log_data, ensure_ascii=False, indent=2),
-                        encoding="utf-8",
-                    )
-
-                    print(
-                        f"[batch] {code} run {run_idx}: {final_diag!r} "
-                        f"→ {'✓' if is_correct else '✗'}  (true={true_name!r})",
-                        flush=True,
-                    )
-
-                    # 시뮬레이션 직후 즉시 symptom_diagnosis 실행 → _result.json 생성
-                    _run_symptom_diagnosis(txt_log_path, result_json_path)
-
-                except Exception as e:
-                    print(f"[batch] simulation error {code} run {run_idx}: {e}", flush=True)
-                    runs_log.append({"run": run_idx, "error": str(e), "correct": False})
-
+                    msg = progress_queue.get_nowait()
+                except _queue.Empty:
+                    return
                 with _batch_lock:
                     _batch_state["done"] += 1
+                    _batch_state["current"] = f"{msg['code']} run {msg['run']}/{msg['total_runs']}"
+                received_per_code[msg["code"]] = received_per_code.get(msg["code"], 0) + 1
 
-            acc = correct / runs_per_disorder if runs_per_disorder else 0.0
-            with _batch_lock:
-                _batch_state["results"][code] = {
-                    "disease_name": true_name,
-                    "correct": correct,
-                    "total": runs_per_disorder,
-                    "accuracy": round(acc, 4),
-                    "runs": runs_log,
-                }
+        with ProcessPoolExecutor(max_workers=max_workers, mp_context=ctx) as executor:
+            futures = {
+                executor.submit(
+                    run_disorder,
+                    code,
+                    disorder_map[code],
+                    runs_per_disorder,
+                    difficulty,
+                    MAX_TURNS,
+                    str(logs_dir),
+                    str(acc_path.parent),
+                    progress_queue,
+                ): code
+                for code in codes
+            }
+            pending = set(futures)
+
+            while pending:
+                _drain_progress()
+                finished, pending = wait(pending, timeout=0.2, return_when=FIRST_COMPLETED)
+                for fut in finished:
+                    code = futures[fut]
+                    try:
+                        result = fut.result()
+                    except Exception as e:
+                        print(f"[batch] disorder {code} failed: {e}", flush=True)
+                        result = {
+                            "disease_name": disorder_map[code],
+                            "correct": 0,
+                            "total": runs_per_disorder,
+                            "accuracy": 0.0,
+                            "runs": [],
+                        }
+                        # 프로세스가 통째로 죽어 progress 메시지가 덜 도착한 만큼 done을 보정
+                        missing = runs_per_disorder - received_per_code.get(code, 0)
+                        if missing > 0:
+                            with _batch_lock:
+                                _batch_state["done"] += missing
+                            received_per_code[code] = runs_per_disorder
+                    with _batch_lock:
+                        _batch_state["results"][code] = result
+            _drain_progress()
+
+        manager.shutdown()
 
         # ── acc.txt 작성 ───────────────────────────────────────────────────
         with _batch_lock:
@@ -484,7 +394,9 @@ def _run_batch_evaluation(
 def batch_eval():
     """배치 평가 시작 엔드포인트.
     Body (JSON, optional):
-      { "runs_per_disorder": 10, "difficulty": "medium" }
+      { "runs_per_disorder": 10, "difficulty": "medium", "parallel_disorders": 4 }
+    parallel_disorders: 동시에 실행할 disorder(프로세스) 개수. 생략 시
+    config.json의 batch.parallel_disorders(기본 4)를 사용한다.
     """
     with _batch_lock:
         if _batch_state["running"]:
@@ -493,6 +405,8 @@ def batch_eval():
     body = request.get_json(force=True) or {}
     runs = int(body.get("runs_per_disorder", 10))
     difficulty = str(body.get("difficulty", "medium")).strip()
+    default_parallel = int((CONFIG.get("batch") or {}).get("parallel_disorders", 4))
+    parallel_disorders = int(body.get("parallel_disorders", default_parallel))
 
     try:
         disorder_map = _load_disorder_map()
@@ -522,7 +436,7 @@ def batch_eval():
 
     t = threading.Thread(
         target=_run_batch_evaluation,
-        args=(disorder_map, runs, difficulty, logs_dir, acc_path),
+        args=(disorder_map, runs, difficulty, logs_dir, acc_path, parallel_disorders),
         daemon=True,
     )
     t.start()
@@ -532,6 +446,7 @@ def batch_eval():
         "disorders": len(disorder_map),
         "runs_per_disorder": runs,
         "difficulty": difficulty,
+        "parallel_disorders": parallel_disorders,
         "run_dir": run_dir,
         "logs_dir": str(logs_dir),
         "acc_path": str(acc_path),
