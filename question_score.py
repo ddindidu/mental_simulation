@@ -283,7 +283,7 @@ class LLMJudgeMapper(QuestionSymptomMapper):
         "Output ONLY valid JSON — no explanation, no markdown."
     )
 
-    def __init__(self, max_tokens: int = 512, prefilter_k: int = _LLM_PREFILTER_K):
+    def __init__(self, max_tokens: int = 4096, prefilter_k: int = _LLM_PREFILTER_K):
         self.max_tokens = max_tokens
         self.prefilter_k = prefilter_k
 
