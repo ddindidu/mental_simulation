@@ -1,10 +1,13 @@
 """
 Question Reasonability Scoring — spec §4.4
 
-Three interchangeable QuestionSymptomMappers:
-  SemanticSimilarityMapper  — word-overlap baseline (replace with embeddings for production)
-  LLMJudgeMapper            — Judge LLM identifies targeted symptoms
-  HybridMapper              — LLM-first, embedding recall-boost adds any missed by LLM
+Two primary QuestionSymptomMappers:
+  CosineSemanticMapper  — sentence-embedding cosine similarity (all-MiniLM-L6-v2)
+  LLMJudgeMapper        — Judge LLM identifies targeted symptoms with cosine pre-filter
+
+Legacy:
+  SemanticSimilarityMapper — word-overlap baseline (kept for ablation)
+  HybridMapper             — cosine union llm_judge
 
 Per-turn scores:
   DCS (Discrimination Coverage Score)
@@ -12,6 +15,11 @@ Per-turn scores:
   mandatory_first_compliance
   redundancy_penalty
   composite_score
+  information_gain
+
+Episode-level aggregate metrics (conditional on active turns):
+  ig_positive_rate, discriminating_q_rate, conditional_mean_composite,
+  conditional_mean_ig, redundancy_rate, early_ig_mean
 
 Safety-critical symptom tracking is kept separate from DCS scoring.
 """
@@ -23,6 +31,8 @@ import re
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Optional
+
+import numpy as np
 
 from utils.config import CONFIG
 from utils.llm import chat as _llm_chat
@@ -190,58 +200,139 @@ class SemanticSimilarityMapper(QuestionSymptomMapper):
         return results
 
 
-class LLMJudgeMapper(QuestionSymptomMapper):
-    def __init__(self, max_tokens: int = 512):
-        self.max_tokens = max_tokens
+_COSINE_TAU = float(_EVAL_CFG.get("cosine_tau", 0.35))
+_LLM_PREFILTER_K = int(_EVAL_CFG.get("llm_prefilter_k", 30))
 
-    def _catalogue(self, all_symptoms: dict) -> str:
-        return "\n".join(
-            f"[{sid}] {s['name']}: {s['description']}"
-            for sid, s in all_symptoms.items()
+
+class CosineSemanticMapper(QuestionSymptomMapper):
+    """
+    Sentence-embedding cosine similarity mapper using all-MiniLM-L6-v2.
+    Symptom embeddings are cached across calls (stable symptom set assumed).
+    threshold is the minimum cosine similarity (config key: cosine_tau, default 0.35).
+    """
+
+    def __init__(self, threshold: float = _COSINE_TAU):
+        self.threshold = threshold
+        self._model: "SentenceTransformer | None" = None
+        self._sym_embeddings: "np.ndarray | None" = None
+        self._sym_ids: list[str] = []
+
+    def _get_model(self):
+        if self._model is None:
+            from sentence_transformers import SentenceTransformer
+            self._model = SentenceTransformer("all-MiniLM-L6-v2")
+        return self._model
+
+    @staticmethod
+    def _sym_text(sdata: dict) -> str:
+        return f"{sdata.get('name', '')} {sdata.get('description', '')}".strip()
+
+    def _ensure_embeddings(self, all_symptoms: dict) -> None:
+        sids = sorted(all_symptoms.keys())
+        if sids == self._sym_ids and self._sym_embeddings is not None:
+            return
+        model = self._get_model()
+        texts = [self._sym_text(all_symptoms[s]) for s in sids]
+        self._sym_embeddings = model.encode(
+            texts, show_progress_bar=False, batch_size=64, normalize_embeddings=True
         )
+        self._sym_ids = sids
 
     def map(self, question: str, all_symptoms: dict) -> list[str]:
-        catalogue = self._catalogue(all_symptoms)
-        prompt = (
-            f"Given the symptom catalogue and a doctor's question, identify which "
-            f"symptom IDs the question is directly trying to assess. List ALL that apply.\n\n"
-            f"=== SYMPTOM CATALOGUE ===\n{catalogue}\n\n"
-            f"=== DOCTOR'S QUESTION ===\n{question}\n\n"
-            f'Reply ONLY with JSON: {{"symptom_ids": ["S001", ...]}}'
+        self._ensure_embeddings(all_symptoms)
+        model = self._get_model()
+        q_emb = model.encode(
+            [question], show_progress_bar=False, normalize_embeddings=True
+        )
+        # Both sides normalized → dot product == cosine similarity
+        sims: np.ndarray = (self._sym_embeddings @ q_emb.T).reshape(-1)
+        return [self._sym_ids[i] for i, s in enumerate(sims) if s >= self.threshold]
+
+    def top_k(self, question: str, all_symptoms: dict, k: int) -> list[str]:
+        """Return the k highest-similarity symptom IDs (used by LLMJudgeMapper as pre-filter)."""
+        self._ensure_embeddings(all_symptoms)
+        model = self._get_model()
+        q_emb = model.encode(
+            [question], show_progress_bar=False, normalize_embeddings=True
+        )
+        sims = (self._sym_embeddings @ q_emb.T).reshape(-1)
+        idx = np.argsort(sims)[::-1][:k]
+        return [self._sym_ids[i] for i in idx]
+
+
+_cosine_prefilter = CosineSemanticMapper()  # shared instance for LLMJudgeMapper pre-filter
+
+
+class LLMJudgeMapper(QuestionSymptomMapper):
+    """
+    LLM judge mapper with cosine pre-filtering.
+
+    Pipeline:
+      1. CosineSemanticMapper.top_k() selects the top-K most similar symptoms
+         (reduces prompt length from all 84 → K candidates).
+      2. LLM identifies which of those K actually match the question.
+
+    This keeps token cost low while preserving recall via the semantic pre-filter.
+    """
+
+    _SYSTEM = (
+        "/no_think\n"
+        "You are a clinical symptom analyst. "
+        "Given a doctor's question and a list of candidate psychiatric symptoms, "
+        "identify which symptom IDs the question is directly attempting to assess. "
+        "Output ONLY valid JSON — no explanation, no markdown."
+    )
+
+    def __init__(self, max_tokens: int = 512, prefilter_k: int = _LLM_PREFILTER_K):
+        self.max_tokens = max_tokens
+        self.prefilter_k = prefilter_k
+
+    def map(self, question: str, all_symptoms: dict) -> list[str]:
+        # Step 1: cosine pre-filter to top-K candidates
+        top_ids = _cosine_prefilter.top_k(question, all_symptoms, k=self.prefilter_k)
+        candidate_text = "\n".join(
+            f"[{sid}] {all_symptoms[sid]['name']}: {all_symptoms[sid].get('description','')}"
+            for sid in top_ids
+        )
+        user_msg = (
+            f"DOCTOR'S QUESTION:\n{question}\n\n"
+            f"CANDIDATE SYMPTOMS (top {self.prefilter_k} by semantic similarity):\n"
+            f"{candidate_text}\n\n"
+            f'Reply ONLY with JSON: {{"symptom_ids": ["S001", ...]}}\n'
+            f"Include only IDs from the candidate list above that the question clearly targets."
         )
         raw = _llm_chat(
             [
-                {"role": "system", "content": "You are a clinical analyst. Output only valid JSON."},
-                {"role": "user", "content": prompt},
+                {"role": "system", "content": self._SYSTEM},
+                {"role": "user",   "content": user_msg},
             ],
             max_new_tokens=self.max_tokens,
             role="judge",
         ).strip()
         raw = re.sub(r"^```[a-z]*\n?", "", raw)
-        raw = re.sub(r"\n?```$", "", raw)
+        raw = re.sub(r"\n?```$",       "", raw)
         m = re.search(r"\{.*\}", raw, re.DOTALL)
         if not m:
             return []
         try:
             data = json.loads(m.group())
-            ids = data.get("symptom_ids", [])
+            ids  = data.get("symptom_ids", [])
             return [s for s in ids if isinstance(s, str) and s in all_symptoms]
         except json.JSONDecodeError:
             return []
 
 
 class HybridMapper(QuestionSymptomMapper):
-    """LLMJudge as primary; SemanticSimilarity adds any symptom LLM missed.
-    Direction is fixed: LLM-first, embedding recall-boost. Do not invert."""
+    """CosineSemanticMapper ∪ LLMJudgeMapper (recall-boost union)."""
 
-    def __init__(self, tau: float = TAU, llm_max_tokens: int = 512):
-        self._llm = LLMJudgeMapper(max_tokens=llm_max_tokens)
-        self._sem = SemanticSimilarityMapper(tau=tau)
+    def __init__(self):
+        self._cosine  = CosineSemanticMapper()
+        self._llm     = LLMJudgeMapper()
 
     def map(self, question: str, all_symptoms: dict) -> list[str]:
-        llm_ids = set(self._llm.map(question, all_symptoms))
-        sem_ids = set(self._sem.map(question, all_symptoms))
-        return sorted(llm_ids | sem_ids)
+        cosine_ids = set(self._cosine.map(question, all_symptoms))
+        llm_ids    = set(self._llm.map(question, all_symptoms))
+        return sorted(cosine_ids | llm_ids)
 
 
 # ── DCS ────────────────────────────────────────────────────────────────────────
@@ -429,6 +520,88 @@ def score_information_gain(
 
     expected_size = 0.5 * size_confirmed + 0.5 * size_denied
     return round(1.0 - expected_size / current_candidate_size, 4)
+
+
+# ── Episode-level aggregate metrics ───────────────────────────────────────────
+
+_DISCRIMINATING_Q_THRESHOLD = float(_EVAL_CFG.get("discriminating_q_threshold", 0.3))
+
+
+def compute_episode_question_metrics(
+    turns: list[dict],
+    mapper_name: str,
+    composite_threshold: float = _DISCRIMINATING_Q_THRESHOLD,
+) -> dict:
+    """
+    Compute per-episode aggregate question-quality metrics for one mapper.
+
+    Active turns: turns where candidate_size > 1 (discrimination still possible).
+    IG values exclude None (i.e. turns already at size ≤ 1 are skipped).
+
+    Returns a flat dict with:
+      — existing aggregates (over ALL turns): mean_composite, mean_dcs, mean_redundancy
+      — new conditional aggregates (over ACTIVE turns only):
+          active_turn_count, conditional_mean_composite, conditional_mean_ig,
+          ig_positive_rate, discriminating_q_rate, redundancy_rate, early_ig_mean
+    """
+
+    def _mean(lst: list) -> Optional[float]:
+        return float(np.mean(lst)) if lst else None
+
+    scored: list[dict] = []
+    sizes:  list[int]  = []
+    for t in turns:
+        sbm = t.get("scores_by_mapper", {})
+        if mapper_name not in sbm:
+            continue
+        scored.append(sbm[mapper_name])
+        sizes.append(t.get("candidate_size", 0))
+
+    if not scored:
+        return {}
+
+    # ── All-turn aggregates (existing behaviour) ──────────────────────────────
+    all_composites  = [s.get("composite_score",    0.0) for s in scored]
+    all_dcs         = [s["dcs"] for s in scored if s.get("dcs") is not None]
+    all_redundancies = [s.get("redundancy_penalty", 0)   for s in scored]
+
+    # ── Active-turn aggregates (NEW) ──────────────────────────────────────────
+    active_s = [s for s, sz in zip(scored, sizes) if sz > 1]
+    active_composites = [s.get("composite_score", 0.0) for s in active_s]
+
+    # IG values from active turns, excluding None (size was already ≤ 1)
+    active_igs: list[float] = [
+        s["information_gain"]
+        for s in active_s
+        if s.get("information_gain") is not None
+    ]
+
+    # Early-turn IG: first ceil(len/2) active turns
+    half      = max(1, (len(active_igs) + 1) // 2)
+    early_igs = active_igs[:half]
+
+    return {
+        # existing (all turns)
+        "mean_composite":  _mean(all_composites),
+        "mean_dcs":        _mean(all_dcs),
+        "mean_redundancy": _mean(all_redundancies),
+
+        # new (active turns)
+        "active_turn_count":          len(active_s),
+        "conditional_mean_composite": _mean(active_composites),
+        "conditional_mean_ig":        _mean(active_igs),
+        "ig_positive_rate": (
+            sum(1 for ig in active_igs if ig > 0) / len(active_igs)
+            if active_igs else None
+        ),
+        "discriminating_q_rate": (
+            sum(1 for c in active_composites if c > composite_threshold)
+            / len(active_composites)
+            if active_composites else None
+        ),
+        "redundancy_rate": _mean(all_redundancies),
+        "early_ig_mean":   _mean(early_igs),
+    }
 
 
 # ── Safety screening compliance ────────────────────────────────────────────────
