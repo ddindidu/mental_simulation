@@ -46,7 +46,7 @@ def run_disorder(
 
     def _ensure_sd() -> tuple:
         if not sd_cache:
-            import symptom_diagnosis as sd
+            import eval.symptom_diagnosis as sd
             sd_cache.extend([sd, sd.load_all_symptoms(), sd.load_diagnostic_criteria()])
         return sd_cache[0], sd_cache[1], sd_cache[2]
 

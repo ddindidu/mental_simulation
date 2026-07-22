@@ -39,7 +39,7 @@ import numpy as np
 
 warnings.filterwarnings("ignore")
 
-BASE_DIR  = Path(__file__).parent
+BASE_DIR  = Path(__file__).resolve().parent.parent
 JUDGE     = "gemini-3.5-flash"
 RB        = BASE_DIR / "results"  / JUDGE / JUDGE   # results base
 AB        = BASE_DIR / "analysis" / JUDGE / JUDGE   # analysis base

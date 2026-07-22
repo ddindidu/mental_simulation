@@ -165,7 +165,7 @@ def _run_eval_pipeline() -> None:
     with _batch_lock:
         _batch_state["current"] = "[pipeline] symptom extraction & disease matching"
     try:
-        sd = _load("symptom_diagnosis")
+        sd = _load("eval.symptom_diagnosis")
         sd.main()
     except Exception as _e:
         print(f"[pipeline] symptom_diagnosis failed: {_e}", flush=True)
@@ -174,7 +174,7 @@ def _run_eval_pipeline() -> None:
     with _batch_lock:
         _batch_state["current"] = "[pipeline] final diagnosis eval"
     try:
-        efd = _load("evaluate_final_diagnosis")
+        efd = _load("eval.evaluate_final_diagnosis")
         efd.main()
     except SystemExit:
         print("[pipeline] evaluate_final_diagnosis: no log files, skipping.", flush=True)
@@ -185,7 +185,7 @@ def _run_eval_pipeline() -> None:
     with _batch_lock:
         _batch_state["current"] = "[pipeline] turn-level eval (non-strict)"
     try:
-        et = _load("evaluate_turns")
+        et = _load("eval.evaluate_turns")
         _turns = et.evaluate()
         et.plot(_turns)
     except SystemExit:
@@ -197,7 +197,7 @@ def _run_eval_pipeline() -> None:
     with _batch_lock:
         _batch_state["current"] = "[pipeline] turn-level eval (strict)"
     try:
-        ets = _load("evaluate_turns_strict")
+        ets = _load("eval.evaluate_turns_strict")
         _turns_s, _crit, _ = ets.evaluate()
         ets.plot(_turns_s, _crit)
     except SystemExit:
@@ -209,7 +209,7 @@ def _run_eval_pipeline() -> None:
     with _batch_lock:
         _batch_state["current"] = "[pipeline] efficiency eval"
     try:
-        ee = _load("evaluate_efficiency")
+        ee = _load("eval.evaluate_efficiency")
         ee.evaluate()
     except SystemExit:
         print("[pipeline] evaluate_efficiency: no result files, skipping.", flush=True)
@@ -220,7 +220,7 @@ def _run_eval_pipeline() -> None:
     with _batch_lock:
         _batch_state["current"] = "[pipeline] question reasonability eval"
     try:
-        eq = _load("evaluate_question")
+        eq = _load("eval.evaluate_question")
         eq.evaluate()
     except SystemExit:
         print("[pipeline] evaluate_question: no result files, skipping.", flush=True)
@@ -231,7 +231,7 @@ def _run_eval_pipeline() -> None:
     with _batch_lock:
         _batch_state["current"] = "[pipeline] diagnostic reasoning eval"
     try:
-        edr = _load("evaluate_diagnostic_reasoning")
+        edr = _load("eval.evaluate_diagnostic_reasoning")
         edr.main()
     except SystemExit:
         print("[pipeline] evaluate_diagnostic_reasoning: no log files, skipping.", flush=True)

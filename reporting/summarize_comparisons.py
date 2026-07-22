@@ -30,7 +30,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-BASE_DIR = Path(__file__).parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 def _mean(vals) -> float | None:
