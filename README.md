@@ -188,16 +188,16 @@ bash script/run_simulate.sh    # PATIENT_MODELS × DOCTOR_MODELS × SYMPTOM_PROF
 ```
 logs/D###_N.txt
    │
-   ├─(1) python symptom_diagnosis.py
+   ├─(1) python eval/symptom_diagnosis.py
    │        턴별 환자 발화 → LLM 증상 추출(S###) → diagnostic_criteria.json 질환 매칭
    │        → results/{log}_result.json, results/summary.json
    │
-   ├─(2) python evaluate_turns_strict.py        # Method B (현행)
+   ├─(2) python eval/evaluate_turns_strict.py    # Method B (현행)
    │        +증상(confirmed) / −증상(denied) 누적 → 제약 전파로 truth_set 산정
-   │        → results/turn_eval_strict.json, turn_eval_plot_strict.png, results/denials/*.json
-   │        (구버전: evaluate_turns.py → turn_eval.json / turn_eval_plot.png)
+   │        → analysis/turn_eval_strict.json, analysis/turn_eval/turn_eval_plot_strict*.png, results/denials/*.json
+   │        (구버전: eval/evaluate_turns.py → analysis/turn_eval.json / turn_eval_plot.png)
    │
-   └─(3) python evaluate_final_diagnosis.py
+   └─(3) python eval/evaluate_final_diagnosis.py
             마지막 의사 블록의 diagnosis ↔ disorder.json 매핑으로 질환별 정확도
             → results/final_diagnosis_eval.txt
 ```

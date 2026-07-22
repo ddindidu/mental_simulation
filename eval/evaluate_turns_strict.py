@@ -28,10 +28,15 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+import sys as _sys
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_REPO_ROOT))
+
 import matplotlib.pyplot as plt
 import numpy as np
 
-BASE_DIR      = Path(__file__).parent
+BASE_DIR      = Path(__file__).resolve().parent.parent
 
 from utils.llm import get_run_dir as _get_run_dir
 _RUN_DIR    = _get_run_dir()

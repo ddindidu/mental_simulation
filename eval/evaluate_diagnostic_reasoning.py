@@ -23,9 +23,14 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+import sys as _sys
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_REPO_ROOT))
+
 import numpy as np
 
-BASE_DIR = Path(__file__).parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 KG_DIR   = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN"
 
 
@@ -41,7 +46,7 @@ def _parse_args() -> argparse.Namespace:
 # ── Lazy imports to avoid module-level side effects ───────────────────────────
 def _setup() -> tuple:
     from utils.llm import get_run_dir as _get_run_dir, chat as _llm_chat
-    from score_diagnostic_reasoning import (
+    from eval.score_diagnostic_reasoning import (
         load_symptom_names,
         build_gt_criteria_text,
         judge_checklist,

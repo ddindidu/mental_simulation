@@ -16,7 +16,12 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-BASE_DIR      = Path(__file__).parent
+import sys as _sys
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_REPO_ROOT))
+
+BASE_DIR      = Path(__file__).resolve().parent.parent
 DISORDER_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "disorder.json"
 
 from utils.llm import get_run_dir as _get_run_dir
@@ -43,11 +48,22 @@ def extract_final_diagnosis(log_file: Path) -> str | None:
     )
     for b in reversed(blocks):  # final diagnosis is the last doctor block
         b = b.strip()
+        # Strip markdown code fences if present (e.g. ```json ... ```)
+        b = re.sub(r"^```(?:json)?\s*", "", b)
+        b = re.sub(r"\s*```$", "", b).strip()
         try:
             parsed = json.loads(b)
             if isinstance(parsed, dict) and "diagnosis" in parsed:
                 return str(parsed["diagnosis"]).strip()
         except (json.JSONDecodeError, ValueError):
+            m = re.search(r"\{[\s\S]*\}", b)
+            if m:
+                try:
+                    parsed = json.loads(m.group())
+                    if isinstance(parsed, dict) and "diagnosis" in parsed:
+                        return str(parsed["diagnosis"]).strip()
+                except (json.JSONDecodeError, ValueError):
+                    pass
             continue
     return None
 

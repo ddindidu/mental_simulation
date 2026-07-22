@@ -22,8 +22,13 @@ import re
 import sys
 from pathlib import Path
 
+import sys as _sys
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_REPO_ROOT))
+
 # ── Paths ─────────────────────────────────────────────────────────────────────
-BASE_DIR      = Path(__file__).parent
+BASE_DIR      = Path(__file__).resolve().parent.parent
 SYMPTOM_DIR   = BASE_DIR / "mentalbench/resources/knowledge_graph/EN/symptom"
 CRITERIA_FILE = BASE_DIR / "mentalbench/resources/knowledge_graph/EN/diagnostic_criteria.json"
 

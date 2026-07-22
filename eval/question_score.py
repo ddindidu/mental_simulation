@@ -30,6 +30,11 @@ import json
 import re
 from abc import ABC, abstractmethod
 from pathlib import Path
+
+import sys as _sys
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_REPO_ROOT))
 from typing import Optional
 
 import numpy as np
@@ -38,7 +43,7 @@ from utils.config import CONFIG
 from utils.llm import chat as _llm_chat
 
 # ── Paths & config ─────────────────────────────────────────────────────────────
-BASE_DIR  = Path(__file__).parent
+BASE_DIR  = Path(__file__).resolve().parent.parent
 KG_DIR    = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN"
 SYMPTOM_DIR   = KG_DIR / "symptom"
 CRITERIA_FILE = KG_DIR / "diagnostic_criteria.json"

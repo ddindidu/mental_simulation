@@ -29,7 +29,7 @@ from typing import Any
 
 import numpy as np
 
-BASE_DIR = Path(__file__).parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 MAPPERS = ("cosine", "llm_judge")
 

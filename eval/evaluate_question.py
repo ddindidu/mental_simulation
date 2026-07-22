@@ -23,9 +23,14 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+import sys as _sys
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_REPO_ROOT))
+
 import numpy as np
 
-from question_score import (
+from eval.question_score import (
     CosineSemanticMapper,
     LLMJudgeMapper,
     HybridMapper,
@@ -46,7 +51,7 @@ from question_score import (
 from utils.llm import get_run_dir as _get_run_dir
 from utils.config import CONFIG
 
-BASE_DIR = Path(__file__).parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 _SAFETY_HORIZON = (CONFIG.get("evaluation") or {}).get("safety_screening_horizon")
 
@@ -310,7 +315,7 @@ def _print_summary(episode_results: list[dict]) -> None:
 
     # Per-safety-symptom breakdown
     try:
-        from question_score import load_all_symptoms as _load_syms
+        from eval.question_score import load_all_symptoms as _load_syms
         syms = _load_syms()
         sid_totals: dict[str, int] = {sid: 0 for sid in SAFETY_CRITICAL_IDS}
         for ep in episode_results:
