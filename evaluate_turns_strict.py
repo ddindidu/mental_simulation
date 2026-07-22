@@ -361,7 +361,7 @@ def evaluate() -> tuple[list[dict], dict, int]:
 
             # Accumulate denials and confirmed symptoms up to this turn
             denied_cumulative |= set(denials_per_turn.get(t, []))
-            new_confirmed = set(turn.get("identified_symptoms", [])) - confirmed_cumulative
+            new_confirmed = set(turn.get("cumulative_confirmed", [])) - confirmed_cumulative
             confirmed_cumulative |= new_confirmed
 
             # Doctor predictions for this turn
@@ -419,7 +419,7 @@ def evaluate() -> tuple[list[dict], dict, int]:
                 "log_file": log_name,
                 "turn": t,
                 "patient_response": turn["patient_response"],
-                "identified_symptoms": turn["identified_symptoms"],
+                "identified_symptoms": turn["cumulative_confirmed"],
                 "new_confirmed_this_turn": sorted(new_confirmed),
                 "denied_symptoms_this_turn": sorted(denials_per_turn.get(t, [])),
                 "denied_cumulative": sorted(denied_cumulative),
@@ -552,7 +552,7 @@ def plot(sample_turns: list[dict], criteria: dict) -> None:
 
     def _case_lines(ax, series, metric, color):
         """각 case(log_file)의 turn별 점수를 연한 실선으로 연결."""
-        key_idx = {"acc": 1, "prec": 2, "recall": 3}[metric]
+        key_idx = {"acc": 1, "prec": 2, "recall": 3, "jaccard": 4, "weighted_recall": 5}[metric]
         for pts in series.values():
             pts_s = sorted(pts, key=lambda x: x[0])
             if len(pts_s) < 2:
