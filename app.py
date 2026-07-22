@@ -229,6 +229,17 @@ def _run_eval_pipeline() -> None:
         _tb.print_exc()
 
     with _batch_lock:
+        _batch_state["current"] = "[pipeline] diagnostic reasoning eval"
+    try:
+        edr = _load("evaluate_diagnostic_reasoning")
+        edr.main()
+    except SystemExit:
+        print("[pipeline] evaluate_diagnostic_reasoning: no log files, skipping.", flush=True)
+    except Exception as _e:
+        print(f"[pipeline] evaluate_diagnostic_reasoning failed: {_e}", flush=True)
+        _tb.print_exc()
+
+    with _batch_lock:
         _batch_state["current"] = "Done"
     print("[pipeline] All done.", flush=True)
 
