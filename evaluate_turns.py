@@ -26,8 +26,10 @@ BASE_DIR    = Path(__file__).parent
 
 from utils.llm import get_run_dir as _get_run_dir
 _RUN_DIR    = _get_run_dir()
-RESULTS_DIR = BASE_DIR / "results" / _RUN_DIR
-LOGS_DIR    = BASE_DIR / "logs"    / _RUN_DIR
+RESULTS_DIR  = BASE_DIR / "results"  / _RUN_DIR
+LOGS_DIR     = BASE_DIR / "logs"     / _RUN_DIR
+ANALYSIS_DIR = BASE_DIR / "analysis" / _RUN_DIR
+PLOTS_DIR    = ANALYSIS_DIR / "turn_eval"
 CRITERIA_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "diagnostic_criteria.json"
 
 
@@ -306,8 +308,8 @@ def evaluate():
     if skipped:
         print(f"\n({skipped} log files not found, skipped)")
 
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    out_path = RESULTS_DIR / "turn_eval.json"
+    ANALYSIS_DIR.mkdir(parents=True, exist_ok=True)
+    out_path = ANALYSIS_DIR / "turn_eval.json"
     out_path.write_text(json.dumps(sample_turns, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"\nSaved {len(sample_turns)} sample-turn entries to {out_path}")
     return sample_turns
@@ -459,9 +461,11 @@ def plot(sample_turns: list[dict]) -> None:
         plt.tight_layout()
         return fig
 
+    PLOTS_DIR.mkdir(parents=True, exist_ok=True)
+
     # ── Combined plot (all three metrics + individual dots) ──
     fig = _iter_subplots(_plot_combined)
-    out_png = RESULTS_DIR / "turn_eval_plot.png"
+    out_png = PLOTS_DIR / "turn_eval_plot.png"
     fig.savefig(out_png, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"Saved plot to {out_png}")
@@ -478,7 +482,7 @@ def plot(sample_turns: list[dict]) -> None:
         def _fn(ax, td, ser, title, _m=metric_key, _c=color, _mk=marker, _l=label):
             _plot_metric(ax, td, ser, title, _m, _c, _mk, _l)
         fig = _iter_subplots(_fn)
-        out_png = RESULTS_DIR / out_name
+        out_png = PLOTS_DIR / out_name
         fig.savefig(out_png, dpi=300, bbox_inches="tight")
         plt.close(fig)
         print(f"Saved plot to {out_png}")
