@@ -495,6 +495,46 @@ Separately from the main pipeline: collect a gold-standard annotation set of 100
 each of the three mappers against this gold set. This validates the **measurement instrument
 itself**, independent of any Doctor model's performance — report as a standalone table.
 
+#### 4.4.7 Episode-level aggregation — macro-mean and outcome stratification
+
+**Aggregation method: macro-mean (episode-weighted)**
+
+All reported question-quality metrics use **macro-mean** over episodes: each episode
+contributes one value regardless of its turn count.
+
+```
+episode_metric(e) = mean over turns_in(e) of per_turn_score
+model_metric      = mean over episodes   of episode_metric(e)
+```
+
+Rationale: each clinical case is an independent unit of measurement. A failed episode
+that runs to 10 turns must not dominate the model's score simply because it produced
+more data points. Micro-mean (averaging over all turns pooled) would over-weight
+harder/longer cases, which are already captured by the Efficiency axis (§4.5).
+
+**Confound: episode length is correlated with outcome**
+
+Longer episodes tend to correspond to incorrect or difficult diagnoses. Because
+question-quality metrics are defined over *active turns* (`|C_t| > 1`), a model with
+more failed episodes will have more active turns contributing to its aggregate.
+This creates a selection bias that inflates (or deflates) metrics depending on the
+correlation direction.
+
+**Ablation: outcome-stratified question quality**
+
+Report question-quality metrics separately for:
+- `correct` episodes: `ground_truth ∈ all_candidates()` at the final turn
+- `incorrect` episodes: `ground_truth ∉ all_candidates()` at the final turn
+
+This isolates two distinct behavioral questions:
+1. *When the model is on track, is it asking good discriminating questions?* (correct stratum)
+2. *When the model has already lost the ground truth, how does question quality degrade?* (incorrect stratum)
+
+Output folder: `analysis/<judge>/<judge>/comparison/outcome_stratified/`
+
+The primary reported metric remains the unconditional macro-mean. Outcome-stratified
+results are an ablation to diagnose confounds, not a replacement.
+
 ### 4.5 Overall / Efficiency Evaluation
 
 `candidate_sizes` includes all three candidate tiers — `|high ∪ moderate ∪ low|`.

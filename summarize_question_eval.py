@@ -3,6 +3,11 @@
 Aggregates question_eval.json (new format with episode_metrics + scores_by_mapper)
 into per-model and cross-model summaries saved to analysis/.
 
+Aggregation method: macro-mean (episode-weighted, spec §4.4.7)
+  Each episode contributes one value regardless of its turn count.
+  episode_metric(e) = mean over turns_in(e)
+  model_metric      = mean over episodes of episode_metric(e)
+
 Usage:
     python summarize_question_eval.py [--judge JUDGE] [--doctor DOCTOR]
 
@@ -56,7 +61,12 @@ def _std(vals: list[float | int]) -> float | None:
 
 
 def aggregate_model(question_eval: list[dict]) -> dict[str, Any]:
-    """Aggregate episode_metrics across all episodes, per mapper."""
+    """
+    Aggregate episode_metrics across all episodes, per mapper.
+
+    Method: macro-mean (episode-weighted) — spec §4.4.7.
+    Each episode contributes one value regardless of its turn count.
+    """
     raw: dict[str, dict[str, list]] = {m: {} for m in MAPPERS}
 
     safety_covered: list[bool] = []
