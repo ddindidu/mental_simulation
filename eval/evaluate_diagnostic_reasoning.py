@@ -218,6 +218,7 @@ def main() -> None:
             "doctor_diagnosis":   diagnosis,
             "has_structured_checklist": has_structured,
             "overall_score":      result.get("overall_score", 0.0),
+            "symptom_satisfaction_score":   result.get("symptom_satisfaction_score"),
             "symptom_group_scores":         result.get("symptom_group_scores", {}),
             "duration_score":               result.get("duration_score"),
             "functional_impairment_score":  result.get("functional_impairment_score"),

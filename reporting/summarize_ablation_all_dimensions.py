@@ -243,9 +243,9 @@ def ablate_efficiency(outcomes: dict[str, bool], episodes: list[dict]) -> dict:
 # ─── Dimension 4: Diagnostic Reasoning ───────────────────────────────────────
 
 DR_METRICS = [
-    "overall_score", "duration_score", "functional_impairment_score",
-    "traumatic_stressor_score", "psychosocial_stressor_score",
-    "additional_requirements_score",
+    "overall_score", "symptom_satisfaction_score", "duration_score",
+    "functional_impairment_score", "traumatic_stressor_score",
+    "psychosocial_stressor_score", "additional_requirements_score",
 ]
 
 

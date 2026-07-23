@@ -612,46 +612,107 @@ For each disease's `required_criteria`, the judge evaluates the following compon
 - `must_include_one_of` constraint violated → ×0.5
 - `must_include_all` constraint violated → ×0.5
 
-**Overall score:**
+**Symptom Satisfaction metric (compliance/threshold view):**
+
+The per-group `symptom_coverage_score` above is continuous and averages over groups by
+weight — it does not on its own answer "did the Doctor satisfy the mandatory symptom
+groups, and how completely?" as a standalone, reportable number. `symptom_satisfaction_score`
+fills that gap: a group counts as **satisfied** (binary) only if its `min_count` threshold is
+fully met (`symptom_coverage_score >= 1.0`) AND no `must_include_one_of` /
+`must_include_all` constraint was violated. Mandatory groups are weighted 2×, matching the
+weighting used elsewhere in this rubric:
+
+```
+Symptom Satisfaction = (2 × satisfied_mandatory_groups + satisfied_optional_groups)
+                        / (2 × total_mandatory_groups + total_optional_groups)
+```
+
+`None` if the disease defines no symptom groups at all (should not occur in practice).
+This is reported as its own metric, separate from `overall_score`, and also feeds into
+`overall_score` as one of the macro-mean components below.
+
+**Overall score — macro-mean over applicable metrics:**
+
+`overall_score` is the unweighted mean of whichever of the following metrics apply to the
+GT disease: `symptom_satisfaction_score`, `duration_score` (if `min_duration` set),
+`functional_impairment_score` (if required), `traumatic_stressor_score` (if required),
+`psychosocial_stressor_score` (if required), `additional_requirements_score` (if any
+additional requirements exist). Each metric contributes **equally**, regardless of how many
+symptom groups or sub-requirements it internally aggregates — this avoids letting a disease
+with many symptom groups (and therefore many weight-2/weight-1 terms in the old per-group
+weighted sum) implicitly dominate the score relative to a disease with few groups but several
+scalar requirements.
 
 ```python
 def compute_diagnostic_reasoning_score(judgment: dict, disease_id: str, criteria: dict) -> float:
     rc = criteria[disease_id]["required_criteria"]
-    weighted_sum, total_weight = 0.0, 0.0
 
-    for crit in judgment["criterion_evaluations"]:
-        weight = 2.0 if crit["relation"] == "must_include" else 1.0
-        s = min(1.0, max(0.0, crit["symptom_coverage_score"]))
-        if crit.get("must_include_one_of_satisfied") is False:
-            s *= 0.5
-        if crit.get("must_include_all_satisfied") is False:
-            s *= 0.5
-        # Skip unaddressed optional groups
-        if crit["relation"] != "must_include" and crit.get("valid_symptom_count", 0) == 0:
-            continue
-        weighted_sum += weight * s
-        total_weight += weight
+    symptom_satisfaction_score = compute_symptom_satisfaction(judgment, disease_id, criteria)
 
-    # Scalar criteria
-    if rc.get("min_duration") and judgment.get("duration_verified") is not None:
-        weighted_sum += 1.0 * (1.0 if judgment["duration_verified"] else 0.0)
-        total_weight += 1.0
-    if rc.get("functional_impairment_required") and judgment.get("functional_impairment_verified") is not None:
-        weighted_sum += 1.0 * (1.0 if judgment["functional_impairment_verified"] else 0.0)
-        total_weight += 1.0
-    if rc.get("traumatic_stressor_required") and judgment.get("traumatic_stressor_verified") is not None:
-        weighted_sum += 1.0 * (1.0 if judgment["traumatic_stressor_verified"] else 0.0)
-        total_weight += 1.0
-    if rc.get("psychosocial_stressor_required") and judgment.get("psychosocial_stressor_verified") is not None:
-        weighted_sum += 1.0 * (1.0 if judgment["psychosocial_stressor_verified"] else 0.0)
-        total_weight += 1.0
+    def _bin(key: str) -> float | None:
+        val = judgment.get(key)
+        return None if val is None else (1.0 if val else 0.0)
+
+    duration_score  = _bin("duration_verified")
+    fi_score        = _bin("functional_impairment_verified")
+    traumatic_score = _bin("traumatic_stressor_verified")
+    psycho_score    = _bin("psychosocial_stressor_verified")
+    add_score       = judgment.get("additional_requirements_coverage")
+
+    has_top_duration = bool(rc.get("min_duration"))
     add_reqs = rc.get("additional_requirements")
-    if add_reqs and isinstance(add_reqs, list) and judgment.get("additional_requirements_coverage") is not None:
-        weighted_sum += 1.0 * judgment["additional_requirements_coverage"]
-        total_weight += 1.0
 
-    return round(weighted_sum / total_weight, 4) if total_weight > 0 else 0.0
+    metrics = []
+    if symptom_satisfaction_score is not None:
+        metrics.append(symptom_satisfaction_score)
+    if has_top_duration and duration_score is not None:
+        metrics.append(duration_score)
+    if rc.get("functional_impairment_required") and fi_score is not None:
+        metrics.append(fi_score)
+    if rc.get("traumatic_stressor_required") and traumatic_score is not None:
+        metrics.append(traumatic_score)
+    if rc.get("psychosocial_stressor_required") and psycho_score is not None:
+        metrics.append(psycho_score)
+    if add_reqs and isinstance(add_reqs, list) and add_score is not None:
+        metrics.append(add_score)
+
+    return round(sum(metrics) / len(metrics), 4) if metrics else 0.0
+
+
+def compute_symptom_satisfaction(judgment: dict, disease_id: str, criteria: dict) -> float | None:
+    rc = criteria[disease_id]["required_criteria"]
+    crit_by_group = {c["group"]: c for c in judgment.get("criterion_evaluations", [])}
+
+    mandatory_total = mandatory_satisfied = 0
+    optional_total  = optional_satisfied  = 0
+    for key, val in rc.items():
+        if not isinstance(val, dict) or "symptom_pool" not in val:
+            continue
+        crit = crit_by_group.get(key, {})
+        s = min(1.0, max(0.0, crit.get("symptom_coverage_score", 0.0)))
+        satisfied = (
+            s >= 1.0
+            and crit.get("must_include_one_of_satisfied") is not False
+            and crit.get("must_include_all_satisfied") is not False
+        )
+        if val.get("relation") == "must_include":
+            mandatory_total += 1
+            mandatory_satisfied += int(satisfied)
+        else:
+            optional_total += 1
+            optional_satisfied += int(satisfied)
+
+    denom = 2 * mandatory_total + optional_total
+    if denom == 0:
+        return None
+    return round((2 * mandatory_satisfied + optional_satisfied) / denom, 4)
 ```
+
+Note: the symptom-group `weighted_sum / total_weight` formula from earlier spec drafts (each
+group weighted 2 or 1, summed together with the scalar criteria into one big weighted average)
+is superseded by the macro-mean above. That older formula let diseases with many symptom
+groups dominate `overall_score` purely by term count; macro-mean over a fixed set of named
+metrics avoids that.
 
 #### 4.6.3 LLM judge
 
@@ -698,6 +759,41 @@ For logs produced before `diagnostic_checklist` was added to the Doctor's output
 (§3.2), the `reason` free-text field can be used as a freeform checklist input to the judge.
 This produces a lower-fidelity score (natural language is less structured than a field-by-field
 checklist) — flag this in results with `has_structured_checklist: false`.
+
+### 4.7 Headline Metrics for Cross-Model Reporting
+
+Each axis emits several metrics (§4.3–§4.6). Full metric suites remain the source of truth and
+must always be persisted and available for inspection, but cross-model comparison dashboards
+and reports MUST lead with exactly two **headline metrics** per axis, with everything else
+reported as supporting detail underneath. This section fixes which two numbers lead — it does
+not change what is computed.
+
+| Axis | Headline metrics | Supporting metrics |
+|---|---|---|
+| Inference Quality (§4.3) | `accuracy`, `jaccard` | `recall`, `precision`, `weighted_recall` |
+| Question Quality (§4.4) | `composite_score` conditional mean, `information_gain` conditional mean — both **`llm_judge` mapper** | `discriminating_q_rate`, `ig_positive_rate` (llm_judge); `composite_score`/`information_gain` conditional means (cosine, as a cross-mapper check) |
+| Efficiency (§4.5) | `turn_count`, `cssr` | `time_to_first_correct_narrowing`, `monotonicity_violations`, `redundant_turn_ratio`, `overcommitment_turns` |
+| Diagnostic Reasoning Quality (§4.5 final_accuracy + §4.6 overall_score) | `final_accuracy` (§4.5), `overall_score` (§4.6) | `duration`, `functional_impairment`, `traumatic_stressor`, `psychosocial_stressor`, `additional_requirements` component scores |
+
+Two notes on how this maps back onto the scoring functions above:
+
+- **`final_accuracy` is computed in `score_overall` (§4.5)** — it is not a `diagnostic_checklist`
+  field — but it is *reported* alongside `overall_score` under Diagnostic Reasoning Quality in
+  cross-model summaries, because both answer "was the diagnosis right," at different grains
+  (exact name match vs. DSM-5 criterion coverage), and a reader wants them side by side. It
+  still satisfies the §4.5 requirement to report `final_accuracy` cross-tabulated with
+  `turn_count` and `cssr` — that cross-tabulation stays in the Efficiency metric table.
+  `turn_count` and `cssr` remain the Efficiency headline pair on their own, since they measure
+  dialogue process, not diagnostic correctness.
+- **Question Quality headlines the `llm_judge` mapper, not `cosine`.** §4.4.1 still requires all
+  mappers be computed and persisted in full for every turn — this only fixes which mapper's
+  numbers lead the summary table. Report `cosine` mapper numbers alongside as a secondary
+  cross-mapper comparison (§4.4.6 already requires validating mapper agreement); do not drop
+  them from detailed tables.
+
+This section governs report layout only; it does not relax the §4.4.7 requirement to report the
+unconditional macro-mean as primary and outcome-stratified numbers as an ablation, nor any other
+aggregation rule defined above.
 
 ---
 
