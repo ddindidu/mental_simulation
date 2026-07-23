@@ -173,6 +173,7 @@ def main() -> None:
         ("Turn Count",            eff, "turn_count",                         True),
         ("Redundant Turn Ratio",  eff, "redundant_turn_ratio",               True),
         ("DR: Overall",           dr,  "overall_score",                      False),
+        ("DR: Symptom Satisfaction", dr, "symptom_satisfaction_score",       False),
         ("DR: Func. Impairment",  dr,  "functional_impairment_score",        False),
         ("DR: Addl. Requirements",dr,  "additional_requirements_score",      False),
     ]

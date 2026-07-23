@@ -94,6 +94,7 @@ def build_reasoning_row(model: str, results_root: Path) -> dict[str, Any] | None
         "n_parse_errors": n_parse_errors,
         "n_structured_checklist": n_structured,
         "overall_score": _mean(r.get("overall_score") for r in valid),
+        "symptom_satisfaction_score": _mean(r.get("symptom_satisfaction_score") for r in valid),
         "duration_score": _mean(r.get("duration_score") for r in valid),
         "functional_impairment_score": _mean(r.get("functional_impairment_score") for r in valid),
         "traumatic_stressor_score": _mean(r.get("traumatic_stressor_score") for r in valid),

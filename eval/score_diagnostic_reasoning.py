@@ -249,13 +249,65 @@ def judge_checklist(
 
 # ── Scoring ───────────────────────────────────────────────────────────────────
 
+def _group_satisfied(crit: dict) -> bool:
+    """A symptom group counts as 'satisfied' only if its min_count threshold is
+    fully met AND no must_include_one_of/must_include_all constraint was violated."""
+    if crit.get("must_include_one_of_satisfied") is False:
+        return False
+    if crit.get("must_include_all_satisfied") is False:
+        return False
+    s = float(crit.get("symptom_coverage_score", 0.0))
+    return s >= 1.0
+
+
+def compute_symptom_satisfaction(judgment: dict, disease_id: str, criteria: dict) -> float | None:
+    """
+    Symptom Satisfaction = (2 * satisfied_mandatory_groups + satisfied_optional_groups)
+                            / (2 * total_mandatory_groups + total_optional_groups)
+
+    Isolates compliance with mandatory (must_include) symptom groups and
+    satisfaction of each group's minimum-count threshold, separate from the
+    scalar checklist items (duration, stressors, etc.). Mandatory groups are
+    weighted 2x, matching the weighting used elsewhere in this scorer.
+    Returns None if the disease has no symptom groups defined.
+    """
+    rc = criteria.get(disease_id, {}).get("required_criteria", {})
+    crit_by_group = {c.get("group"): c for c in judgment.get("criterion_evaluations", [])}
+
+    mandatory_total = mandatory_satisfied = 0
+    optional_total  = optional_satisfied  = 0
+
+    for key, val in rc.items():
+        if not isinstance(val, dict) or "symptom_pool" not in val:
+            continue
+        relation  = val.get("relation", "include")
+        satisfied = _group_satisfied(crit_by_group.get(key, {}))
+        if relation == "must_include":
+            mandatory_total += 1
+            mandatory_satisfied += int(satisfied)
+        else:
+            optional_total += 1
+            optional_satisfied += int(satisfied)
+
+    denom = 2 * mandatory_total + optional_total
+    if denom == 0:
+        return None
+    return round((2 * mandatory_satisfied + optional_satisfied) / denom, 4)
+
+
 def compute_score(judgment: dict, disease_id: str, criteria: dict) -> dict:
     """
     Aggregate judge output into a scalar score + sub-scores.
 
+    "overall_score" is the macro-mean across all applicable metrics
+    (symptom_satisfaction_score plus whichever scalar criteria the GT disease
+    requires) — each metric contributes equally regardless of how many
+    symptom groups or requirements it internally covers.
+
     Returns:
       {
         "overall_score": float,
+        "symptom_satisfaction_score": float | None,
         "symptom_group_scores": {group: float},
         "duration_score": float | None,
         "functional_impairment_score": float | None,
@@ -270,33 +322,25 @@ def compute_score(judgment: dict, disease_id: str, criteria: dict) -> dict:
 
     rc = criteria.get(disease_id, {}).get("required_criteria", {})
 
-    weighted_sum   = 0.0
-    total_weight   = 0.0
-    group_scores:  dict[str, float] = {}
-
+    group_scores: dict[str, float] = {}
     for crit in judgment.get("criterion_evaluations", []):
         group    = crit.get("group", "")
         relation = crit.get("relation", "include")
-        weight   = 2.0 if relation == "must_include" else 1.0
 
         s = float(crit.get("symptom_coverage_score", 0.0))
         s = max(0.0, min(1.0, s))
-
-        # Penalty for missing must_include_one_of
         if crit.get("must_include_one_of_satisfied") is False:
             s *= 0.5
-
-        # Penalty for missing must_include_all
         if crit.get("must_include_all_satisfied") is False:
             s *= 0.5
 
-        # For optional groups (include), only count if doctor actually addressed them
+        # For optional groups (include), only report if doctor actually addressed them
         if relation != "must_include" and crit.get("valid_symptom_count", 0) == 0:
-            continue  # skip unaddressed optional groups
+            continue
 
         group_scores[group] = round(s, 4)
-        weighted_sum  += weight * s
-        total_weight  += weight
+
+    symptom_satisfaction_score = compute_symptom_satisfaction(judgment, disease_id, criteria)
 
     def _bin_score(key: str) -> float | None:
         val = judgment.get(key)
@@ -315,37 +359,36 @@ def compute_score(judgment: dict, disease_id: str, criteria: dict) -> dict:
     else:
         add_score = None
 
-    # Add non-group criteria only when they are actually required
+    # Include non-group criteria only when they are actually required
     fi_required = rc.get("functional_impairment_required")
     traumatic_required = rc.get("traumatic_stressor_required")
     psycho_required = rc.get("psychosocial_stressor_required")
     add_reqs = rc.get("additional_requirements")
     has_top_duration = bool(rc.get("min_duration")) and not isinstance(rc.get("min_duration"), dict)
 
+    # overall_score = macro-mean over applicable metrics: each metric (symptom
+    # satisfaction, duration, functional impairment, stressors, additional
+    # requirements) contributes equally, regardless of how many symptom groups
+    # or sub-requirements it aggregates internally.
+    metrics: list[float] = []
+    if symptom_satisfaction_score is not None:
+        metrics.append(symptom_satisfaction_score)
     if has_top_duration and duration_score is not None:
-        weighted_sum += 1.0 * duration_score
-        total_weight += 1.0
-
+        metrics.append(duration_score)
     if fi_required and fi_score is not None:
-        weighted_sum += 1.0 * fi_score
-        total_weight += 1.0
-
+        metrics.append(fi_score)
     if traumatic_required and traumatic_score is not None:
-        weighted_sum += 1.0 * traumatic_score
-        total_weight += 1.0
-
+        metrics.append(traumatic_score)
     if psycho_required and psycho_score is not None:
-        weighted_sum += 1.0 * psycho_score
-        total_weight += 1.0
-
+        metrics.append(psycho_score)
     if add_reqs and isinstance(add_reqs, list) and add_score is not None:
-        weighted_sum += 1.0 * add_score
-        total_weight += 1.0
+        metrics.append(add_score)
 
-    overall = round(weighted_sum / total_weight, 4) if total_weight > 0 else 0.0
+    overall = round(sum(metrics) / len(metrics), 4) if metrics else 0.0
 
     return {
         "overall_score":               overall,
+        "symptom_satisfaction_score":  symptom_satisfaction_score,
         "symptom_group_scores":        group_scores,
         "duration_score":              round(duration_score, 4) if duration_score is not None else None,
         "functional_impairment_score": round(fi_score, 4) if fi_score is not None else None,
