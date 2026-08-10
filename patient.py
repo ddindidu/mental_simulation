@@ -6,10 +6,8 @@ import re
 from pathlib import Path
 from typing import Any
 
-from utils.paths import DEFAULT_SYMPTOM_PROFILE_PATH
+from utils.paths import DEFAULT_SYMPTOM_PROFILE_PATH, PROJECT_ROOT
 from utils.config import CONFIG
-
-_PROFILE_PATH = DEFAULT_SYMPTOM_PROFILE_PATH
 
 # ─── config 로드 ───────────────────────────────────────────────────────────────
 _PATIENT_CFG: dict = CONFIG.get("patient", {})
@@ -21,15 +19,33 @@ _KG_BASE_DIR: str = str(
 )
 
 
+def _resolve_profile_path(path: str | Path) -> Path:
+    """Resolve a configured profile path relative to the project root."""
+    resolved = Path(path).expanduser()
+    if not resolved.is_absolute():
+        resolved = PROJECT_ROOT / resolved
+    return resolved.resolve()
+
+
+_PROFILE_PATH = _resolve_profile_path(
+    _PATIENT_CFG.get("symptom_profile_path", DEFAULT_SYMPTOM_PROFILE_PATH)
+)
+
+
 # ─── 레거시 JSON-파일 기반 함수들 (폴백용) ────────────────────────────────────
 
 def _load_profile() -> dict:
     if not _PROFILE_PATH.is_file():
         raise FileNotFoundError(
-            f"symptom_profile.json not found: {_PROFILE_PATH}"
+            f"symptom profile JSON not found: {_PROFILE_PATH}"
         )
     with open(_PROFILE_PATH, encoding="utf-8") as f:
-        return json.load(f)
+        data = json.load(f)
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"symptom profile JSON must contain an object: {_PROFILE_PATH}"
+        )
+    return data
 
 
 def _skip_value(val: object) -> bool:
@@ -87,7 +103,91 @@ def _format_associated_symptoms(assoc: dict) -> list[str]:
     return lines
 
 
+def _format_generated_profile(data: dict) -> str:
+    """Format the new symptom/patient/manifestation/add_requirements schema."""
+    symptom = data.get("symptom")
+    patient = data.get("patient")
+    if not isinstance(symptom, dict) or not isinstance(patient, dict):
+        return ""
+
+    sampled = symptom.get("sampled_features")
+    if not isinstance(sampled, dict):
+        sampled = {}
+
+    disease_code = symptom.get("disease_code") or sampled.get("disease_code")
+    disease_name = symptom.get("disease_name") or sampled.get("disease_name")
+
+    out: list[str] = []
+    clinical_lines = _section_lines(
+        [
+            ("Disease Code", disease_code),
+            ("Diagnosis", disease_name),
+        ]
+    )
+    _append_sub(out, "Clinical Context", clinical_lines)
+
+    patient_lines = _section_lines(
+        [
+            ("Demographics", patient.get("demographics")),
+            ("Stressor Category", patient.get("stressor_category")),
+            ("Severity", patient.get("severity")),
+            ("Stressor / Background", patient.get("stressor")),
+            ("Chief Complaint", patient.get("chief_complaint")),
+        ]
+    )
+    _append_sub(out, "Patient Background and Presenting Concern", patient_lines)
+
+    # Prefer patient-specific manifestations. During a partial pipeline run they
+    # may not exist yet, so fall back to sampled symptom descriptions without
+    # inventing patient-specific details.
+    manifestations = data.get("manifestation")
+    if isinstance(manifestations, dict) and manifestations:
+        manifestation_lines: list[str] = []
+        for code, entry in manifestations.items():
+            if not isinstance(entry, dict):
+                if not _skip_value(entry):
+                    manifestation_lines.append(f"- {code}: {entry}")
+                continue
+            name = entry.get("name") or code
+            text = entry.get("manifestation")
+            if not _skip_value(text):
+                manifestation_lines.append(f"- {code} ({name}): {text}")
+        _append_sub(out, "Patient-specific Symptom Manifestations", manifestation_lines)
+    else:
+        descriptions = sampled.get("sampled_symptoms_descriptions")
+        sampled_codes = sampled.get("sampled_symptoms")
+        if isinstance(descriptions, dict):
+            if not isinstance(sampled_codes, list):
+                sampled_codes = list(descriptions)
+            symptom_lines: list[str] = []
+            for code in sampled_codes:
+                entry = descriptions.get(code)
+                if not isinstance(entry, dict):
+                    continue
+                name = entry.get("name") or code
+                description = entry.get("description")
+                if not _skip_value(description):
+                    symptom_lines.append(f"- {code} ({name}): {description}")
+            _append_sub(out, "Sampled Symptoms", symptom_lines)
+
+    requirements = data.get("add_requirements")
+    if isinstance(requirements, dict):
+        requirement_lines = [
+            f"- {key}: {value}"
+            for key, value in requirements.items()
+            if not _skip_value(value) and not isinstance(value, (dict, list))
+        ]
+        _append_sub(out, "Additional Diagnostic Requirements", requirement_lines)
+
+    return "\n".join(out).strip()
+
+
 def format_symptom_profile(data: dict) -> str:
+    # New pipeline: symptom + patient + optional manifestation + add_requirements
+    generated = _format_generated_profile(data)
+    if generated:
+        return generated
+
     # Legacy: condition_label + symptom_lines
     legacy_lines = data.get("symptom_lines")
     if legacy_lines:
@@ -168,7 +268,17 @@ def format_symptom_profile(data: dict) -> str:
 
 
 def _chief_complaints_for_prompt(data: dict) -> str:
-    """Extract chief complaint string from symptom_profile.json."""
+    """Extract the chief complaint from either the new or legacy schema."""
+    patient = data.get("patient")
+    if isinstance(patient, dict):
+        nested = patient.get("chief_complaint")
+        if isinstance(nested, list):
+            parts = [str(x).strip() for x in nested if not _skip_value(x)]
+            if parts:
+                return ", ".join(parts)
+        elif isinstance(nested, str) and not _skip_value(nested):
+            return nested.strip()
+
     raw = data.get("chief_complaint")
     if isinstance(raw, list):
         parts = [str(x).strip() for x in raw if not _skip_value(x)]
@@ -462,10 +572,18 @@ def _build_system_prompt_from_kg() -> str:
 # ─── JSON 파일 기반 프롬프트 빌더 (폴백) ─────────────────────────────────────
 
 def _build_system_prompt_from_json() -> str:
-    """Generate patient prompt from existing symptom_profile.json."""
+    """Generate the patient prompt from a configured profile JSON."""
     data = _load_profile()
     block = format_symptom_profile(data)
-    diagnosis = (data.get("most_likely_diagnosis") or "").strip()
+    diagnosis = ""
+    symptom = data.get("symptom")
+    if isinstance(symptom, dict):
+        diagnosis = str(symptom.get("disease_name") or "").strip()
+        sampled = symptom.get("sampled_features")
+        if not diagnosis and isinstance(sampled, dict):
+            diagnosis = str(sampled.get("disease_name") or "").strip()
+    if not diagnosis:
+        diagnosis = str(data.get("most_likely_diagnosis") or "").strip()
     if not diagnosis:
         cand = data.get("candidate_diagnosis")
         if isinstance(cand, list) and cand:
@@ -487,7 +605,7 @@ def build_system_prompt() -> str:
     """
     Based on patient.use_knowledge_graph in config.json:
       - True  → Dynamically generate patient profile from KnowledgeGraph
-      - False → Use existing symptom_profile.json
+      - False → Load patient.symptom_profile_path
     """
     if _USE_KG:
         try:
@@ -495,7 +613,7 @@ def build_system_prompt() -> str:
         except Exception as exc:
             print(
                 f"[patient] KG-based profile generation failed ({exc}). "
-                "Falling back to symptom_profile.json.",
+                f"Falling back to configured JSON: {_PROFILE_PATH}.",
                 flush=True,
             )
     return _build_system_prompt_from_json()
@@ -550,4 +668,5 @@ def current_config() -> dict:
         "disease_code": _DISEASE_CODE,
         "difficulty_level": _DIFFICULTY,
         "kg_base_dir": _KG_BASE_DIR,
+        "symptom_profile_path": str(_PROFILE_PATH),
     }
