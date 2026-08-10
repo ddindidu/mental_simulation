@@ -11,7 +11,16 @@ DOCTOR_MEMORY_FILE = DEFAULT_DOCTOR_MEMORY_PATH
 TRANSCRIPT_FILE = DEFAULT_TRANSCRIPT_PATH
 
 
-def get_inference_system_prompt() -> str:  # inference system prompt
+def _no_think_prefix(doctor_model: str = "") -> str:
+    """'/no_think' is a Qwen3 control token that disables its thinking phase.
+    It's meaningless (and shows up as literal text) for non-Qwen models, so
+    only prepend it when the doctor model is actually a Qwen3 model."""
+    if "qwen" in doctor_model.lower():
+        return "/no_think\n"
+    return ""
+
+
+def get_inference_system_prompt(doctor_model: str = "") -> str:  # inference system prompt
     # 허용된 질환 리스트 정의
     allowed_candidates = [
         "Attention-Deficit/Hyperactivity Disorder (Combined Presentation)",
@@ -40,43 +49,61 @@ def get_inference_system_prompt() -> str:  # inference system prompt
     ]
     
     candidates_bullet = "\n".join([f"- {c}" for c in allowed_candidates])
+    
+    # ver.1
+#     return f"""/no_think
+# You are a board-certified psychiatrist.
+# Your goal is to identify the patient's accurate diagnosis through an interview.
 
-    return f"""/no_think
-You are a board-certified psychiatrist.
-Your goal is to identify the patient's accurate diagnosis through an interview.
+# Based on the interview conversation so far and the Previous Candidates (if provided),
+# infer the current differential diagnosis candidates.
 
-Based on the interview conversation so far and the Previous Candidates (if provided),
-infer the current differential diagnosis candidates.
+# [Constraint: Allowed Candidate List]
+# You MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:
+# {candidates_bullet}
 
-[Constraint: Allowed Candidate List]
-You MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:
-{candidates_bullet}
+# [Important — Note Field Formatting]
+# In the "note" field, you MUST explain WHY the candidate list has changed or remained the same
+# compared to the previous candidates.
+# For example: "Previously the candidates were [A, B, C], but based on this conversation,
+# C seems unlikely because [reason], so the current candidates are [A, B]."
+
+# [When to End the Interview]
+# Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident
+# final diagnosis and no further questioning is needed. You may set is_final=true with one
+# OR multiple candidates still listed (the final diagnosis call will select among them).
+# Continue the interview (is_final: false) if uncertainty remains, even if only one candidate
+# is currently listed.
+
+# Output Format (JSON only, no other text):
+# {{"candidates": ["Disease1", "Disease2"], "note": "Explanation of changes from previous candidates", "is_final": false}}
+# """
+
+    # ver.2 (260730 updated)
+    # - Remove the constraint on allowed candidates in the prompt.
+    return f"""{_no_think_prefix(doctor_model)}You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
 
 [Important — Note Field Formatting]
-In the "note" field, you MUST explain WHY the candidate list has changed or remained the same
-compared to the previous candidates.
-For example: "Previously the candidates were [A, B, C], but based on this conversation,
-C seems unlikely because [reason], so the current candidates are [A, B]."
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
 
 [When to End the Interview]
-Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident
-final diagnosis and no further questioning is needed. You may set is_final=true with one
-OR multiple candidates still listed (the final diagnosis call will select among them).
-Continue the interview (is_final: false) if uncertainty remains, even if only one candidate
-is currently listed.
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
 
 Output Format (JSON only, no other text):
-{{"candidates": ["Disease1", "Disease2"], "note": "Explanation of changes from previous candidates", "is_final": false}}
+{{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}}
 """
 
 
 def get_questioning_system_prompt(  # questioning system prompt
     max_turns: int,
     candidates: list[str] | None = None,
-    asked_questions: list[str] | None = None,
+    doctor_model: str = "",
 ) -> str:
     cand_list = list(candidates or [])
-    asked_list = list(asked_questions or [])
+    # asked_list = list(asked_questions or [])
 
     if cand_list:
         candidate_block = (
@@ -85,26 +112,48 @@ def get_questioning_system_prompt(  # questioning system prompt
     else:
         candidate_block = ""
 
-    asked_block = ""
-    if asked_list:
-        asked_block = "\n[Already Asked Questions]\n" + "\n".join(f"- {q}" for q in asked_list)
+    # asked_block = ""
+    # if asked_list:
+    #     asked_block = "\n[Already Asked Questions]\n" + "\n".join(f"- {q}" for q in asked_list)
 
-    return f"""/no_think
-You are a board-certified psychiatrist.
-Your goal is to identify the patient's accurate diagnosis through an interview.
+    # ver.1
+#     return f"""{_no_think_prefix(doctor_model)}You are a board-certified psychiatrist. 
+# Your goal is to identify the patient's accurate diagnosis through an interview.
 
-Based on the interview so far and the current differential diagnosis candidates,
-ask one follow-up question to narrow down the diagnosis.
+# Based on the interview so far and the current differential diagnosis candidates,
+# ask one follow-up question to narrow down the diagnosis.
+
+# [Candidate Diseases]
+# {candidate_block}
+
+# [Already Asked Questions]
+# {asked_block}
+
+# [Interview Strategy]
+# - Review the conversation and the candidate disease list.
+# - Ask exactly one follow-up question that best differentiates among the candidates.
+# - Keep the question clear and easy for the patient to understand. Two sentences at most.
+# - Respond in English.
+
+# [Output Format — JSON only, no other text]
+# {{
+#   "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+#   "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+#   "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+# }}
+# """
+
+    # ver.2 (260730 updated)
+    # 
+    return f"""{_no_think_prefix(doctor_model)}You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
 
 [Candidate Diseases]
 {candidate_block}
 
-[Already Asked Questions]
-{asked_block}
-
 [Interview Strategy]
-- Review the conversation and the candidate disease list.
-- Ask exactly one follow-up question that best differentiates among the candidates.
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
 - Keep the question clear and easy for the patient to understand. Two sentences at most.
 - Respond in English.
 
@@ -117,7 +166,7 @@ ask one follow-up question to narrow down the diagnosis.
 """
 
 
-def get_final_diagnosis_system_prompt() -> str:  # final diagnosis system prompt
+def get_final_diagnosis_system_prompt(doctor_model: str = "") -> str:  # final diagnosis system prompt
     # 허용된 질환 리스트 정의
     allowed_candidates = [
         "Attention-Deficit/Hyperactivity Disorder (Combined Presentation)",
@@ -147,21 +196,65 @@ def get_final_diagnosis_system_prompt() -> str:  # final diagnosis system prompt
     
     candidates_bullet = "\n".join([f"- {c}" for c in allowed_candidates])
 
-    return f"""/no_think
-You are a board-certified psychiatrist.
-Your goal is to identify the patient's accurate diagnosis through an interview.
+    # ver.1
+#     return f"""{_no_think_prefix(doctor_model)}You are a board-certified psychiatrist.
+# Your goal is to identify the patient's accurate diagnosis through an interview.
 
-Based on the full interview transcript and the differential diagnosis candidates,
-write the final diagnosis report.
+# Based on the full interview transcript and the differential diagnosis candidates,
+# write the final diagnosis report.
 
-[Constraint: Allowed Candidate List]
-Both the "diagnosis" and "candidates" fields MUST ONLY contain items from the following list:
-{candidates_bullet}
+# [Constraint: Allowed Candidate List]
+# Both the "diagnosis" and "candidates" fields MUST ONLY contain items from the following list:
+# {candidates_bullet}
+
+# Output Format (JSON only, no other text):
+# {{
+#   "diagnosis": "Final Diagnosis Name",
+#   "candidates": ["Candidate1", "Candidate2"],
+#   "reason": "Brief diagnostic rationale.",
+#   "diagnostic_checklist": {{
+#     "symptom_groups": [
+#       {{
+#         "group": "clinical group name (e.g., inattention, manic_episode, psychotic_symptoms)",
+#         "confirmed_symptoms": ["natural language description of each confirmed symptom in this group"],
+#         "count": <integer>
+#       }}
+#     ],
+#     "duration_verified": "Description of how the duration criterion was established (e.g., 'symptoms present for over 6 months since childhood'), or null if not assessed.",
+#     "functional_impairment": <true if functional impairment was confirmed, false if denied, null if not assessed>,
+#     "traumatic_stressor": <true if a qualifying traumatic stressor was confirmed, null if not applicable or not assessed>,
+#     "psychosocial_stressor": <true if a qualifying psychosocial stressor was confirmed, null if not applicable or not assessed>,
+#     "additional_requirements": ["Each additional criterion that was explicitly verified during the interview (e.g., 'Onset prior to age 12 confirmed')"]
+#   }}
+# }}
+
+# [Field Instructions]
+# - diagnosis: The single diagnosis name from the allowed list you are most confident about.
+# - candidates: Top 2–3 differential candidates from the allowed list considered until the end.
+# - reason: Brief diagnostic rationale.
+# - diagnostic_checklist: Structured evidence summary organized by diagnostic criterion type.
+#   List only symptom groups that are relevant to your diagnosis, with the symptoms the patient actually confirmed.
+# """
+
+    # ver.2 (260730 updated)
+    # - Remove the constraint on allowed candidates in the prompt.
+    return f"""{_no_think_prefix(doctor_model)}You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the full interview transcript and the differential diagnosis candidates, write the final diagnosis report.
+
+Both the "diagnosis" and "candidates" MUST be ICD-10 codes.
+
+[Field Instructions]
+- diagnosis: The single diagnosis code of ICD-10.
+- candidates: Top 2–3 differential candidates of ICD-10 codes considered until the end.
+- reason: Brief diagnostic rationale.
+- diagnostic_checklist: Structured evidence summary organized by diagnostic criterion type.
+  List only symptom groups that are relevant to your diagnosis, with the symptoms the patient actually confirmed.
 
 Output Format (JSON only, no other text):
 {{
-  "diagnosis": "Final Diagnosis Name",
-  "candidates": ["Candidate1", "Candidate2"],
+  "diagnosis": "Final Diagnosis ICD-10 code",
+  "candidates": ["Disease Code1", "Disease Code2"],
   "reason": "Brief diagnostic rationale.",
   "diagnostic_checklist": {{
     "symptom_groups": [
@@ -178,14 +271,8 @@ Output Format (JSON only, no other text):
     "additional_requirements": ["Each additional criterion that was explicitly verified during the interview (e.g., 'Onset prior to age 12 confirmed')"]
   }}
 }}
-
-[Field Instructions]
-- diagnosis: The single diagnosis name from the allowed list you are most confident about.
-- candidates: Top 2–3 differential candidates from the allowed list considered until the end.
-- reason: Brief diagnostic rationale.
-- diagnostic_checklist: Structured evidence summary organized by diagnostic criterion type.
-  List only symptom groups that are relevant to your diagnosis, with the symptoms the patient actually confirmed.
 """
+
 
 
 def opening_user_message() -> str:  # opening user message

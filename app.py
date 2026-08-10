@@ -59,11 +59,15 @@ def index(): # prompt 불러와서 html 화면에 출력
     return render_template(
         "index.html",
         patient_system_html=system_prompt_to_html(patient.SYSTEM_PROMPT),
-        doctor_inference_html=system_prompt_to_html(doctor.get_inference_system_prompt()),
-        doctor_questioning_html=system_prompt_to_html(
-            doctor.get_questioning_system_prompt(MAX_TURNS, [])
+        doctor_inference_html=system_prompt_to_html(
+            doctor.get_inference_system_prompt(get_doctor_model_name())
         ),
-        doctor_final_html=system_prompt_to_html(doctor.get_final_diagnosis_system_prompt()),
+        doctor_questioning_html=system_prompt_to_html(
+            doctor.get_questioning_system_prompt(MAX_TURNS, [], get_doctor_model_name())
+        ),
+        doctor_final_html=system_prompt_to_html(
+            doctor.get_final_diagnosis_system_prompt(get_doctor_model_name())
+        ),
         model_name=get_display_model_name(),
         max_turns=MAX_TURNS,
     )
@@ -490,9 +494,10 @@ def batch_status():
 @app.route("/simulate") # start simulation
 def simulate(): # prompts loading
     rotate_log_file()  # 시뮬레이션마다 새 loggingN.txt 생성
-    patient_system = patient.SYSTEM_PROMPT 
-    inference_system = doctor.get_inference_system_prompt()
-    final_system = doctor.get_final_diagnosis_system_prompt()
+    patient_system = patient.SYSTEM_PROMPT
+    doctor_model = get_doctor_model_name()
+    inference_system = doctor.get_inference_system_prompt(doctor_model)
+    final_system = doctor.get_final_diagnosis_system_prompt(doctor_model)
     diag_tokens = get_doctor_diagnosis_max_tokens()
     inf_tokens = get_doctor_inference_max_tokens()
     align_tokens = get_patient_alignment_max_tokens()
@@ -501,25 +506,24 @@ def simulate(): # prompts loading
     def _gen(): # run simulation
         doctor_memory: dict = doctor.new_doctor_memory() # initializing doctor memory
         patient_hist: list[dict] = [{"role": "system", "content": patient_system}] # initializing patient history
-        questioning_hist: list[dict] = [ # initializing questioning history
-            {
-                "role": "system",
-                "content": doctor.get_questioning_system_prompt(MAX_TURNS, [], []),
-            }
-        ]
-        transcript: list[tuple[str, str]] = [] 
+        transcript: list[tuple[str, str]] = []
 
-        def emit(obj: dict) -> str: 
+        def emit(obj: dict) -> str:
             return f"data: {json.dumps(obj, ensure_ascii=False)}\n\n"
 
         yield emit({"event": "start"})
         yield emit({"event": "doctor_memory", "state": doctor_memory})
 
         try:
-            questioning_hist.append({"role": "user", "content": doctor.opening_user_message()})
-            _log_llm_history("Doctor LLM (questioning)", "opening", questioning_hist)
-            doctor_raw = llm_chat(questioning_hist, role="doctor")
-            questioning_hist.append({"role": "assistant", "content": doctor_raw})
+            opening_messages = [
+                {
+                    "role": "system",
+                    "content": doctor.get_questioning_system_prompt(MAX_TURNS, [], doctor_model),
+                },
+                {"role": "user", "content": doctor.opening_user_message()},
+            ]
+            _log_llm_history("Doctor LLM (questioning)", "opening", opening_messages)
+            doctor_raw = llm_chat(opening_messages, role="doctor")
             q_open = doctor.parse_questioning_result(doctor_raw)
             question_text = q_open["question"]
             doctor_memory["opening_question"] = {
@@ -665,28 +669,22 @@ def simulate(): # prompts loading
                     break
 
                 # ── Questioning phase (follow-up) ────────────────────────
-                asked_questions = [q for role, q in transcript if role == "doctor"]
-                questioning_hist[0] = {
-                    "role": "system",
-                    "content": doctor.get_questioning_system_prompt(
-                        MAX_TURNS, candidates, asked_questions
-                    ),
-                }
-                questioning_hist.append(
+                questioning_messages = [
+                    {
+                        "role": "system",
+                        "content": doctor.get_questioning_system_prompt(MAX_TURNS, candidates, doctor_model),
+                    },
                     {
                         "role": "user",
-                        "content": doctor.questioning_followup_user_payload(
-                            patient_msg, tr_text, candidates
-                        ),
-                    }
-                )
+                        "content": doctor.questioning_followup_user_payload(tr_text, candidates),
+                    },
+                ]
                 _log_llm_history(
                     "Doctor LLM (questioning)",
                     f"follow-up after turn {t}",
-                    questioning_hist,
+                    questioning_messages,
                 )
-                doctor_raw = llm_chat(questioning_hist, role="doctor")
-                questioning_hist.append({"role": "assistant", "content": doctor_raw})
+                doctor_raw = llm_chat(questioning_messages, role="doctor")
                 q_follow = doctor.parse_questioning_result(doctor_raw)
                 question_text = q_follow["question"]
 

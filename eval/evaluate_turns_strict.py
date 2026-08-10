@@ -47,6 +47,7 @@ PLOTS_DIR    = ANALYSIS_DIR / "turn_eval"
 DENIAL_DIR   = RESULTS_DIR / "denials"
 CRITERIA_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "diagnostic_criteria.json"
 SYMPTOM_DIR   = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "symptom"
+DISORDER_ICD10_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "disorder_icd10.json"
 
 from utils.llm import chat as _llm_chat
 
@@ -66,8 +67,11 @@ def load_all_symptoms() -> dict:
     return symptoms
 
 
-def _name_to_id(criteria: dict) -> dict[str, str]:
-    return {v["name"].lower().strip(): k for k, v in criteria.items()}
+def _code_to_id() -> dict[str, str]:
+    """Return {icd10_code: disease_id} from disorder_icd10.json."""
+    with open(DISORDER_ICD10_FILE, encoding="utf-8") as f:
+        mapping = json.load(f)
+    return {v["icd10_code"].strip().upper(): k for k, v in mapping.items()}
 
 
 # ── Log parsing ──────────────────────────────────────────────────────────────
@@ -303,10 +307,10 @@ def ground_truth_disease(log_name: str) -> str:
     return m.group(1)
 
 
-def _names_to_ids(names: list[str], name2id: dict[str, str]) -> set[str]:
+def _codes_to_ids(codes: list[str], code2id: dict[str, str]) -> set[str]:
     ids = set()
-    for n in names:
-        did = name2id.get(n.lower().strip())
+    for c in codes:
+        did = code2id.get(str(c).strip().upper())
         if did:
             ids.add(did)
     return ids
@@ -316,7 +320,7 @@ def _names_to_ids(names: list[str], name2id: dict[str, str]) -> set[str]:
 
 def evaluate() -> tuple[list[dict], dict, int]:
     criteria    = load_criteria()
-    name2id     = _name_to_id(criteria)
+    code2id     = _code_to_id()
     all_symptoms = load_all_symptoms()
     n_classes   = len(criteria)
 
@@ -373,7 +377,7 @@ def evaluate() -> tuple[list[dict], dict, int]:
 
             # Doctor predictions for this turn
             if turn_idx < len(doctor_cands):
-                preds = _names_to_ids(doctor_cands[turn_idx], name2id)
+                preds = _codes_to_ids(doctor_cands[turn_idx], code2id)
                 raw_candidates = doctor_cands[turn_idx]
             else:
                 preds = set()
@@ -434,7 +438,7 @@ def evaluate() -> tuple[list[dict], dict, int]:
                 "ground_truth": gt,
                 "truth_set": sorted(truth_set),
                 "predicted": sorted(preds),
-                "predicted_names": raw_candidates,
+                "predicted_codes": raw_candidates,
                 "tp": tp, "fp": fp, "fn": fn, "tn": tn,
                 "precision":       round(prec, 4),
                 "recall":          round(rec, 4),

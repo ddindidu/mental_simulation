@@ -37,6 +37,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+DISORDER_ICD10_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "disorder_icd10.json"
 
 from eval.question_score import (
     SemanticSimilarityMapper,
@@ -82,13 +83,20 @@ def _log_sort_key(name: str) -> tuple[int, int]:
     return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
 
 
+def _build_code_to_id() -> dict[str, str]:
+    """Return {icd10_code: disease_id} from disorder_icd10.json."""
+    with open(DISORDER_ICD10_FILE, encoding="utf-8") as f:
+        mapping = json.load(f)
+    return {v["icd10_code"].strip().upper(): k for k, v in mapping.items()}
+
+
 # ── Metric computation ─────────────────────────────────────────────────────────
 
 def compute_question_metrics(results_dir: Path, logs_dir: Path) -> list[dict]:
     all_symptoms = load_all_symptoms()
     criteria     = load_criteria()
     diff_edges   = load_differential_edges()
-    name2id      = {v["name"].lower().strip(): k for k, v in criteria.items()}
+    code2id      = _build_code_to_id()
     mapper       = SemanticSimilarityMapper()
 
     result_paths = sorted(results_dir.glob("*_result.json"),
@@ -131,9 +139,9 @@ def compute_question_metrics(results_dir: Path, logs_dir: Path) -> list[dict]:
 
             question, raw_cands = q_and_cands[i]
             candidate_ids = [
-                name2id[c.lower().strip()]
+                code2id[c.strip().upper()]
                 for c in raw_cands
-                if name2id.get(c.lower().strip())
+                if code2id.get(c.strip().upper())
             ]
 
             q_syms     = mapper.map(question, all_symptoms)

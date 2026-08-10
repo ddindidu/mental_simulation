@@ -52,8 +52,16 @@ from utils.llm import get_run_dir as _get_run_dir
 from utils.config import CONFIG
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+DISORDER_ICD10_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "disorder_icd10.json"
 
 _SAFETY_HORIZON = (CONFIG.get("evaluation") or {}).get("safety_screening_horizon")
+
+
+def _build_code_to_id() -> dict[str, str]:
+    """Return {icd10_code: disease_id} from disorder_icd10.json."""
+    with open(DISORDER_ICD10_FILE, encoding="utf-8") as f:
+        mapping = json.load(f)
+    return {v["icd10_code"].strip().upper(): k for k, v in mapping.items()}
 
 
 def _parse_args() -> argparse.Namespace:
@@ -111,7 +119,7 @@ def evaluate() -> list[dict]:
     all_symptoms = load_all_symptoms()
     criteria     = load_criteria()
     diff_edges   = load_differential_edges()
-    name2id      = {v["name"].lower().strip(): k for k, v in criteria.items()}
+    code2id      = _build_code_to_id()
 
     mappers: dict[str, CosineSemanticMapper | LLMJudgeMapper] = {
         "cosine":    CosineSemanticMapper(),
@@ -171,9 +179,9 @@ def evaluate() -> list[dict]:
 
             question, raw_cands = q_and_cands[i]
             candidate_ids = [
-                name2id[c.lower().strip()]
+                code2id[c.strip().upper()]
                 for c in raw_cands
-                if name2id.get(c.lower().strip())
+                if code2id.get(c.strip().upper())
             ]
 
             scores_by_mapper: dict[str, dict] = {}

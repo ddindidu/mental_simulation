@@ -35,14 +35,16 @@ import numpy as np
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 CRITERIA_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "diagnostic_criteria.json"
+DISORDER_ICD10_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "disorder_icd10.json"
 
 
-# ── Name → ID mapping ──────────────────────────────────────────────────────────
+# ── ICD-10 code → ID mapping ─────────────────────────────────────────────────
 
-def _build_name_to_id() -> dict[str, str]:
-    with open(CRITERIA_FILE, encoding="utf-8") as f:
-        criteria = json.load(f)
-    return {v["name"].lower().strip(): k for k, v in criteria.items()}
+def _build_code_to_id() -> dict[str, str]:
+    """Return {icd10_code: disease_id} from disorder_icd10.json."""
+    with open(DISORDER_ICD10_FILE, encoding="utf-8") as f:
+        mapping = json.load(f)
+    return {v["icd10_code"].strip().upper(): k for k, v in mapping.items()}
 
 
 def _build_id_to_name() -> dict[str, str]:
@@ -73,10 +75,10 @@ def extract_doctor_candidates(log_file: Path) -> tuple[list[list[str]], list[str
     return per_turn, final_cands
 
 
-def _names_to_ids(names: list[str], name2id: dict[str, str]) -> set[str]:
+def _codes_to_ids(codes: list[str], code2id: dict[str, str]) -> set[str]:
     ids = set()
-    for name in names:
-        did = name2id.get(name.lower().strip())
+    for code in codes:
+        did = code2id.get(str(code).strip().upper())
         if did:
             ids.add(did)
     return ids
@@ -90,7 +92,7 @@ def _log_sort_key(name: str) -> tuple[int, int]:
 # ── Metric computation ─────────────────────────────────────────────────────────
 
 def compute_turn_metrics(results_dir: Path, logs_dir: Path) -> list[dict]:
-    name2id = _build_name_to_id()
+    code2id = _build_code_to_id()
     result_paths = sorted(results_dir.glob("*_result.json"),
                           key=lambda p: _log_sort_key(p.stem.replace("_result", "")))
     if not result_paths:
@@ -126,7 +128,7 @@ def compute_turn_metrics(results_dir: Path, logs_dir: Path) -> list[dict]:
             t = turn["turn"]
             turn_idx = t - 1
 
-            preds = _names_to_ids(doctor_cands[turn_idx], name2id) if turn_idx < len(doctor_cands) else set()
+            preds = _codes_to_ids(doctor_cands[turn_idx], code2id) if turn_idx < len(doctor_cands) else set()
 
             # Candidate tiers from candidate_set (preferred) or disease_matches fallback
             cs = turn.get("candidate_set", {})

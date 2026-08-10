@@ -11,6 +11,7 @@ import patient
 from utils.llm import chat as llm_chat
 from utils.llm import get_doctor_diagnosis_max_tokens
 from utils.llm import get_doctor_inference_max_tokens
+from utils.llm import get_doctor_model_name
 from utils.llm import get_patient_alignment_max_tokens
 
 
@@ -41,26 +42,26 @@ def run_interview_simulation(
     if max_turns < 1:
         raise ValueError("max_turns must be >= 1")
 
-    inference_system = doctor.get_inference_system_prompt()
-    final_system = doctor.get_final_diagnosis_system_prompt()
+    doctor_model = get_doctor_model_name()
+    inference_system = doctor.get_inference_system_prompt(doctor_model)
+    final_system = doctor.get_final_diagnosis_system_prompt(doctor_model)
     diag_tokens = get_doctor_diagnosis_max_tokens()
     inf_tokens = get_doctor_inference_max_tokens()
     align_tokens = get_patient_alignment_max_tokens()
 
     doctor_memory: dict[str, Any] = doctor.new_doctor_memory()
     patient_hist: list[dict] = [{"role": "system", "content": patient_system}]
-    questioning_hist: list[dict] = [
-        {
-            "role": "system",
-            "content": doctor.get_questioning_system_prompt(max_turns, [], []),
-        }
-    ]
     transcript: list[tuple[str, str]] = []
 
-    questioning_hist.append({"role": "user", "content": doctor.opening_user_message()})
-    _log(verbose, "Doctor LLM (questioning)", "opening", questioning_hist)
-    doctor_raw = llm_chat(questioning_hist, role="doctor")
-    questioning_hist.append({"role": "assistant", "content": doctor_raw})
+    opening_messages = [
+        {
+            "role": "system",
+            "content": doctor.get_questioning_system_prompt(max_turns, [], doctor_model),
+        },
+        {"role": "user", "content": doctor.opening_user_message()},
+    ]
+    _log(verbose, "Doctor LLM (questioning)", "opening", opening_messages)
+    doctor_raw = llm_chat(opening_messages, role="doctor")
     q_open = doctor.parse_questioning_result(doctor_raw)
     question_text = q_open["question"]
     doctor_memory["opening_question"] = {
@@ -148,27 +149,23 @@ def run_interview_simulation(
                 "closed_at_patient_turn": t,
             }
 
-        asked_questions = [q for role, q in transcript if role == "doctor"]
-        questioning_hist[0] = {
-            "role": "system",
-            "content": doctor.get_questioning_system_prompt(max_turns, candidates, asked_questions),
-        }
-        questioning_hist.append(
+        questioning_messages = [
+            {
+                "role": "system",
+                "content": doctor.get_questioning_system_prompt(max_turns, candidates, doctor_model),
+            },
             {
                 "role": "user",
-                "content": doctor.questioning_followup_user_payload(
-                    patient_msg, tr_text, candidates
-                ),
-            }
-        )
+                "content": doctor.questioning_followup_user_payload(tr_text, candidates),
+            },
+        ]
         _log(
             verbose,
             "Doctor LLM (questioning)",
             f"follow-up after turn {t}",
-            questioning_hist,
+            questioning_messages,
         )
-        doctor_raw = llm_chat(questioning_hist, role="doctor")
-        questioning_hist.append({"role": "assistant", "content": doctor_raw})
+        doctor_raw = llm_chat(questioning_messages, role="doctor")
         q_follow = doctor.parse_questioning_result(doctor_raw)
         question_text = q_follow["question"]
 
