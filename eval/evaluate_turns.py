@@ -4,7 +4,7 @@ Turn-level evaluation: accuracy, precision, recall based on doctor's
 per-turn candidate diagnoses parsed from simulation logs.
 
 Ground truth : disease ID extracted from log filename (e.g. D001_3.txt → D001)
-Predicted set: doctor's inference candidates after each patient turn
+Predicted set: doctor's inference candidates (ICD-10 codes) after each patient turn
 Truth set    : {ground_truth} ∪ {all diseases in disease_matches (fully_met + top_partial)}
 
 Definitions (per sample per turn):
@@ -36,15 +36,16 @@ LOGS_DIR     = BASE_DIR / "logs"     / _RUN_DIR
 ANALYSIS_DIR = BASE_DIR / "analysis" / _RUN_DIR
 PLOTS_DIR    = ANALYSIS_DIR / "turn_eval"
 CRITERIA_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "diagnostic_criteria.json"
+DISORDER_ICD10_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "disorder_icd10.json"
 
 
-# ── Disease name ↔ ID mapping ────────────────────────────────────────────────
+# ── ICD-10 code ↔ ID mapping ─────────────────────────────────────────────────
 
-def _build_name_to_id() -> dict[str, str]:
-    """Return {lowercase disease name: disease_id} from diagnostic_criteria.json."""
-    with open(CRITERIA_FILE, encoding="utf-8") as f:
-        criteria = json.load(f)
-    return {v["name"].lower().strip(): k for k, v in criteria.items()}
+def _build_code_to_id() -> dict[str, str]:
+    """Return {icd10_code: disease_id} from disorder_icd10.json."""
+    with open(DISORDER_ICD10_FILE, encoding="utf-8") as f:
+        mapping = json.load(f)
+    return {v["icd10_code"].strip().upper(): k for k, v in mapping.items()}
 
 
 # ── Log parsing: extract doctor candidates per turn ──────────────────────────
@@ -54,7 +55,7 @@ def extract_doctor_candidates_per_turn(
 ) -> tuple[list[list[str]], list[str] | None]:
     """
     Parse a simulation log and return:
-      - per_turn : inference candidates (disease NAMES) per patient turn
+      - per_turn : inference candidates (ICD-10 codes) per patient turn
       - final_cands: candidates from the final diagnosis block, if present
 
     Inference block: {"candidates", "note"} without "diagnosis".
@@ -83,11 +84,11 @@ def extract_doctor_candidates_per_turn(
     return per_turn, final_cands
 
 
-def _names_to_ids(names: list[str], name2id: dict[str, str]) -> set[str]:
-    """Map a list of disease names to their IDs. Skip unknown names."""
+def _codes_to_ids(codes: list[str], code2id: dict[str, str]) -> set[str]:
+    """Map a list of ICD-10 codes to their disease IDs. Skip unknown codes."""
     ids = set()
-    for name in names:
-        did = name2id.get(name.lower().strip())
+    for code in codes:
+        did = code2id.get(str(code).strip().upper())
         if did:
             ids.add(did)
     return ids
@@ -133,7 +134,7 @@ def all_matched_disease_ids(turn: dict) -> set[str]:
 # ── Main evaluation ──────────────────────────────────────────────────────────
 
 def evaluate():
-    name2id = _build_name_to_id()
+    code2id = _build_code_to_id()
     results = load_results()
     if not results:
         print("No result files found.", file=sys.stderr)
@@ -184,7 +185,7 @@ def evaluate():
 
             # Doctor's candidates after this patient turn
             if turn_idx < len(doctor_cands):
-                preds = _names_to_ids(doctor_cands[turn_idx], name2id)
+                preds = _codes_to_ids(doctor_cands[turn_idx], code2id)
                 raw_candidates = doctor_cands[turn_idx]
             else:
                 preds = set()
@@ -248,7 +249,7 @@ def evaluate():
                 "symptom_reasoning": turn.get("symptom_reasoning", {}),
                 "ground_truth":      gt,
                 "predicted":         sorted(preds),
-                "predicted_names":   raw_candidates,
+                "predicted_codes":   raw_candidates,
                 "high_likely":       sorted(high_likely),
                 "moderate_likely":   sorted(moderate_likely),
                 "low_likely":        sorted(low_likely),

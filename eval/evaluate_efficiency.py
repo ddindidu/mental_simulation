@@ -58,6 +58,13 @@ def _load_id2name() -> dict[str, str]:
     return {k: v["name"] for k, v in data.items()}
 
 
+def _load_code2id() -> dict[str, str]:
+    """Return {icd10_code: disease_id} from disorder_icd10.json."""
+    icd10_path = KG_DIR / "disorder_icd10.json"
+    data = json.loads(icd10_path.read_text(encoding="utf-8"))
+    return {v["icd10_code"].strip().upper(): k for k, v in data.items()}
+
+
 def _log_sort_key(name: str) -> tuple[int, int]:
     m = re.match(r"D(\d+)_(\d+)", name)
     return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
@@ -83,18 +90,15 @@ def score_efficiency_episode(
     candidate_sizes: list[int],
     high_likely_per_turn: list[set[str]],
     ground_truth: str,
-    final_diagnosis: str,
-    ground_truth_name: str,
+    final_diagnosis_id: str | None,
 ) -> dict:
     """Compute all efficiency metrics for a single episode."""
     T = len(candidate_sizes)
     if T == 0:
         return {}
 
-    # Final accuracy: exact match, case-insensitive
-    fd  = final_diagnosis.lower().strip()
-    gtn = ground_truth_name.lower().strip()
-    final_accuracy = 1.0 if fd and gtn and fd == gtn else 0.0
+    # Final accuracy: final diagnosis' ICD-10 code resolves to the ground-truth disease ID
+    final_accuracy = 1.0 if final_diagnosis_id and final_diagnosis_id == ground_truth else 0.0
 
     # CSSR
     cssr = (candidate_sizes[0] - candidate_sizes[-1]) / T
@@ -140,6 +144,7 @@ def score_efficiency_episode(
 
 def evaluate() -> list[dict]:
     id2name = _load_id2name()
+    code2id = _load_code2id()
 
     result_paths = sorted(
         RESULTS_DIR.glob("*_result.json"),
@@ -188,13 +193,13 @@ def evaluate() -> list[dict]:
             continue
 
         final_diag = _extract_final_diagnosis(log_file) if log_file.exists() else ""
+        final_diag_id = code2id.get(final_diag.strip().upper()) if final_diag else None
 
         metrics = score_efficiency_episode(
             candidate_sizes      = candidate_sizes,
             high_likely_per_turn = high_likely_per_turn,
             ground_truth         = gt,
-            final_diagnosis      = final_diag,
-            ground_truth_name    = gt_name,
+            final_diagnosis_id   = final_diag_id,
         )
 
         episode_results.append({
@@ -203,6 +208,7 @@ def evaluate() -> list[dict]:
             "ground_truth_name":     gt_name,
             "candidate_sizes":       candidate_sizes,
             "final_diagnosis":       final_diag,
+            "final_diagnosis_id":    final_diag_id,
             **metrics,
         })
 

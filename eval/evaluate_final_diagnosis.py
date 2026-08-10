@@ -4,9 +4,10 @@ Per-disease accuracy of the doctor's final diagnosis.
 
 Ground truth : disease ID from log filename (e.g. D001_8.txt → D001)
 Prediction   : "diagnosis" field from the last doctor block in the log
-Mapping      : disorder.json (disease_id → disease name)
+               (an ICD-10 code, e.g. "F32.9")
+Mapping      : disorder_icd10.json (disease_id → ICD-10 code)
 
-A sample is correct when the predicted diagnosis name maps to the
+A sample is correct when the predicted ICD-10 code maps to the
 ground-truth disease ID (case-insensitive exact match).
 """
 
@@ -23,6 +24,7 @@ if str(_REPO_ROOT) not in _sys.path:
 
 BASE_DIR      = Path(__file__).resolve().parent.parent
 DISORDER_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "disorder.json"
+DISORDER_ICD10_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "disorder_icd10.json"
 
 from utils.llm import get_run_dir as _get_run_dir
 _RUN_DIR = _get_run_dir()
@@ -30,12 +32,16 @@ LOGS_DIR = BASE_DIR / "logs" / _RUN_DIR
 
 
 def load_disorder_map() -> tuple[dict[str, str], dict[str, str]]:
-    """Return (id→name, name_lower→id) from disorder.json."""
+    """Return (id→name, icd10_code→id). Names come from disorder.json (for display
+    only); the code map comes from disorder_icd10.json and is what predictions
+    are matched against, since the doctor now outputs ICD-10 codes."""
     with open(DISORDER_FILE, encoding="utf-8") as f:
         data = json.load(f)
     id2name = {k: v["name"] for k, v in data.items()}
-    name2id = {v.lower().strip(): k for k, v in id2name.items()}
-    return id2name, name2id
+    with open(DISORDER_ICD10_FILE, encoding="utf-8") as f:
+        icd10_data = json.load(f)
+    code2id = {v["icd10_code"].strip().upper(): k for k, v in icd10_data.items()}
+    return id2name, code2id
 
 
 def extract_final_diagnosis(log_file: Path) -> str | None:
@@ -79,7 +85,7 @@ def _log_sort_key(name: str) -> tuple[int, int]:
 
 
 def main():
-    id2name, name2id = load_disorder_map()
+    id2name, code2id = load_disorder_map()
 
     log_files = sorted(LOGS_DIR.glob("*.txt"), key=lambda p: _log_sort_key(p.stem))
     if not log_files:
@@ -107,7 +113,7 @@ def main():
             })
             continue
 
-        pred_id = name2id.get(diagnosis.lower().strip())
+        pred_id = code2id.get(diagnosis.strip().upper())
         is_correct = pred_id == gt
 
         stats[gt]["total"] += 1
