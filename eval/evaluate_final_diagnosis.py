@@ -40,7 +40,10 @@ def load_disorder_map() -> tuple[dict[str, str], dict[str, str]]:
     id2name = {k: v["name"] for k, v in data.items()}
     with open(DISORDER_ICD10_FILE, encoding="utf-8") as f:
         icd10_data = json.load(f)
-    code2id = {v["icd10_code"].strip().upper(): k for k, v in icd10_data.items()}
+    code2id: dict[str, str] = {}
+    for k, v in icd10_data.items():
+        for code in v.get("icd10_accepted_codes") or [v["icd10_code"]]:
+            code2id[code.strip().upper()] = k
     return id2name, code2id
 
 

@@ -140,7 +140,7 @@ def identify_symptoms_turn(
             {"role": "system", "content": "You are a clinical psychiatrist. Output only valid JSON."},
             {"role": "user", "content": prompt},
         ],
-        max_new_tokens=2048,
+        max_new_tokens=4096,
         role="judge",
     ).strip()
 

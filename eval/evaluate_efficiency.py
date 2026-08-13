@@ -62,7 +62,11 @@ def _load_code2id() -> dict[str, str]:
     """Return {icd10_code: disease_id} from disorder_icd10.json."""
     icd10_path = KG_DIR / "disorder_icd10.json"
     data = json.loads(icd10_path.read_text(encoding="utf-8"))
-    return {v["icd10_code"].strip().upper(): k for k, v in data.items()}
+    code2id: dict[str, str] = {}
+    for k, v in data.items():
+        for code in v.get("icd10_accepted_codes") or [v["icd10_code"]]:
+            code2id[code.strip().upper()] = k
+    return code2id
 
 
 def _log_sort_key(name: str) -> tuple[int, int]:
@@ -77,11 +81,22 @@ def _extract_final_diagnosis(log_file: Path) -> str:
     )
     for b in reversed(blocks):
         b = b.strip()
+        # Strip markdown code fences if present (e.g. ```json ... ```)
+        b = re.sub(r"^```(?:json)?\s*", "", b)
+        b = re.sub(r"\s*```$", "", b).strip()
         try:
             p = json.loads(b)
             if isinstance(p, dict) and "diagnosis" in p:
                 return str(p["diagnosis"]).strip()
         except (json.JSONDecodeError, ValueError):
+            m = re.search(r"\{[\s\S]*\}", b)
+            if m:
+                try:
+                    p = json.loads(m.group())
+                    if isinstance(p, dict) and "diagnosis" in p:
+                        return str(p["diagnosis"]).strip()
+                except (json.JSONDecodeError, ValueError):
+                    pass
             continue
     return ""
 

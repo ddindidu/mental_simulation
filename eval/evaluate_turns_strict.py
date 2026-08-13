@@ -71,7 +71,11 @@ def _code_to_id() -> dict[str, str]:
     """Return {icd10_code: disease_id} from disorder_icd10.json."""
     with open(DISORDER_ICD10_FILE, encoding="utf-8") as f:
         mapping = json.load(f)
-    return {v["icd10_code"].strip().upper(): k for k, v in mapping.items()}
+    code2id: dict[str, str] = {}
+    for k, v in mapping.items():
+        for code in v.get("icd10_accepted_codes") or [v["icd10_code"]]:
+            code2id[code.strip().upper()] = k
+    return code2id
 
 
 # ── Log parsing ──────────────────────────────────────────────────────────────
@@ -197,7 +201,7 @@ def extract_denials_for_log(
             {"role": "system", "content": "You are a clinical analyst. Output only valid JSON."},
             {"role": "user", "content": prompt},
         ],
-        max_new_tokens=3072,
+        max_new_tokens=4096,
         role="judge",
     ).strip()
     raw = _strip_fences(raw)
@@ -580,6 +584,9 @@ def plot(sample_turns: list[dict], criteria: dict) -> None:
 
     def plot_one(ax, turn_data, series, title):
         turns = sorted(turn_data.keys())
+        if not turns:
+            ax.set_title(title, fontsize=9)
+            return
         mean_acc  = [np.mean(turn_data[t]["acc"])    for t in turns]
         mean_prec = [np.mean(turn_data[t]["prec"])   for t in turns]
         mean_rec  = [np.mean(turn_data[t]["recall"]) for t in turns]

@@ -308,15 +308,13 @@ def final_diagnosis_user_payload(transcript: str, candidates: list[str]) -> str:
 
 
 def questioning_followup_user_payload(  # constructing scripts for questioning phase
-    patient_last_message: str,
     transcript: str,
     candidates: list[str],
 ) -> str:
     cand_json = json.dumps(candidates, ensure_ascii=False)
     return (
         f"Candidate Diseases: \n{cand_json}\n\n"
-        f"Interview Transcript: \n{transcript}\n\n"
-        f"Patient: {patient_last_message.strip()}"
+        f"Interview Transcript: \n{transcript}"
     )
 
 
