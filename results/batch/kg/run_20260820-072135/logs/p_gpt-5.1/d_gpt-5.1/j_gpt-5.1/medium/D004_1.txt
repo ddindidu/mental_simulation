@@ -1,0 +1,2332 @@
+--- turn 00 ---
+
+[call 01] doctor-opening-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "open-ended chief complaint",
+  "subcategory": null,
+  "question": "Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?"
+}
+=====================================
+
+--- turn 01 ---
+
+[call 02] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ delusions
+  - Persecutory Delusions: The false belief that one is being harmed or monitored by other people or organizations.
+  - Referential Delusions: The conviction that ordinary events, remarks, or behaviors have specific relevance to oneself.
+  - Grandiose Delusions: The false belief that one possesses special abilities, power, or fame.
+  - Erotomanic Delusions: The false belief that another person is in love with or has affection for them.
+  - Nihilistic Delusions: A destructive or negative conviction that the world is ending or that a major catastrophe will occur.
+  - Somatic Delusions: The baseless conviction that there is a serious abnormality with one's body or organs.
+  - Jealous Delusions: The conviction that one's spouse or romantic partner is being unfaithful without sufficient evidence.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 11 months
+  - Additional: Functioning is not markedly impaired apart from the impact of the delusion(s) or its ramifications
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 1
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["delusions"], "answer_strategy": "Briefly describe that you've been experiencing persistent false beliefs (delusions) that have been very distressing and ongoing, without going into all the specific types yet. Focus on how these beliefs are affecting you enough that you felt you needed help. Keep the tone honest and straightforward, emphasizing that these thoughts feel very real to you and have been present for a long time."}
+=====================================
+
+[call 03] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Delusional Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ delusions
+  - Persecutory Delusions: The false belief that one is being harmed or monitored by other people or organizations.
+  - Referential Delusions: The conviction that ordinary events, remarks, or behaviors have specific relevance to oneself.
+  - Grandiose Delusions: The false belief that one possesses special abilities, power, or fame.
+  - Erotomanic Delusions: The false belief that another person is in love with or has affection for them.
+  - Nihilistic Delusions: A destructive or negative conviction that the world is ending or that a major catastrophe will occur.
+  - Somatic Delusions: The baseless conviction that there is a serious abnormality with one's body or organs.
+  - Jealous Delusions: The conviction that one's spouse or romantic partner is being unfaithful without sufficient evidence.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 11 months
+  - Additional: Functioning is not markedly impaired apart from the impact of the delusion(s) or its ramifications
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Delusions
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: delusions
+Answer strategy: Briefly describe that you've been experiencing persistent false beliefs (delusions) that have been very distressing and ongoing, without going into all the specific types yet. Focus on how these beliefs are affecting you enough that you felt you needed help. Keep the tone honest and straightforward, emphasizing that these thoughts feel very real to you and have been present for a long time.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+========== OUTPUT [patient] ==========
+I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+=====================================
+
+[call 04] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F22.0", "F20.0", "F25.0", "F23.3"], "note": "Initial presentation only indicates the presence of fixed, non‑shared beliefs that feel real to the patient and cause distress and impairment. At this very early stage, without details on duration, presence of hallucinations, mood symptoms, disorganization, or substance/medical factors, the differential must remain broad within psychotic-spectrum conditions. Thus, persistent delusional disorder, schizophrenia, schizoaffective disorder, and acute psychotic disorder with predominantly delusions are all still possible. No previous candidate list was provided, so this is the initial set; it may narrow substantially once we know more about symptom content, duration, functional decline, and mood or substance history.", "is_final": false}
+=====================================
+
+[call 05] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F22.0
+- F20.0
+- F25.0
+- F23.3
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F22.0", "F20.0", "F25.0", "F23.3"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "mood symptoms",
+  "question": "Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?"
+}
+=====================================
+
+--- turn 02 ---
+
+[call 06] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ delusions
+  - Persecutory Delusions: The false belief that one is being harmed or monitored by other people or organizations.
+  - Referential Delusions: The conviction that ordinary events, remarks, or behaviors have specific relevance to oneself.
+  - Grandiose Delusions: The false belief that one possesses special abilities, power, or fame.
+  - Erotomanic Delusions: The false belief that another person is in love with or has affection for them.
+  - Nihilistic Delusions: A destructive or negative conviction that the world is ending or that a major catastrophe will occur.
+  - Somatic Delusions: The baseless conviction that there is a serious abnormality with one's body or organs.
+  - Jealous Delusions: The conviction that one's spouse or romantic partner is being unfaithful without sufficient evidence.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 11 months
+  - Additional: Functioning is not markedly impaired apart from the impact of the delusion(s) or its ramifications
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 2
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+========== OUTPUT [patient] ==========
+{"matched": false, "matched_sections": [], "answer_strategy": "This question is about mood episodes (depression or unusually high/energized periods), which are not described in the profile. The patient should answer briefly and honestly from their own experience, for example: clearly state whether they have or have not noticed such long periods of unusually low or unusually high mood, roughly how long they lasted if present, and whether others noticed a change. If they’re unsure, they can say something like, 'I’m not really sure' or 'I haven’t noticed anything that stands out.'"}
+=====================================
+
+[call 07] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Delusional Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ delusions
+  - Persecutory Delusions: The false belief that one is being harmed or monitored by other people or organizations.
+  - Referential Delusions: The conviction that ordinary events, remarks, or behaviors have specific relevance to oneself.
+  - Grandiose Delusions: The false belief that one possesses special abilities, power, or fame.
+  - Erotomanic Delusions: The false belief that another person is in love with or has affection for them.
+  - Nihilistic Delusions: A destructive or negative conviction that the world is ending or that a major catastrophe will occur.
+  - Somatic Delusions: The baseless conviction that there is a serious abnormality with one's body or organs.
+  - Jealous Delusions: The conviction that one's spouse or romantic partner is being unfaithful without sufficient evidence.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 11 months
+  - Additional: Functioning is not markedly impaired apart from the impact of the delusion(s) or its ramifications
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Delusions
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(No match in profile or inference only)
+Answer strategy: This question is about mood episodes (depression or unusually high/energized periods), which are not described in the profile. The patient should answer briefly and honestly from their own experience, for example: clearly state whether they have or have not noticed such long periods of unusually low or unusually high mood, roughly how long they lasted if present, and whether others noticed a change. If they’re unsure, they can say something like, 'I’m not really sure' or 'I haven’t noticed anything that stands out.'
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+========== OUTPUT [patient] ==========
+I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+=====================================
+
+[call 08] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F22.0", "F20.0", "F25.0", "F23.3"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F22.0", "F20.0", "F23.3"], "note": "Previously the candidates were [F22.0, F20.0, F25.0, F23.3]. The patient reports persistent, strongly held beliefs that others say are not real, causing distress and functional impact, but explicitly denies any clear periods of abnormally low or high mood standing out from their usual self. This makes a comorbid mood episode less likely at this point, so a schizoaffective-type picture is less supported and F25.0 is removed from the list. Persistent delusional disorder (F22.0), schizophrenia (F20.0), and an acute/transient psychotic disorder (F23.3) remain under consideration, as we still lack detailed information about duration, presence of other psychotic symptoms, and the exact time course of onset. Further questioning is needed to clarify these aspects.", "is_final": false}
+=====================================
+
+[call 09] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F22.0
+- F20.0
+- F23.3
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F22.0", "F20.0", "F23.3"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "duration",
+  "subcategory": "psychotic symptoms",
+  "question": "How long have you been experiencing these strong beliefs—would you say it’s been less than a month, between one and six months, or more than six months continuously?"
+}
+=====================================
+
+--- turn 03 ---
+
+[call 10] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ delusions
+  - Persecutory Delusions: The false belief that one is being harmed or monitored by other people or organizations.
+  - Referential Delusions: The conviction that ordinary events, remarks, or behaviors have specific relevance to oneself.
+  - Grandiose Delusions: The false belief that one possesses special abilities, power, or fame.
+  - Erotomanic Delusions: The false belief that another person is in love with or has affection for them.
+  - Nihilistic Delusions: A destructive or negative conviction that the world is ending or that a major catastrophe will occur.
+  - Somatic Delusions: The baseless conviction that there is a serious abnormality with one's body or organs.
+  - Jealous Delusions: The conviction that one's spouse or romantic partner is being unfaithful without sufficient evidence.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 11 months
+  - Additional: Functioning is not markedly impaired apart from the impact of the delusion(s) or its ramifications
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 3
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+How long have you been experiencing these strong beliefs—would you say it’s been less than a month, between one and six months, or more than six months continuously?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["Critical Diagnostic Criteria - Duration: 1 year and 11 months"], "answer_strategy": "Clearly state that these strong beliefs have been present continuously for more than six months, using the specific timeframe from the profile (about 1 year and 11 months). Keep the tone straightforward and factual, e.g., 'It’s been going on continuously for more than six months—almost two years now.'"}
+=====================================
+
+[call 11] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Delusional Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ delusions
+  - Persecutory Delusions: The false belief that one is being harmed or monitored by other people or organizations.
+  - Referential Delusions: The conviction that ordinary events, remarks, or behaviors have specific relevance to oneself.
+  - Grandiose Delusions: The false belief that one possesses special abilities, power, or fame.
+  - Erotomanic Delusions: The false belief that another person is in love with or has affection for them.
+  - Nihilistic Delusions: A destructive or negative conviction that the world is ending or that a major catastrophe will occur.
+  - Somatic Delusions: The baseless conviction that there is a serious abnormality with one's body or organs.
+  - Jealous Delusions: The conviction that one's spouse or romantic partner is being unfaithful without sufficient evidence.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 11 months
+  - Additional: Functioning is not markedly impaired apart from the impact of the delusion(s) or its ramifications
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Delusions
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: Critical Diagnostic Criteria - Duration: 1 year and 11 months
+Answer strategy: Clearly state that these strong beliefs have been present continuously for more than six months, using the specific timeframe from the profile (about 1 year and 11 months). Keep the tone straightforward and factual, e.g., 'It’s been going on continuously for more than six months—almost two years now.'
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+Doctor: How long have you been experiencing these strong beliefs—would you say it’s been less than a month, between one and six months, or more than six months continuously?
+
+========== OUTPUT [patient] ==========
+It’s definitely been more than six months continuously. I’d say it’s been going on for almost two years now without really letting up.
+=====================================
+
+[call 12] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F22.0", "F20.0", "F23.3"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+Doctor: How long have you been experiencing these strong beliefs—would you say it’s been less than a month, between one and six months, or more than six months continuously?
+
+Patient: It’s definitely been more than six months continuously. I’d say it’s been going on for almost two years now without really letting up.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F22.0", "F20.0"], "note": "Previously the candidates were [F22.0, F20.0, F23.3]. The patient reports that the fixed, strongly held beliefs have been present continuously for almost two years, which makes an acute and transient psychotic episode (F23.3) unlikely, as that diagnosis requires a much shorter duration (typically under 1 month, and in any case not chronic over years). The absence of clear mood episodes also does not point toward an affective psychosis. At this stage, persistent delusional disorder (F22.0) and schizophrenia (F20.0) remain in consideration; we still need more detail on the nature of the beliefs, presence or absence of hallucinations, negative symptoms, and impact on functioning to differentiate them. Therefore F23.3 is removed, and the current candidates are [F22.0, F20.0].", "is_final": false}
+=====================================
+
+[call 13] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F22.0
+- F20.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F22.0", "F20.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+Doctor: How long have you been experiencing these strong beliefs—would you say it’s been less than a month, between one and six months, or more than six months continuously?
+
+Patient: It’s definitely been more than six months continuously. I’d say it’s been going on for almost two years now without really letting up.
+
+Patient: It’s definitely been more than six months continuously. I’d say it’s been going on for almost two years now without really letting up.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "schizophrenic core symptoms",
+  "question": "Apart from these strong beliefs, have you also noticed things like hearing voices that others can’t hear, feeling your thoughts are being interfered with or controlled, or your thoughts getting very jumbled or hard to follow?"
+}
+=====================================
+
+--- turn 04 ---
+
+[call 14] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ delusions
+  - Persecutory Delusions: The false belief that one is being harmed or monitored by other people or organizations.
+  - Referential Delusions: The conviction that ordinary events, remarks, or behaviors have specific relevance to oneself.
+  - Grandiose Delusions: The false belief that one possesses special abilities, power, or fame.
+  - Erotomanic Delusions: The false belief that another person is in love with or has affection for them.
+  - Nihilistic Delusions: A destructive or negative conviction that the world is ending or that a major catastrophe will occur.
+  - Somatic Delusions: The baseless conviction that there is a serious abnormality with one's body or organs.
+  - Jealous Delusions: The conviction that one's spouse or romantic partner is being unfaithful without sufficient evidence.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 11 months
+  - Additional: Functioning is not markedly impaired apart from the impact of the delusion(s) or its ramifications
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 4
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Apart from these strong beliefs, have you also noticed things like hearing voices that others can’t hear, feeling your thoughts are being interfered with or controlled, or your thoughts getting very jumbled or hard to follow?
+
+========== OUTPUT [patient] ==========
+{"matched": false, "matched_sections": [], "answer_strategy": "These kinds of experiences (hearing voices, thought interference, very jumbled thoughts) are not described in your current profile, so you shouldn’t assume you have them. Answer simply and honestly based on your real experience, for example: briefly say whether you do or do not hear voices others can’t hear, whether you feel anyone or anything is controlling or interfering with your thoughts, and whether your thoughts feel clear or very jumbled. If you’re unsure, it’s fine to say you haven’t noticed that or haven’t really thought about it."}
+=====================================
+
+[call 15] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Delusional Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ delusions
+  - Persecutory Delusions: The false belief that one is being harmed or monitored by other people or organizations.
+  - Referential Delusions: The conviction that ordinary events, remarks, or behaviors have specific relevance to oneself.
+  - Grandiose Delusions: The false belief that one possesses special abilities, power, or fame.
+  - Erotomanic Delusions: The false belief that another person is in love with or has affection for them.
+  - Nihilistic Delusions: A destructive or negative conviction that the world is ending or that a major catastrophe will occur.
+  - Somatic Delusions: The baseless conviction that there is a serious abnormality with one's body or organs.
+  - Jealous Delusions: The conviction that one's spouse or romantic partner is being unfaithful without sufficient evidence.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 11 months
+  - Additional: Functioning is not markedly impaired apart from the impact of the delusion(s) or its ramifications
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Delusions
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(No match in profile or inference only)
+Answer strategy: These kinds of experiences (hearing voices, thought interference, very jumbled thoughts) are not described in your current profile, so you shouldn’t assume you have them. Answer simply and honestly based on your real experience, for example: briefly say whether you do or do not hear voices others can’t hear, whether you feel anyone or anything is controlling or interfering with your thoughts, and whether your thoughts feel clear or very jumbled. If you’re unsure, it’s fine to say you haven’t noticed that or haven’t really thought about it.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+Doctor: How long have you been experiencing these strong beliefs—would you say it’s been less than a month, between one and six months, or more than six months continuously?
+
+Patient: It’s definitely been more than six months continuously. I’d say it’s been going on for almost two years now without really letting up.
+
+Doctor: Apart from these strong beliefs, have you also noticed things like hearing voices that others can’t hear, feeling your thoughts are being interfered with or controlled, or your thoughts getting very jumbled or hard to follow?
+
+========== OUTPUT [patient] ==========
+No, I don’t hear voices that other people can’t hear. I don’t feel like anyone is controlling my thoughts, and my thinking feels pretty clear to me, not especially jumbled.
+=====================================
+
+[call 16] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F22.0", "F20.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+Doctor: How long have you been experiencing these strong beliefs—would you say it’s been less than a month, between one and six months, or more than six months continuously?
+
+Patient: It’s definitely been more than six months continuously. I’d say it’s been going on for almost two years now without really letting up.
+
+Doctor: Apart from these strong beliefs, have you also noticed things like hearing voices that others can’t hear, feeling your thoughts are being interfered with or controlled, or your thoughts getting very jumbled or hard to follow?
+
+Patient: No, I don’t hear voices that other people can’t hear. I don’t feel like anyone is controlling my thoughts, and my thinking feels pretty clear to me, not especially jumbled.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F22.0"], "note": "Previously the candidates were [F22.0, F20.0]. The patient reports persistent, non‑mood‑related, strongly held beliefs for almost two years, without hallucinations, thought interference, or formal thought disorder, and without clear mood episodes. This pattern is more consistent with a persistent delusional condition than with a primary psychotic disorder characterized by first‑rank symptoms or thought disorganization. Because there are no reported hallucinations, thought control experiences, or marked thought disorder, the likelihood of the second candidate has decreased, so the current candidate list is narrowed to [F22.0]. Further questioning is still needed to clarify the exact nature and content of the beliefs, rule out mood or substance/medical causes, and confirm functional impact, so is_final remains false.", "is_final": false}
+=====================================
+
+[call 17] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F22.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F22.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+Doctor: How long have you been experiencing these strong beliefs—would you say it’s been less than a month, between one and six months, or more than six months continuously?
+
+Patient: It’s definitely been more than six months continuously. I’d say it’s been going on for almost two years now without really letting up.
+
+Doctor: Apart from these strong beliefs, have you also noticed things like hearing voices that others can’t hear, feeling your thoughts are being interfered with or controlled, or your thoughts getting very jumbled or hard to follow?
+
+Patient: No, I don’t hear voices that other people can’t hear. I don’t feel like anyone is controlling my thoughts, and my thinking feels pretty clear to me, not especially jumbled.
+
+Patient: No, I don’t hear voices that other people can’t hear. I don’t feel like anyone is controlling my thoughts, and my thinking feels pretty clear to me, not especially jumbled.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "symptom presence",
+  "subcategory": "insight and impact on functioning",
+  "question": "Do you ever find yourself questioning whether these beliefs might be mistaken, or are you completely convinced they are true even when they cause problems in your work, relationships, or daily activities?"
+}
+=====================================
+
+--- turn 05 ---
+
+[call 18] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ delusions
+  - Persecutory Delusions: The false belief that one is being harmed or monitored by other people or organizations.
+  - Referential Delusions: The conviction that ordinary events, remarks, or behaviors have specific relevance to oneself.
+  - Grandiose Delusions: The false belief that one possesses special abilities, power, or fame.
+  - Erotomanic Delusions: The false belief that another person is in love with or has affection for them.
+  - Nihilistic Delusions: A destructive or negative conviction that the world is ending or that a major catastrophe will occur.
+  - Somatic Delusions: The baseless conviction that there is a serious abnormality with one's body or organs.
+  - Jealous Delusions: The conviction that one's spouse or romantic partner is being unfaithful without sufficient evidence.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 11 months
+  - Additional: Functioning is not markedly impaired apart from the impact of the delusion(s) or its ramifications
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 5
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Do you ever find yourself questioning whether these beliefs might be mistaken, or are you completely convinced they are true even when they cause problems in your work, relationships, or daily activities?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["delusions", "Critical Diagnostic Criteria - Additional: Functioning is not markedly impaired apart from the impact of the delusion(s) or its ramifications"], "answer_strategy": "Respond directly about how convinced you feel about your beliefs. Say whether you ever doubt them, even a little, or if you feel 100% certain they are true. Mention briefly if and how they have caused problems at work, in relationships, or in daily life, but also note that outside of the impact of these beliefs you feel your functioning is mostly okay. Use a straightforward, honest tone, describing your own internal experience of certainty vs. doubt rather than what others say about your beliefs."}
+=====================================
+
+[call 19] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Delusional Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ delusions
+  - Persecutory Delusions: The false belief that one is being harmed or monitored by other people or organizations.
+  - Referential Delusions: The conviction that ordinary events, remarks, or behaviors have specific relevance to oneself.
+  - Grandiose Delusions: The false belief that one possesses special abilities, power, or fame.
+  - Erotomanic Delusions: The false belief that another person is in love with or has affection for them.
+  - Nihilistic Delusions: A destructive or negative conviction that the world is ending or that a major catastrophe will occur.
+  - Somatic Delusions: The baseless conviction that there is a serious abnormality with one's body or organs.
+  - Jealous Delusions: The conviction that one's spouse or romantic partner is being unfaithful without sufficient evidence.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 11 months
+  - Additional: Functioning is not markedly impaired apart from the impact of the delusion(s) or its ramifications
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Delusions
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: delusions, Critical Diagnostic Criteria - Additional: Functioning is not markedly impaired apart from the impact of the delusion(s) or its ramifications
+Answer strategy: Respond directly about how convinced you feel about your beliefs. Say whether you ever doubt them, even a little, or if you feel 100% certain they are true. Mention briefly if and how they have caused problems at work, in relationships, or in daily life, but also note that outside of the impact of these beliefs you feel your functioning is mostly okay. Use a straightforward, honest tone, describing your own internal experience of certainty vs. doubt rather than what others say about your beliefs.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+Doctor: How long have you been experiencing these strong beliefs—would you say it’s been less than a month, between one and six months, or more than six months continuously?
+
+Patient: It’s definitely been more than six months continuously. I’d say it’s been going on for almost two years now without really letting up.
+
+Doctor: Apart from these strong beliefs, have you also noticed things like hearing voices that others can’t hear, feeling your thoughts are being interfered with or controlled, or your thoughts getting very jumbled or hard to follow?
+
+Patient: No, I don’t hear voices that other people can’t hear. I don’t feel like anyone is controlling my thoughts, and my thinking feels pretty clear to me, not especially jumbled.
+
+Doctor: Do you ever find yourself questioning whether these beliefs might be mistaken, or are you completely convinced they are true even when they cause problems in your work, relationships, or daily activities?
+
+========== OUTPUT [patient] ==========
+Most of the time I feel completely sure they’re true, even when people argue with me about them. Very occasionally I’ll wonder for a moment if I might be overreacting, but that doubt doesn’t really last. They’ve caused some tension with family and a few issues at work, but aside from dealing with that, I feel like I function pretty normally.
+=====================================
+
+[call 20] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F22.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+Doctor: How long have you been experiencing these strong beliefs—would you say it’s been less than a month, between one and six months, or more than six months continuously?
+
+Patient: It’s definitely been more than six months continuously. I’d say it’s been going on for almost two years now without really letting up.
+
+Doctor: Apart from these strong beliefs, have you also noticed things like hearing voices that others can’t hear, feeling your thoughts are being interfered with or controlled, or your thoughts getting very jumbled or hard to follow?
+
+Patient: No, I don’t hear voices that other people can’t hear. I don’t feel like anyone is controlling my thoughts, and my thinking feels pretty clear to me, not especially jumbled.
+
+Doctor: Do you ever find yourself questioning whether these beliefs might be mistaken, or are you completely convinced they are true even when they cause problems in your work, relationships, or daily activities?
+
+Patient: Most of the time I feel completely sure they’re true, even when people argue with me about them. Very occasionally I’ll wonder for a moment if I might be overreacting, but that doubt doesn’t really last. They’ve caused some tension with family and a few issues at work, but aside from dealing with that, I feel like I function pretty normally.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F22.0"], "note": "Previously the only candidate was F22.0. The new information confirms: (1) persistent, fixed, non–mood-congruent beliefs for almost two years; (2) absence of clear mood episodes that would suggest a primary mood disorder with psychotic features; (3) absence of hallucinations, thought interference, or formal thought disorder that would suggest a broader psychotic syndrome; and (4) relatively preserved overall functioning aside from conflict and stress around the beliefs. This pattern continues to fit a chronic, circumscribed delusional condition without additional psychotic or mood symptoms. No new features emerged to suggest alternative diagnoses (such as a primary mood disorder, acute/transient psychosis, or a schizophrenia-spectrum disorder with broader symptomatology). Therefore the candidate list remains the same with F22.0 as the sole candidate, and no other ICD-10 categories are currently supported by the history provided.", "is_final": false}
+=====================================
+
+[call 21] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F22.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F22.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+Doctor: How long have you been experiencing these strong beliefs—would you say it’s been less than a month, between one and six months, or more than six months continuously?
+
+Patient: It’s definitely been more than six months continuously. I’d say it’s been going on for almost two years now without really letting up.
+
+Doctor: Apart from these strong beliefs, have you also noticed things like hearing voices that others can’t hear, feeling your thoughts are being interfered with or controlled, or your thoughts getting very jumbled or hard to follow?
+
+Patient: No, I don’t hear voices that other people can’t hear. I don’t feel like anyone is controlling my thoughts, and my thinking feels pretty clear to me, not especially jumbled.
+
+Doctor: Do you ever find yourself questioning whether these beliefs might be mistaken, or are you completely convinced they are true even when they cause problems in your work, relationships, or daily activities?
+
+Patient: Most of the time I feel completely sure they’re true, even when people argue with me about them. Very occasionally I’ll wonder for a moment if I might be overreacting, but that doubt doesn’t really last. They’ve caused some tension with family and a few issues at work, but aside from dealing with that, I feel like I function pretty normally.
+
+Patient: Most of the time I feel completely sure they’re true, even when people argue with me about them. Very occasionally I’ll wonder for a moment if I might be overreacting, but that doubt doesn’t really last. They’ve caused some tension with family and a few issues at work, but aside from dealing with that, I feel like I function pretty normally.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "reality testing and cultural/contextual beliefs",
+  "question": "Can you briefly describe one or two of these strong beliefs and tell me whether people from your family, culture, or close community generally share these ideas, or if they say they seem unusual just for you?"
+}
+=====================================
+
+--- turn 06 ---
+
+[call 22] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ delusions
+  - Persecutory Delusions: The false belief that one is being harmed or monitored by other people or organizations.
+  - Referential Delusions: The conviction that ordinary events, remarks, or behaviors have specific relevance to oneself.
+  - Grandiose Delusions: The false belief that one possesses special abilities, power, or fame.
+  - Erotomanic Delusions: The false belief that another person is in love with or has affection for them.
+  - Nihilistic Delusions: A destructive or negative conviction that the world is ending or that a major catastrophe will occur.
+  - Somatic Delusions: The baseless conviction that there is a serious abnormality with one's body or organs.
+  - Jealous Delusions: The conviction that one's spouse or romantic partner is being unfaithful without sufficient evidence.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 11 months
+  - Additional: Functioning is not markedly impaired apart from the impact of the delusion(s) or its ramifications
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 6
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Can you briefly describe one or two of these strong beliefs and tell me whether people from your family, culture, or close community generally share these ideas, or if they say they seem unusual just for you?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["delusions", "Persecutory Delusions", "Referential Delusions", "Grandiose Delusions", "Erotomanic Delusions", "Nihilistic Delusions", "Somatic Delusions", "Jealous Delusions"], "answer_strategy": "Calmly pick one or two of the specific delusion types you experience (for example, feeling monitored, believing someone is in love with you, or being certain a catastrophe is coming) and describe them in simple, concrete terms: what you believe, how long it’s been going on, and how strongly you feel it is true. Then clearly say whether your family, cultural group, or close community also believe these same things, or if they usually tell you that these beliefs sound unusual or are only something you experience. Keep the tone straightforward and honest, focusing on how your beliefs compare with those around you."}
+=====================================
+
+[call 23] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Delusional Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ delusions
+  - Persecutory Delusions: The false belief that one is being harmed or monitored by other people or organizations.
+  - Referential Delusions: The conviction that ordinary events, remarks, or behaviors have specific relevance to oneself.
+  - Grandiose Delusions: The false belief that one possesses special abilities, power, or fame.
+  - Erotomanic Delusions: The false belief that another person is in love with or has affection for them.
+  - Nihilistic Delusions: A destructive or negative conviction that the world is ending or that a major catastrophe will occur.
+  - Somatic Delusions: The baseless conviction that there is a serious abnormality with one's body or organs.
+  - Jealous Delusions: The conviction that one's spouse or romantic partner is being unfaithful without sufficient evidence.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 11 months
+  - Additional: Functioning is not markedly impaired apart from the impact of the delusion(s) or its ramifications
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Delusions
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: delusions, Persecutory Delusions, Referential Delusions, Grandiose Delusions, Erotomanic Delusions, Nihilistic Delusions, Somatic Delusions, Jealous Delusions
+Answer strategy: Calmly pick one or two of the specific delusion types you experience (for example, feeling monitored, believing someone is in love with you, or being certain a catastrophe is coming) and describe them in simple, concrete terms: what you believe, how long it’s been going on, and how strongly you feel it is true. Then clearly say whether your family, cultural group, or close community also believe these same things, or if they usually tell you that these beliefs sound unusual or are only something you experience. Keep the tone straightforward and honest, focusing on how your beliefs compare with those around you.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+Doctor: How long have you been experiencing these strong beliefs—would you say it’s been less than a month, between one and six months, or more than six months continuously?
+
+Patient: It’s definitely been more than six months continuously. I’d say it’s been going on for almost two years now without really letting up.
+
+Doctor: Apart from these strong beliefs, have you also noticed things like hearing voices that others can’t hear, feeling your thoughts are being interfered with or controlled, or your thoughts getting very jumbled or hard to follow?
+
+Patient: No, I don’t hear voices that other people can’t hear. I don’t feel like anyone is controlling my thoughts, and my thinking feels pretty clear to me, not especially jumbled.
+
+Doctor: Do you ever find yourself questioning whether these beliefs might be mistaken, or are you completely convinced they are true even when they cause problems in your work, relationships, or daily activities?
+
+Patient: Most of the time I feel completely sure they’re true, even when people argue with me about them. Very occasionally I’ll wonder for a moment if I might be overreacting, but that doubt doesn’t really last. They’ve caused some tension with family and a few issues at work, but aside from dealing with that, I feel like I function pretty normally.
+
+Doctor: Can you briefly describe one or two of these strong beliefs and tell me whether people from your family, culture, or close community generally share these ideas, or if they say they seem unusual just for you?
+
+========== OUTPUT [patient] ==========
+One big one is that I’m being watched and monitored, like there are people or some organization tracking me through my phone and even when I’m out in public, and that a lot of small things around me—like comments on TV or strangers’ conversations—are actually messages directed at me. My family and friends all say these ideas sound unusual and that they don’t see any evidence of it, so it feels like I’m the only one who believes this.
+=====================================
+
+[call 24] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F22.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+Doctor: How long have you been experiencing these strong beliefs—would you say it’s been less than a month, between one and six months, or more than six months continuously?
+
+Patient: It’s definitely been more than six months continuously. I’d say it’s been going on for almost two years now without really letting up.
+
+Doctor: Apart from these strong beliefs, have you also noticed things like hearing voices that others can’t hear, feeling your thoughts are being interfered with or controlled, or your thoughts getting very jumbled or hard to follow?
+
+Patient: No, I don’t hear voices that other people can’t hear. I don’t feel like anyone is controlling my thoughts, and my thinking feels pretty clear to me, not especially jumbled.
+
+Doctor: Do you ever find yourself questioning whether these beliefs might be mistaken, or are you completely convinced they are true even when they cause problems in your work, relationships, or daily activities?
+
+Patient: Most of the time I feel completely sure they’re true, even when people argue with me about them. Very occasionally I’ll wonder for a moment if I might be overreacting, but that doubt doesn’t really last. They’ve caused some tension with family and a few issues at work, but aside from dealing with that, I feel like I function pretty normally.
+
+Doctor: Can you briefly describe one or two of these strong beliefs and tell me whether people from your family, culture, or close community generally share these ideas, or if they say they seem unusual just for you?
+
+Patient: One big one is that I’m being watched and monitored, like there are people or some organization tracking me through my phone and even when I’m out in public, and that a lot of small things around me—like comments on TV or strangers’ conversations—are actually messages directed at me. My family and friends all say these ideas sound unusual and that they don’t see any evidence of it, so it feels like I’m the only one who believes this.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F22.0"], "note": "Previously the only candidate was a persistent delusional disorder. In this segment, the patient describes fixed, non–culturally shared persecutory and referential beliefs lasting almost two years, with clear conviction, minimal insight, and associated interpersonal/work impact. They deny sustained mood episodes and do not report hallucinations, thought interference, or formal thought disorder. Duration is well over three months, and functioning is relatively preserved aside from the impact of the beliefs. This pattern continues to fit a non-schizophrenic, non-affective, persistent delusional condition, so the same single candidate remains. No new evidence suggests prominent mood episodes, acute/transient psychosis, or schizophrenia-spectrum features, so no additional or alternative candidates are added.", "is_final": false}
+=====================================
+
+[call 25] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F22.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F22.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+Doctor: How long have you been experiencing these strong beliefs—would you say it’s been less than a month, between one and six months, or more than six months continuously?
+
+Patient: It’s definitely been more than six months continuously. I’d say it’s been going on for almost two years now without really letting up.
+
+Doctor: Apart from these strong beliefs, have you also noticed things like hearing voices that others can’t hear, feeling your thoughts are being interfered with or controlled, or your thoughts getting very jumbled or hard to follow?
+
+Patient: No, I don’t hear voices that other people can’t hear. I don’t feel like anyone is controlling my thoughts, and my thinking feels pretty clear to me, not especially jumbled.
+
+Doctor: Do you ever find yourself questioning whether these beliefs might be mistaken, or are you completely convinced they are true even when they cause problems in your work, relationships, or daily activities?
+
+Patient: Most of the time I feel completely sure they’re true, even when people argue with me about them. Very occasionally I’ll wonder for a moment if I might be overreacting, but that doubt doesn’t really last. They’ve caused some tension with family and a few issues at work, but aside from dealing with that, I feel like I function pretty normally.
+
+Doctor: Can you briefly describe one or two of these strong beliefs and tell me whether people from your family, culture, or close community generally share these ideas, or if they say they seem unusual just for you?
+
+Patient: One big one is that I’m being watched and monitored, like there are people or some organization tracking me through my phone and even when I’m out in public, and that a lot of small things around me—like comments on TV or strangers’ conversations—are actually messages directed at me. My family and friends all say these ideas sound unusual and that they don’t see any evidence of it, so it feels like I’m the only one who believes this.
+
+Patient: One big one is that I’m being watched and monitored, like there are people or some organization tracking me through my phone and even when I’m out in public, and that a lot of small things around me—like comments on TV or strangers’ conversations—are actually messages directed at me. My family and friends all say these ideas sound unusual and that they don’t see any evidence of it, so it feels like I’m the only one who believes this.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "medical history",
+  "subcategory": "substance use",
+  "question": "Have you used any drugs or substances (such as cannabis, stimulants like cocaine or meth, hallucinogens, or large amounts of alcohol) around the time these beliefs started or since then, and if so, did they make these experiences stronger or more frequent?"
+}
+=====================================
+
+--- turn 07 ---
+
+[call 26] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ delusions
+  - Persecutory Delusions: The false belief that one is being harmed or monitored by other people or organizations.
+  - Referential Delusions: The conviction that ordinary events, remarks, or behaviors have specific relevance to oneself.
+  - Grandiose Delusions: The false belief that one possesses special abilities, power, or fame.
+  - Erotomanic Delusions: The false belief that another person is in love with or has affection for them.
+  - Nihilistic Delusions: A destructive or negative conviction that the world is ending or that a major catastrophe will occur.
+  - Somatic Delusions: The baseless conviction that there is a serious abnormality with one's body or organs.
+  - Jealous Delusions: The conviction that one's spouse or romantic partner is being unfaithful without sufficient evidence.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 11 months
+  - Additional: Functioning is not markedly impaired apart from the impact of the delusion(s) or its ramifications
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 7
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Have you used any drugs or substances (such as cannabis, stimulants like cocaine or meth, hallucinogens, or large amounts of alcohol) around the time these beliefs started or since then, and if so, did they make these experiences stronger or more frequent?
+
+========== OUTPUT [patient] ==========
+{"matched": false, "matched_sections": [], "answer_strategy": "This isn’t mentioned in the profile, so the patient should answer briefly and honestly from their own experience, e.g., clearly state whether they used any substances around the time the beliefs began or afterward, name which ones and how often if applicable, and say whether they noticed any change (stronger, weaker, or no change) in their beliefs or experiences when using them. If they’re unsure or haven’t really thought about it, they can say that directly."}
+=====================================
+
+[call 27] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Delusional Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ delusions
+  - Persecutory Delusions: The false belief that one is being harmed or monitored by other people or organizations.
+  - Referential Delusions: The conviction that ordinary events, remarks, or behaviors have specific relevance to oneself.
+  - Grandiose Delusions: The false belief that one possesses special abilities, power, or fame.
+  - Erotomanic Delusions: The false belief that another person is in love with or has affection for them.
+  - Nihilistic Delusions: A destructive or negative conviction that the world is ending or that a major catastrophe will occur.
+  - Somatic Delusions: The baseless conviction that there is a serious abnormality with one's body or organs.
+  - Jealous Delusions: The conviction that one's spouse or romantic partner is being unfaithful without sufficient evidence.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 11 months
+  - Additional: Functioning is not markedly impaired apart from the impact of the delusion(s) or its ramifications
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Delusions
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(No match in profile or inference only)
+Answer strategy: This isn’t mentioned in the profile, so the patient should answer briefly and honestly from their own experience, e.g., clearly state whether they used any substances around the time the beliefs began or afterward, name which ones and how often if applicable, and say whether they noticed any change (stronger, weaker, or no change) in their beliefs or experiences when using them. If they’re unsure or haven’t really thought about it, they can say that directly.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+Doctor: How long have you been experiencing these strong beliefs—would you say it’s been less than a month, between one and six months, or more than six months continuously?
+
+Patient: It’s definitely been more than six months continuously. I’d say it’s been going on for almost two years now without really letting up.
+
+Doctor: Apart from these strong beliefs, have you also noticed things like hearing voices that others can’t hear, feeling your thoughts are being interfered with or controlled, or your thoughts getting very jumbled or hard to follow?
+
+Patient: No, I don’t hear voices that other people can’t hear. I don’t feel like anyone is controlling my thoughts, and my thinking feels pretty clear to me, not especially jumbled.
+
+Doctor: Do you ever find yourself questioning whether these beliefs might be mistaken, or are you completely convinced they are true even when they cause problems in your work, relationships, or daily activities?
+
+Patient: Most of the time I feel completely sure they’re true, even when people argue with me about them. Very occasionally I’ll wonder for a moment if I might be overreacting, but that doubt doesn’t really last. They’ve caused some tension with family and a few issues at work, but aside from dealing with that, I feel like I function pretty normally.
+
+Doctor: Can you briefly describe one or two of these strong beliefs and tell me whether people from your family, culture, or close community generally share these ideas, or if they say they seem unusual just for you?
+
+Patient: One big one is that I’m being watched and monitored, like there are people or some organization tracking me through my phone and even when I’m out in public, and that a lot of small things around me—like comments on TV or strangers’ conversations—are actually messages directed at me. My family and friends all say these ideas sound unusual and that they don’t see any evidence of it, so it feels like I’m the only one who believes this.
+
+Doctor: Have you used any drugs or substances (such as cannabis, stimulants like cocaine or meth, hallucinogens, or large amounts of alcohol) around the time these beliefs started or since then, and if so, did they make these experiences stronger or more frequent?
+
+========== OUTPUT [patient] ==========
+I don’t really use drugs—just an occasional drink socially, maybe a couple of beers on a weekend. I didn’t start or change any substance use around the time these beliefs began, and I haven’t noticed alcohol making them any better or worse.
+=====================================
+
+[call 28] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F22.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+Doctor: How long have you been experiencing these strong beliefs—would you say it’s been less than a month, between one and six months, or more than six months continuously?
+
+Patient: It’s definitely been more than six months continuously. I’d say it’s been going on for almost two years now without really letting up.
+
+Doctor: Apart from these strong beliefs, have you also noticed things like hearing voices that others can’t hear, feeling your thoughts are being interfered with or controlled, or your thoughts getting very jumbled or hard to follow?
+
+Patient: No, I don’t hear voices that other people can’t hear. I don’t feel like anyone is controlling my thoughts, and my thinking feels pretty clear to me, not especially jumbled.
+
+Doctor: Do you ever find yourself questioning whether these beliefs might be mistaken, or are you completely convinced they are true even when they cause problems in your work, relationships, or daily activities?
+
+Patient: Most of the time I feel completely sure they’re true, even when people argue with me about them. Very occasionally I’ll wonder for a moment if I might be overreacting, but that doubt doesn’t really last. They’ve caused some tension with family and a few issues at work, but aside from dealing with that, I feel like I function pretty normally.
+
+Doctor: Can you briefly describe one or two of these strong beliefs and tell me whether people from your family, culture, or close community generally share these ideas, or if they say they seem unusual just for you?
+
+Patient: One big one is that I’m being watched and monitored, like there are people or some organization tracking me through my phone and even when I’m out in public, and that a lot of small things around me—like comments on TV or strangers’ conversations—are actually messages directed at me. My family and friends all say these ideas sound unusual and that they don’t see any evidence of it, so it feels like I’m the only one who believes this.
+
+Doctor: Have you used any drugs or substances (such as cannabis, stimulants like cocaine or meth, hallucinogens, or large amounts of alcohol) around the time these beliefs started or since then, and if so, did they make these experiences stronger or more frequent?
+
+Patient: I don’t really use drugs—just an occasional drink socially, maybe a couple of beers on a weekend. I didn’t start or change any substance use around the time these beliefs began, and I haven’t noticed alcohol making them any better or worse.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F22.0", "F20.0"], "note": "Previously the only candidate was a persistent delusional disorder. The patient continues to report long-standing, non–mood-related, non–substance-related persecutory and referential beliefs lasting almost two years, with preserved overall functioning and no clear hallucinations or thought disorder, which strongly supports keeping a persistent delusional condition as the leading candidate. However, the content (being watched, monitored, messages from TV and strangers) overlaps with typical psychotic experiences seen in schizophrenia-spectrum illnesses. Although the patient currently denies hallucinations, thought interference, or marked thought disorder, early or attenuated schizophrenia can sometimes present with prominent delusions and relatively preserved functioning, especially early in the course. Because of this overlap and the chronicity, a schizophrenia-spectrum diagnosis (paranoid-type picture) remains a reasonable alternative in the differential, so a schizophrenia code is now added alongside the original candidate. Further questioning about negative symptoms, cognitive and social decline, and any subtle psychotic features is still needed, so this is not yet final.", "is_final": false}
+=====================================
+
+[call 29] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F22.0
+- F20.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F22.0", "F20.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+Doctor: How long have you been experiencing these strong beliefs—would you say it’s been less than a month, between one and six months, or more than six months continuously?
+
+Patient: It’s definitely been more than six months continuously. I’d say it’s been going on for almost two years now without really letting up.
+
+Doctor: Apart from these strong beliefs, have you also noticed things like hearing voices that others can’t hear, feeling your thoughts are being interfered with or controlled, or your thoughts getting very jumbled or hard to follow?
+
+Patient: No, I don’t hear voices that other people can’t hear. I don’t feel like anyone is controlling my thoughts, and my thinking feels pretty clear to me, not especially jumbled.
+
+Doctor: Do you ever find yourself questioning whether these beliefs might be mistaken, or are you completely convinced they are true even when they cause problems in your work, relationships, or daily activities?
+
+Patient: Most of the time I feel completely sure they’re true, even when people argue with me about them. Very occasionally I’ll wonder for a moment if I might be overreacting, but that doubt doesn’t really last. They’ve caused some tension with family and a few issues at work, but aside from dealing with that, I feel like I function pretty normally.
+
+Doctor: Can you briefly describe one or two of these strong beliefs and tell me whether people from your family, culture, or close community generally share these ideas, or if they say they seem unusual just for you?
+
+Patient: One big one is that I’m being watched and monitored, like there are people or some organization tracking me through my phone and even when I’m out in public, and that a lot of small things around me—like comments on TV or strangers’ conversations—are actually messages directed at me. My family and friends all say these ideas sound unusual and that they don’t see any evidence of it, so it feels like I’m the only one who believes this.
+
+Doctor: Have you used any drugs or substances (such as cannabis, stimulants like cocaine or meth, hallucinogens, or large amounts of alcohol) around the time these beliefs started or since then, and if so, did they make these experiences stronger or more frequent?
+
+Patient: I don’t really use drugs—just an occasional drink socially, maybe a couple of beers on a weekend. I didn’t start or change any substance use around the time these beliefs began, and I haven’t noticed alcohol making them any better or worse.
+
+Patient: I don’t really use drugs—just an occasional drink socially, maybe a couple of beers on a weekend. I didn’t start or change any substance use around the time these beliefs began, and I haven’t noticed alcohol making them any better or worse.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "negative symptoms and functioning",
+  "question": "Over the past couple of years, have you noticed changes like becoming much more withdrawn, losing motivation or interest in things you used to enjoy, or having trouble taking care of daily tasks (like hygiene or work), beyond the stress caused by these beliefs themselves?"
+}
+=====================================
+
+--- turn 08 ---
+
+[call 30] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ delusions
+  - Persecutory Delusions: The false belief that one is being harmed or monitored by other people or organizations.
+  - Referential Delusions: The conviction that ordinary events, remarks, or behaviors have specific relevance to oneself.
+  - Grandiose Delusions: The false belief that one possesses special abilities, power, or fame.
+  - Erotomanic Delusions: The false belief that another person is in love with or has affection for them.
+  - Nihilistic Delusions: A destructive or negative conviction that the world is ending or that a major catastrophe will occur.
+  - Somatic Delusions: The baseless conviction that there is a serious abnormality with one's body or organs.
+  - Jealous Delusions: The conviction that one's spouse or romantic partner is being unfaithful without sufficient evidence.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 11 months
+  - Additional: Functioning is not markedly impaired apart from the impact of the delusion(s) or its ramifications
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 8
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Over the past couple of years, have you noticed changes like becoming much more withdrawn, losing motivation or interest in things you used to enjoy, or having trouble taking care of daily tasks (like hygiene or work), beyond the stress caused by these beliefs themselves?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["Critical Diagnostic Criteria - Additional: Functioning is not markedly impaired apart from the impact of the delusion(s) or its ramifications"], "answer_strategy": "Explain that overall your functioning has not been markedly impaired apart from what is directly caused by the delusional beliefs. If you have not become significantly more withdrawn, unmotivated, or neglectful of daily tasks beyond what the stress of the delusions causes, say that clearly and give a couple of brief examples (e.g., still going to work, maintaining hygiene, keeping up with responsibilities). If there are any mild changes, you can mention them but emphasize they are tied to the beliefs and their consequences rather than a broad loss of motivation or ability."}
+=====================================
+
+[call 31] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Delusional Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ delusions
+  - Persecutory Delusions: The false belief that one is being harmed or monitored by other people or organizations.
+  - Referential Delusions: The conviction that ordinary events, remarks, or behaviors have specific relevance to oneself.
+  - Grandiose Delusions: The false belief that one possesses special abilities, power, or fame.
+  - Erotomanic Delusions: The false belief that another person is in love with or has affection for them.
+  - Nihilistic Delusions: A destructive or negative conviction that the world is ending or that a major catastrophe will occur.
+  - Somatic Delusions: The baseless conviction that there is a serious abnormality with one's body or organs.
+  - Jealous Delusions: The conviction that one's spouse or romantic partner is being unfaithful without sufficient evidence.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 11 months
+  - Additional: Functioning is not markedly impaired apart from the impact of the delusion(s) or its ramifications
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Delusions
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: Critical Diagnostic Criteria - Additional: Functioning is not markedly impaired apart from the impact of the delusion(s) or its ramifications
+Answer strategy: Explain that overall your functioning has not been markedly impaired apart from what is directly caused by the delusional beliefs. If you have not become significantly more withdrawn, unmotivated, or neglectful of daily tasks beyond what the stress of the delusions causes, say that clearly and give a couple of brief examples (e.g., still going to work, maintaining hygiene, keeping up with responsibilities). If there are any mild changes, you can mention them but emphasize they are tied to the beliefs and their consequences rather than a broad loss of motivation or ability.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+Doctor: How long have you been experiencing these strong beliefs—would you say it’s been less than a month, between one and six months, or more than six months continuously?
+
+Patient: It’s definitely been more than six months continuously. I’d say it’s been going on for almost two years now without really letting up.
+
+Doctor: Apart from these strong beliefs, have you also noticed things like hearing voices that others can’t hear, feeling your thoughts are being interfered with or controlled, or your thoughts getting very jumbled or hard to follow?
+
+Patient: No, I don’t hear voices that other people can’t hear. I don’t feel like anyone is controlling my thoughts, and my thinking feels pretty clear to me, not especially jumbled.
+
+Doctor: Do you ever find yourself questioning whether these beliefs might be mistaken, or are you completely convinced they are true even when they cause problems in your work, relationships, or daily activities?
+
+Patient: Most of the time I feel completely sure they’re true, even when people argue with me about them. Very occasionally I’ll wonder for a moment if I might be overreacting, but that doubt doesn’t really last. They’ve caused some tension with family and a few issues at work, but aside from dealing with that, I feel like I function pretty normally.
+
+Doctor: Can you briefly describe one or two of these strong beliefs and tell me whether people from your family, culture, or close community generally share these ideas, or if they say they seem unusual just for you?
+
+Patient: One big one is that I’m being watched and monitored, like there are people or some organization tracking me through my phone and even when I’m out in public, and that a lot of small things around me—like comments on TV or strangers’ conversations—are actually messages directed at me. My family and friends all say these ideas sound unusual and that they don’t see any evidence of it, so it feels like I’m the only one who believes this.
+
+Doctor: Have you used any drugs or substances (such as cannabis, stimulants like cocaine or meth, hallucinogens, or large amounts of alcohol) around the time these beliefs started or since then, and if so, did they make these experiences stronger or more frequent?
+
+Patient: I don’t really use drugs—just an occasional drink socially, maybe a couple of beers on a weekend. I didn’t start or change any substance use around the time these beliefs began, and I haven’t noticed alcohol making them any better or worse.
+
+Doctor: Over the past couple of years, have you noticed changes like becoming much more withdrawn, losing motivation or interest in things you used to enjoy, or having trouble taking care of daily tasks (like hygiene or work), beyond the stress caused by these beliefs themselves?
+
+========== OUTPUT [patient] ==========
+Not really beyond what’s directly related to these beliefs. I still go to work, keep up with my responsibilities, and take care of myself, though I might avoid certain places or people sometimes because I’m worried about being watched.
+=====================================
+
+[call 32] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F22.0", "F20.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+Doctor: How long have you been experiencing these strong beliefs—would you say it’s been less than a month, between one and six months, or more than six months continuously?
+
+Patient: It’s definitely been more than six months continuously. I’d say it’s been going on for almost two years now without really letting up.
+
+Doctor: Apart from these strong beliefs, have you also noticed things like hearing voices that others can’t hear, feeling your thoughts are being interfered with or controlled, or your thoughts getting very jumbled or hard to follow?
+
+Patient: No, I don’t hear voices that other people can’t hear. I don’t feel like anyone is controlling my thoughts, and my thinking feels pretty clear to me, not especially jumbled.
+
+Doctor: Do you ever find yourself questioning whether these beliefs might be mistaken, or are you completely convinced they are true even when they cause problems in your work, relationships, or daily activities?
+
+Patient: Most of the time I feel completely sure they’re true, even when people argue with me about them. Very occasionally I’ll wonder for a moment if I might be overreacting, but that doubt doesn’t really last. They’ve caused some tension with family and a few issues at work, but aside from dealing with that, I feel like I function pretty normally.
+
+Doctor: Can you briefly describe one or two of these strong beliefs and tell me whether people from your family, culture, or close community generally share these ideas, or if they say they seem unusual just for you?
+
+Patient: One big one is that I’m being watched and monitored, like there are people or some organization tracking me through my phone and even when I’m out in public, and that a lot of small things around me—like comments on TV or strangers’ conversations—are actually messages directed at me. My family and friends all say these ideas sound unusual and that they don’t see any evidence of it, so it feels like I’m the only one who believes this.
+
+Doctor: Have you used any drugs or substances (such as cannabis, stimulants like cocaine or meth, hallucinogens, or large amounts of alcohol) around the time these beliefs started or since then, and if so, did they make these experiences stronger or more frequent?
+
+Patient: I don’t really use drugs—just an occasional drink socially, maybe a couple of beers on a weekend. I didn’t start or change any substance use around the time these beliefs began, and I haven’t noticed alcohol making them any better or worse.
+
+Doctor: Over the past couple of years, have you noticed changes like becoming much more withdrawn, losing motivation or interest in things you used to enjoy, or having trouble taking care of daily tasks (like hygiene or work), beyond the stress caused by these beliefs themselves?
+
+Patient: Not really beyond what’s directly related to these beliefs. I still go to work, keep up with my responsibilities, and take care of myself, though I might avoid certain places or people sometimes because I’m worried about being watched.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F22.0"], "note": "Previously the candidates were [F22.0, F20.0]. The patient describes more than 6 months (almost two years) of fixed, non‑shared persecutory and referential beliefs causing distress and some interpersonal/work tension, with preserved overall functioning. They explicitly deny hallucinations, thought interference, or formal thought disorder, and there is no clear negative symptom pattern or marked deterioration in functioning beyond behavior directly related to the beliefs. There is no history of significant mood episodes or substance use around onset. This pattern strongly favors a persistent delusional disorder and makes schizophrenia less likely, as core first‑rank or other characteristic symptoms and broader functional decline are absent. Therefore F20.0 is removed and F22.0 remains as the current candidate. Further questioning is still warranted to confirm absence of subtle psychotic or mood symptoms and to rule out medical causes, so is_final is set to false.", "is_final": false}
+=====================================
+
+[call 33] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F22.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F22.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+Doctor: How long have you been experiencing these strong beliefs—would you say it’s been less than a month, between one and six months, or more than six months continuously?
+
+Patient: It’s definitely been more than six months continuously. I’d say it’s been going on for almost two years now without really letting up.
+
+Doctor: Apart from these strong beliefs, have you also noticed things like hearing voices that others can’t hear, feeling your thoughts are being interfered with or controlled, or your thoughts getting very jumbled or hard to follow?
+
+Patient: No, I don’t hear voices that other people can’t hear. I don’t feel like anyone is controlling my thoughts, and my thinking feels pretty clear to me, not especially jumbled.
+
+Doctor: Do you ever find yourself questioning whether these beliefs might be mistaken, or are you completely convinced they are true even when they cause problems in your work, relationships, or daily activities?
+
+Patient: Most of the time I feel completely sure they’re true, even when people argue with me about them. Very occasionally I’ll wonder for a moment if I might be overreacting, but that doubt doesn’t really last. They’ve caused some tension with family and a few issues at work, but aside from dealing with that, I feel like I function pretty normally.
+
+Doctor: Can you briefly describe one or two of these strong beliefs and tell me whether people from your family, culture, or close community generally share these ideas, or if they say they seem unusual just for you?
+
+Patient: One big one is that I’m being watched and monitored, like there are people or some organization tracking me through my phone and even when I’m out in public, and that a lot of small things around me—like comments on TV or strangers’ conversations—are actually messages directed at me. My family and friends all say these ideas sound unusual and that they don’t see any evidence of it, so it feels like I’m the only one who believes this.
+
+Doctor: Have you used any drugs or substances (such as cannabis, stimulants like cocaine or meth, hallucinogens, or large amounts of alcohol) around the time these beliefs started or since then, and if so, did they make these experiences stronger or more frequent?
+
+Patient: I don’t really use drugs—just an occasional drink socially, maybe a couple of beers on a weekend. I didn’t start or change any substance use around the time these beliefs began, and I haven’t noticed alcohol making them any better or worse.
+
+Doctor: Over the past couple of years, have you noticed changes like becoming much more withdrawn, losing motivation or interest in things you used to enjoy, or having trouble taking care of daily tasks (like hygiene or work), beyond the stress caused by these beliefs themselves?
+
+Patient: Not really beyond what’s directly related to these beliefs. I still go to work, keep up with my responsibilities, and take care of myself, though I might avoid certain places or people sometimes because I’m worried about being watched.
+
+Patient: Not really beyond what’s directly related to these beliefs. I still go to work, keep up with my responsibilities, and take care of myself, though I might avoid certain places or people sometimes because I’m worried about being watched.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "personality traits and insight",
+  "question": "Before these beliefs started, would you describe yourself as a generally suspicious or mistrustful person in relationships or with other people’s intentions, or does this level of suspicion feel very different from how you used to be?"
+}
+=====================================
+
+--- turn 09 ---
+
+[call 34] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ delusions
+  - Persecutory Delusions: The false belief that one is being harmed or monitored by other people or organizations.
+  - Referential Delusions: The conviction that ordinary events, remarks, or behaviors have specific relevance to oneself.
+  - Grandiose Delusions: The false belief that one possesses special abilities, power, or fame.
+  - Erotomanic Delusions: The false belief that another person is in love with or has affection for them.
+  - Nihilistic Delusions: A destructive or negative conviction that the world is ending or that a major catastrophe will occur.
+  - Somatic Delusions: The baseless conviction that there is a serious abnormality with one's body or organs.
+  - Jealous Delusions: The conviction that one's spouse or romantic partner is being unfaithful without sufficient evidence.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 11 months
+  - Additional: Functioning is not markedly impaired apart from the impact of the delusion(s) or its ramifications
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 9
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Before these beliefs started, would you describe yourself as a generally suspicious or mistrustful person in relationships or with other people’s intentions, or does this level of suspicion feel very different from how you used to be?
+
+========== OUTPUT [patient] ==========
+{"matched": false, "matched_sections": [], "answer_strategy": "This isn’t covered in the profile, so answer from your own reflection. Briefly say whether you were generally trusting or suspicious before the delusions began, and whether the current level of suspicion feels like a big change from your usual personality or just an intensification of how you’ve always been. If you’re unsure, say you haven’t really thought about it or that it’s hard to compare."}
+=====================================
+
+[call 35] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Delusional Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ delusions
+  - Persecutory Delusions: The false belief that one is being harmed or monitored by other people or organizations.
+  - Referential Delusions: The conviction that ordinary events, remarks, or behaviors have specific relevance to oneself.
+  - Grandiose Delusions: The false belief that one possesses special abilities, power, or fame.
+  - Erotomanic Delusions: The false belief that another person is in love with or has affection for them.
+  - Nihilistic Delusions: A destructive or negative conviction that the world is ending or that a major catastrophe will occur.
+  - Somatic Delusions: The baseless conviction that there is a serious abnormality with one's body or organs.
+  - Jealous Delusions: The conviction that one's spouse or romantic partner is being unfaithful without sufficient evidence.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 11 months
+  - Additional: Functioning is not markedly impaired apart from the impact of the delusion(s) or its ramifications
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Delusions
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(No match in profile or inference only)
+Answer strategy: This isn’t covered in the profile, so answer from your own reflection. Briefly say whether you were generally trusting or suspicious before the delusions began, and whether the current level of suspicion feels like a big change from your usual personality or just an intensification of how you’ve always been. If you’re unsure, say you haven’t really thought about it or that it’s hard to compare.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+Doctor: How long have you been experiencing these strong beliefs—would you say it’s been less than a month, between one and six months, or more than six months continuously?
+
+Patient: It’s definitely been more than six months continuously. I’d say it’s been going on for almost two years now without really letting up.
+
+Doctor: Apart from these strong beliefs, have you also noticed things like hearing voices that others can’t hear, feeling your thoughts are being interfered with or controlled, or your thoughts getting very jumbled or hard to follow?
+
+Patient: No, I don’t hear voices that other people can’t hear. I don’t feel like anyone is controlling my thoughts, and my thinking feels pretty clear to me, not especially jumbled.
+
+Doctor: Do you ever find yourself questioning whether these beliefs might be mistaken, or are you completely convinced they are true even when they cause problems in your work, relationships, or daily activities?
+
+Patient: Most of the time I feel completely sure they’re true, even when people argue with me about them. Very occasionally I’ll wonder for a moment if I might be overreacting, but that doubt doesn’t really last. They’ve caused some tension with family and a few issues at work, but aside from dealing with that, I feel like I function pretty normally.
+
+Doctor: Can you briefly describe one or two of these strong beliefs and tell me whether people from your family, culture, or close community generally share these ideas, or if they say they seem unusual just for you?
+
+Patient: One big one is that I’m being watched and monitored, like there are people or some organization tracking me through my phone and even when I’m out in public, and that a lot of small things around me—like comments on TV or strangers’ conversations—are actually messages directed at me. My family and friends all say these ideas sound unusual and that they don’t see any evidence of it, so it feels like I’m the only one who believes this.
+
+Doctor: Have you used any drugs or substances (such as cannabis, stimulants like cocaine or meth, hallucinogens, or large amounts of alcohol) around the time these beliefs started or since then, and if so, did they make these experiences stronger or more frequent?
+
+Patient: I don’t really use drugs—just an occasional drink socially, maybe a couple of beers on a weekend. I didn’t start or change any substance use around the time these beliefs began, and I haven’t noticed alcohol making them any better or worse.
+
+Doctor: Over the past couple of years, have you noticed changes like becoming much more withdrawn, losing motivation or interest in things you used to enjoy, or having trouble taking care of daily tasks (like hygiene or work), beyond the stress caused by these beliefs themselves?
+
+Patient: Not really beyond what’s directly related to these beliefs. I still go to work, keep up with my responsibilities, and take care of myself, though I might avoid certain places or people sometimes because I’m worried about being watched.
+
+Doctor: Before these beliefs started, would you describe yourself as a generally suspicious or mistrustful person in relationships or with other people’s intentions, or does this level of suspicion feel very different from how you used to be?
+
+========== OUTPUT [patient] ==========
+Before all this started, I’d say I was a pretty normal level of cautious, but not especially suspicious or paranoid about people’s intentions. What I feel now is a lot more intense and constant than anything I remember experiencing before, so it does feel like a big change from my usual personality.
+=====================================
+
+[call 36] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F22.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+Doctor: How long have you been experiencing these strong beliefs—would you say it’s been less than a month, between one and six months, or more than six months continuously?
+
+Patient: It’s definitely been more than six months continuously. I’d say it’s been going on for almost two years now without really letting up.
+
+Doctor: Apart from these strong beliefs, have you also noticed things like hearing voices that others can’t hear, feeling your thoughts are being interfered with or controlled, or your thoughts getting very jumbled or hard to follow?
+
+Patient: No, I don’t hear voices that other people can’t hear. I don’t feel like anyone is controlling my thoughts, and my thinking feels pretty clear to me, not especially jumbled.
+
+Doctor: Do you ever find yourself questioning whether these beliefs might be mistaken, or are you completely convinced they are true even when they cause problems in your work, relationships, or daily activities?
+
+Patient: Most of the time I feel completely sure they’re true, even when people argue with me about them. Very occasionally I’ll wonder for a moment if I might be overreacting, but that doubt doesn’t really last. They’ve caused some tension with family and a few issues at work, but aside from dealing with that, I feel like I function pretty normally.
+
+Doctor: Can you briefly describe one or two of these strong beliefs and tell me whether people from your family, culture, or close community generally share these ideas, or if they say they seem unusual just for you?
+
+Patient: One big one is that I’m being watched and monitored, like there are people or some organization tracking me through my phone and even when I’m out in public, and that a lot of small things around me—like comments on TV or strangers’ conversations—are actually messages directed at me. My family and friends all say these ideas sound unusual and that they don’t see any evidence of it, so it feels like I’m the only one who believes this.
+
+Doctor: Have you used any drugs or substances (such as cannabis, stimulants like cocaine or meth, hallucinogens, or large amounts of alcohol) around the time these beliefs started or since then, and if so, did they make these experiences stronger or more frequent?
+
+Patient: I don’t really use drugs—just an occasional drink socially, maybe a couple of beers on a weekend. I didn’t start or change any substance use around the time these beliefs began, and I haven’t noticed alcohol making them any better or worse.
+
+Doctor: Over the past couple of years, have you noticed changes like becoming much more withdrawn, losing motivation or interest in things you used to enjoy, or having trouble taking care of daily tasks (like hygiene or work), beyond the stress caused by these beliefs themselves?
+
+Patient: Not really beyond what’s directly related to these beliefs. I still go to work, keep up with my responsibilities, and take care of myself, though I might avoid certain places or people sometimes because I’m worried about being watched.
+
+Doctor: Before these beliefs started, would you describe yourself as a generally suspicious or mistrustful person in relationships or with other people’s intentions, or does this level of suspicion feel very different from how you used to be?
+
+Patient: Before all this started, I’d say I was a pretty normal level of cautious, but not especially suspicious or paranoid about people’s intentions. What I feel now is a lot more intense and constant than anything I remember experiencing before, so it does feel like a big change from my usual personality.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F22.0", "F20.0"], "note": "Previously the only candidate was F22.0, reflecting a persistent, non-bizarre delusional state without other psychotic features. The current interview continues to show a long-standing (>2 years), well-systematized persecutory belief with ideas of reference, in the absence of hallucinations, thought disorder, marked negative symptoms, or prominent mood episodes, and with relatively preserved functioning—this remains highly consistent with F22.0, so it stays on the list. However, given the duration (>2 years) and the content (persecutory, referential), a schizophrenia-spectrum disorder such as F20.0 cannot be fully excluded at this stage, especially early or attenuated forms where hallucinations and disorganization are minimal or not clearly reported. There is no evidence of substance use or mood episodes to suggest other categories (e.g., substance-induced psychosis or mood disorder with psychotic features), so these are not added. Thus the current candidates are F22.0 and F20.0. Further questioning about any subtle negative symptoms, cognitive changes, or past transient hallucinations is still needed, so this is not yet final.", "is_final": false}
+=====================================
+
+[call 37] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F22.0
+- F20.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F22.0", "F20.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+Doctor: How long have you been experiencing these strong beliefs—would you say it’s been less than a month, between one and six months, or more than six months continuously?
+
+Patient: It’s definitely been more than six months continuously. I’d say it’s been going on for almost two years now without really letting up.
+
+Doctor: Apart from these strong beliefs, have you also noticed things like hearing voices that others can’t hear, feeling your thoughts are being interfered with or controlled, or your thoughts getting very jumbled or hard to follow?
+
+Patient: No, I don’t hear voices that other people can’t hear. I don’t feel like anyone is controlling my thoughts, and my thinking feels pretty clear to me, not especially jumbled.
+
+Doctor: Do you ever find yourself questioning whether these beliefs might be mistaken, or are you completely convinced they are true even when they cause problems in your work, relationships, or daily activities?
+
+Patient: Most of the time I feel completely sure they’re true, even when people argue with me about them. Very occasionally I’ll wonder for a moment if I might be overreacting, but that doubt doesn’t really last. They’ve caused some tension with family and a few issues at work, but aside from dealing with that, I feel like I function pretty normally.
+
+Doctor: Can you briefly describe one or two of these strong beliefs and tell me whether people from your family, culture, or close community generally share these ideas, or if they say they seem unusual just for you?
+
+Patient: One big one is that I’m being watched and monitored, like there are people or some organization tracking me through my phone and even when I’m out in public, and that a lot of small things around me—like comments on TV or strangers’ conversations—are actually messages directed at me. My family and friends all say these ideas sound unusual and that they don’t see any evidence of it, so it feels like I’m the only one who believes this.
+
+Doctor: Have you used any drugs or substances (such as cannabis, stimulants like cocaine or meth, hallucinogens, or large amounts of alcohol) around the time these beliefs started or since then, and if so, did they make these experiences stronger or more frequent?
+
+Patient: I don’t really use drugs—just an occasional drink socially, maybe a couple of beers on a weekend. I didn’t start or change any substance use around the time these beliefs began, and I haven’t noticed alcohol making them any better or worse.
+
+Doctor: Over the past couple of years, have you noticed changes like becoming much more withdrawn, losing motivation or interest in things you used to enjoy, or having trouble taking care of daily tasks (like hygiene or work), beyond the stress caused by these beliefs themselves?
+
+Patient: Not really beyond what’s directly related to these beliefs. I still go to work, keep up with my responsibilities, and take care of myself, though I might avoid certain places or people sometimes because I’m worried about being watched.
+
+Doctor: Before these beliefs started, would you describe yourself as a generally suspicious or mistrustful person in relationships or with other people’s intentions, or does this level of suspicion feel very different from how you used to be?
+
+Patient: Before all this started, I’d say I was a pretty normal level of cautious, but not especially suspicious or paranoid about people’s intentions. What I feel now is a lot more intense and constant than anything I remember experiencing before, so it does feel like a big change from my usual personality.
+
+Patient: Before all this started, I’d say I was a pretty normal level of cautious, but not especially suspicious or paranoid about people’s intentions. What I feel now is a lot more intense and constant than anything I remember experiencing before, so it does feel like a big change from my usual personality.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "schizophrenia first-rank symptoms",
+  "question": "Have you ever felt that TV, radio, the internet, or other people could directly put thoughts into your mind, take thoughts out, or broadcast your thoughts so that others can hear them, or is it more that you feel watched and that messages are about you but your thoughts still feel private and under your own control?"
+}
+=====================================
+
+--- turn 10 ---
+
+[call 38] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ delusions
+  - Persecutory Delusions: The false belief that one is being harmed or monitored by other people or organizations.
+  - Referential Delusions: The conviction that ordinary events, remarks, or behaviors have specific relevance to oneself.
+  - Grandiose Delusions: The false belief that one possesses special abilities, power, or fame.
+  - Erotomanic Delusions: The false belief that another person is in love with or has affection for them.
+  - Nihilistic Delusions: A destructive or negative conviction that the world is ending or that a major catastrophe will occur.
+  - Somatic Delusions: The baseless conviction that there is a serious abnormality with one's body or organs.
+  - Jealous Delusions: The conviction that one's spouse or romantic partner is being unfaithful without sufficient evidence.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 11 months
+  - Additional: Functioning is not markedly impaired apart from the impact of the delusion(s) or its ramifications
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 10
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Have you ever felt that TV, radio, the internet, or other people could directly put thoughts into your mind, take thoughts out, or broadcast your thoughts so that others can hear them, or is it more that you feel watched and that messages are about you but your thoughts still feel private and under your own control?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["delusions", "Persecutory Delusions", "Referential Delusions"], "answer_strategy": "Answer by clarifying whether you mainly feel watched/targeted and that messages (like from TV, radio, internet, or people) are about you, or whether you actually feel your thoughts are being controlled, inserted, removed, or broadcast. Since your profile only mentions persecutory and referential-type ideas (being harmed/monitored, messages being about you), and not thought insertion/withdrawal/broadcasting, lean toward explaining that your thoughts still feel private and under your own control, but you feel observed and that things in the environment are specifically about you. Be concrete and straightforward about what you do and do not experience, and correct any part that doesn’t fit you."}
+=====================================
+
+[call 39] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Delusional Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ delusions
+  - Persecutory Delusions: The false belief that one is being harmed or monitored by other people or organizations.
+  - Referential Delusions: The conviction that ordinary events, remarks, or behaviors have specific relevance to oneself.
+  - Grandiose Delusions: The false belief that one possesses special abilities, power, or fame.
+  - Erotomanic Delusions: The false belief that another person is in love with or has affection for them.
+  - Nihilistic Delusions: A destructive or negative conviction that the world is ending or that a major catastrophe will occur.
+  - Somatic Delusions: The baseless conviction that there is a serious abnormality with one's body or organs.
+  - Jealous Delusions: The conviction that one's spouse or romantic partner is being unfaithful without sufficient evidence.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 11 months
+  - Additional: Functioning is not markedly impaired apart from the impact of the delusion(s) or its ramifications
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Delusions
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: delusions, Persecutory Delusions, Referential Delusions
+Answer strategy: Answer by clarifying whether you mainly feel watched/targeted and that messages (like from TV, radio, internet, or people) are about you, or whether you actually feel your thoughts are being controlled, inserted, removed, or broadcast. Since your profile only mentions persecutory and referential-type ideas (being harmed/monitored, messages being about you), and not thought insertion/withdrawal/broadcasting, lean toward explaining that your thoughts still feel private and under your own control, but you feel observed and that things in the environment are specifically about you. Be concrete and straightforward about what you do and do not experience, and correct any part that doesn’t fit you.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+Doctor: How long have you been experiencing these strong beliefs—would you say it’s been less than a month, between one and six months, or more than six months continuously?
+
+Patient: It’s definitely been more than six months continuously. I’d say it’s been going on for almost two years now without really letting up.
+
+Doctor: Apart from these strong beliefs, have you also noticed things like hearing voices that others can’t hear, feeling your thoughts are being interfered with or controlled, or your thoughts getting very jumbled or hard to follow?
+
+Patient: No, I don’t hear voices that other people can’t hear. I don’t feel like anyone is controlling my thoughts, and my thinking feels pretty clear to me, not especially jumbled.
+
+Doctor: Do you ever find yourself questioning whether these beliefs might be mistaken, or are you completely convinced they are true even when they cause problems in your work, relationships, or daily activities?
+
+Patient: Most of the time I feel completely sure they’re true, even when people argue with me about them. Very occasionally I’ll wonder for a moment if I might be overreacting, but that doubt doesn’t really last. They’ve caused some tension with family and a few issues at work, but aside from dealing with that, I feel like I function pretty normally.
+
+Doctor: Can you briefly describe one or two of these strong beliefs and tell me whether people from your family, culture, or close community generally share these ideas, or if they say they seem unusual just for you?
+
+Patient: One big one is that I’m being watched and monitored, like there are people or some organization tracking me through my phone and even when I’m out in public, and that a lot of small things around me—like comments on TV or strangers’ conversations—are actually messages directed at me. My family and friends all say these ideas sound unusual and that they don’t see any evidence of it, so it feels like I’m the only one who believes this.
+
+Doctor: Have you used any drugs or substances (such as cannabis, stimulants like cocaine or meth, hallucinogens, or large amounts of alcohol) around the time these beliefs started or since then, and if so, did they make these experiences stronger or more frequent?
+
+Patient: I don’t really use drugs—just an occasional drink socially, maybe a couple of beers on a weekend. I didn’t start or change any substance use around the time these beliefs began, and I haven’t noticed alcohol making them any better or worse.
+
+Doctor: Over the past couple of years, have you noticed changes like becoming much more withdrawn, losing motivation or interest in things you used to enjoy, or having trouble taking care of daily tasks (like hygiene or work), beyond the stress caused by these beliefs themselves?
+
+Patient: Not really beyond what’s directly related to these beliefs. I still go to work, keep up with my responsibilities, and take care of myself, though I might avoid certain places or people sometimes because I’m worried about being watched.
+
+Doctor: Before these beliefs started, would you describe yourself as a generally suspicious or mistrustful person in relationships or with other people’s intentions, or does this level of suspicion feel very different from how you used to be?
+
+Patient: Before all this started, I’d say I was a pretty normal level of cautious, but not especially suspicious or paranoid about people’s intentions. What I feel now is a lot more intense and constant than anything I remember experiencing before, so it does feel like a big change from my usual personality.
+
+Doctor: Have you ever felt that TV, radio, the internet, or other people could directly put thoughts into your mind, take thoughts out, or broadcast your thoughts so that others can hear them, or is it more that you feel watched and that messages are about you but your thoughts still feel private and under your own control?
+
+========== OUTPUT [patient] ==========
+It’s more that I feel watched and that things—like TV, online posts, or comments people make—are really about me or directed at me. My thoughts still feel private and under my own control; I don’t feel like anyone is putting thoughts in, taking them out, or broadcasting them.
+=====================================
+
+[call 40] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F22.0", "F20.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+Doctor: How long have you been experiencing these strong beliefs—would you say it’s been less than a month, between one and six months, or more than six months continuously?
+
+Patient: It’s definitely been more than six months continuously. I’d say it’s been going on for almost two years now without really letting up.
+
+Doctor: Apart from these strong beliefs, have you also noticed things like hearing voices that others can’t hear, feeling your thoughts are being interfered with or controlled, or your thoughts getting very jumbled or hard to follow?
+
+Patient: No, I don’t hear voices that other people can’t hear. I don’t feel like anyone is controlling my thoughts, and my thinking feels pretty clear to me, not especially jumbled.
+
+Doctor: Do you ever find yourself questioning whether these beliefs might be mistaken, or are you completely convinced they are true even when they cause problems in your work, relationships, or daily activities?
+
+Patient: Most of the time I feel completely sure they’re true, even when people argue with me about them. Very occasionally I’ll wonder for a moment if I might be overreacting, but that doubt doesn’t really last. They’ve caused some tension with family and a few issues at work, but aside from dealing with that, I feel like I function pretty normally.
+
+Doctor: Can you briefly describe one or two of these strong beliefs and tell me whether people from your family, culture, or close community generally share these ideas, or if they say they seem unusual just for you?
+
+Patient: One big one is that I’m being watched and monitored, like there are people or some organization tracking me through my phone and even when I’m out in public, and that a lot of small things around me—like comments on TV or strangers’ conversations—are actually messages directed at me. My family and friends all say these ideas sound unusual and that they don’t see any evidence of it, so it feels like I’m the only one who believes this.
+
+Doctor: Have you used any drugs or substances (such as cannabis, stimulants like cocaine or meth, hallucinogens, or large amounts of alcohol) around the time these beliefs started or since then, and if so, did they make these experiences stronger or more frequent?
+
+Patient: I don’t really use drugs—just an occasional drink socially, maybe a couple of beers on a weekend. I didn’t start or change any substance use around the time these beliefs began, and I haven’t noticed alcohol making them any better or worse.
+
+Doctor: Over the past couple of years, have you noticed changes like becoming much more withdrawn, losing motivation or interest in things you used to enjoy, or having trouble taking care of daily tasks (like hygiene or work), beyond the stress caused by these beliefs themselves?
+
+Patient: Not really beyond what’s directly related to these beliefs. I still go to work, keep up with my responsibilities, and take care of myself, though I might avoid certain places or people sometimes because I’m worried about being watched.
+
+Doctor: Before these beliefs started, would you describe yourself as a generally suspicious or mistrustful person in relationships or with other people’s intentions, or does this level of suspicion feel very different from how you used to be?
+
+Patient: Before all this started, I’d say I was a pretty normal level of cautious, but not especially suspicious or paranoid about people’s intentions. What I feel now is a lot more intense and constant than anything I remember experiencing before, so it does feel like a big change from my usual personality.
+
+Doctor: Have you ever felt that TV, radio, the internet, or other people could directly put thoughts into your mind, take thoughts out, or broadcast your thoughts so that others can hear them, or is it more that you feel watched and that messages are about you but your thoughts still feel private and under your own control?
+
+Patient: It’s more that I feel watched and that things—like TV, online posts, or comments people make—are really about me or directed at me. My thoughts still feel private and under my own control; I don’t feel like anyone is putting thoughts in, taking them out, or broadcasting them.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F22.0"], "note": "Previously the candidates were [F22.0, F20.0]. The patient describes a nearly two‑year history of fixed persecutory and referential beliefs (being monitored, messages directed at them) that are not shared by their cultural group, with minimal or no insight and clear associated distress and some interpersonal/occupational impact. There is no history of prominent mood episodes, no substance trigger, and no evidence of hallucinations, thought interference, thought disorder, or negative symptoms. Functioning is largely preserved aside from behaviors driven by the delusional beliefs, and there is no marked deterioration in self‑care or social/occupational functioning outside the impact of the beliefs themselves. This pattern strongly favors a persistent delusional disorder over schizophrenia, which in ICD‑10 typically requires additional first‑rank symptoms (e.g., thought insertion, running commentary voices), or more pervasive functional decline. Given the absence of such features over a prolonged course, F20.0 has become unlikely, so the current candidate list is narrowed to [F22.0]. I will continue the interview to confirm there are no subtle psychotic or mood symptoms and to clarify any other contributing factors before making a final diagnosis.", "is_final": false}
+=====================================
+
+[call 41] doctor-final-diagnosis
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the full interview transcript and the differential diagnosis candidates, write the final diagnosis report.
+
+Both the "diagnosis" and "candidates" MUST be ICD-10 codes.
+
+[Field Instructions]
+- diagnosis: The single diagnosis code of ICD-10.
+- candidates: Top 2–3 differential candidates of ICD-10 codes considered until the end.
+- reason: Brief diagnostic rationale.
+- diagnostic_checklist: Structured evidence summary organized by diagnostic criterion type.
+  List only symptom groups that are relevant to your diagnosis, with the symptoms the patient actually confirmed.
+
+Output Format (JSON only, no other text):
+{
+  "diagnosis": "Final Diagnosis ICD-10 code",
+  "candidates": ["Disease Code1", "Disease Code2"],
+  "reason": "Brief diagnostic rationale.",
+  "diagnostic_checklist": {
+    "symptom_groups": [
+      {
+        "group": "clinical group name (e.g., inattention, manic_episode, psychotic_symptoms)",
+        "confirmed_symptoms": ["natural language description of each confirmed symptom in this group"],
+        "count": <integer>
+      }
+    ],
+    "duration_verified": "Description of how the duration criterion was established (e.g., 'symptoms present for over 6 months since childhood'), or null if not assessed.",
+    "functional_impairment": <true if functional impairment was confirmed, false if denied, null if not assessed>,
+    "traumatic_stressor": <true if a qualifying traumatic stressor was confirmed, null if not applicable or not assessed>,
+    "psychosocial_stressor": <true if a qualifying psychosocial stressor was confirmed, null if not applicable or not assessed>,
+    "additional_requirements": ["Each additional criterion that was explicitly verified during the interview (e.g., 'Onset prior to age 12 confirmed')"]
+  }
+}
+
+[2. USER]
+Candidate Diseases: 
+["F22.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—thanks for coming in today. What has been bothering you lately that made you decide to come see me?
+
+Patient: I’ve been having these really strong beliefs about things going on around me that other people keep telling me aren’t real, but they still feel completely real to me. It’s been going on for a long time and it’s starting to really stress me out and affect my day-to-day life, so I thought I should get help.
+
+Doctor: Over the past few months, have you had any long periods when your mood was unusually low or, on the other hand, unusually high or energized, where these mood changes clearly stood out from how you usually feel?
+
+Patient: I don’t think I’ve had anything like that that really stands out. I get stressed and worried because of these beliefs, but I haven’t noticed any long stretches of being really down or overly energetic that feel different from my usual self.
+
+Doctor: How long have you been experiencing these strong beliefs—would you say it’s been less than a month, between one and six months, or more than six months continuously?
+
+Patient: It’s definitely been more than six months continuously. I’d say it’s been going on for almost two years now without really letting up.
+
+Doctor: Apart from these strong beliefs, have you also noticed things like hearing voices that others can’t hear, feeling your thoughts are being interfered with or controlled, or your thoughts getting very jumbled or hard to follow?
+
+Patient: No, I don’t hear voices that other people can’t hear. I don’t feel like anyone is controlling my thoughts, and my thinking feels pretty clear to me, not especially jumbled.
+
+Doctor: Do you ever find yourself questioning whether these beliefs might be mistaken, or are you completely convinced they are true even when they cause problems in your work, relationships, or daily activities?
+
+Patient: Most of the time I feel completely sure they’re true, even when people argue with me about them. Very occasionally I’ll wonder for a moment if I might be overreacting, but that doubt doesn’t really last. They’ve caused some tension with family and a few issues at work, but aside from dealing with that, I feel like I function pretty normally.
+
+Doctor: Can you briefly describe one or two of these strong beliefs and tell me whether people from your family, culture, or close community generally share these ideas, or if they say they seem unusual just for you?
+
+Patient: One big one is that I’m being watched and monitored, like there are people or some organization tracking me through my phone and even when I’m out in public, and that a lot of small things around me—like comments on TV or strangers’ conversations—are actually messages directed at me. My family and friends all say these ideas sound unusual and that they don’t see any evidence of it, so it feels like I’m the only one who believes this.
+
+Doctor: Have you used any drugs or substances (such as cannabis, stimulants like cocaine or meth, hallucinogens, or large amounts of alcohol) around the time these beliefs started or since then, and if so, did they make these experiences stronger or more frequent?
+
+Patient: I don’t really use drugs—just an occasional drink socially, maybe a couple of beers on a weekend. I didn’t start or change any substance use around the time these beliefs began, and I haven’t noticed alcohol making them any better or worse.
+
+Doctor: Over the past couple of years, have you noticed changes like becoming much more withdrawn, losing motivation or interest in things you used to enjoy, or having trouble taking care of daily tasks (like hygiene or work), beyond the stress caused by these beliefs themselves?
+
+Patient: Not really beyond what’s directly related to these beliefs. I still go to work, keep up with my responsibilities, and take care of myself, though I might avoid certain places or people sometimes because I’m worried about being watched.
+
+Doctor: Before these beliefs started, would you describe yourself as a generally suspicious or mistrustful person in relationships or with other people’s intentions, or does this level of suspicion feel very different from how you used to be?
+
+Patient: Before all this started, I’d say I was a pretty normal level of cautious, but not especially suspicious or paranoid about people’s intentions. What I feel now is a lot more intense and constant than anything I remember experiencing before, so it does feel like a big change from my usual personality.
+
+Doctor: Have you ever felt that TV, radio, the internet, or other people could directly put thoughts into your mind, take thoughts out, or broadcast your thoughts so that others can hear them, or is it more that you feel watched and that messages are about you but your thoughts still feel private and under your own control?
+
+Patient: It’s more that I feel watched and that things—like TV, online posts, or comments people make—are really about me or directed at me. My thoughts still feel private and under my own control; I don’t feel like anyone is putting thoughts in, taking them out, or broadcasting them.
+
+========== OUTPUT [doctor] ==========
+{
+  "diagnosis": "F22.0",
+  "candidates": ["F22.0", "F20.0"],
+  "reason": "The patient has had a single, well‑systematized delusional theme (being monitored, messages directed at them) for almost two years, with strong conviction and minimal insight, not shared by their cultural group. There are no hallucinations, thought interference, or formal thought disorder, no prominent or sustained mood episodes, and no significant negative symptoms or functional decline beyond circumscribed avoidance related to the delusional beliefs. Symptoms are not attributable to substances. This pattern is most consistent with persistent delusional disorder (F22.0). Schizophrenia (F20.0) was considered but ruled out due to absence of first‑rank psychotic symptoms, hallucinations, or marked deterioration in functioning.",
+  "diagnostic_checklist": {
+    "symptom_groups": [
+      {
+        "group": "delusions",
+        "confirmed_symptoms": [
+          "Fixed belief of being watched and monitored by people or an organization, including tracking through phone and in public spaces",
+          "Belief that comments on TV, strangers’ conversations, and online posts contain special messages directed specifically at them (ideas of reference with delusional intensity)",
+          "Beliefs are not shared by family, friends, or cultural group and are regarded by others as unusual and unfounded",
+          "High level of conviction in these beliefs with only fleeting, transient doubts despite interpersonal conflict and stress",
+          "Beliefs are stable and systematized around a persecutory/reference theme"
+        ],
+        "count": 5
+      },
+      {
+        "group": "exclusion_of_other_psychotic_features",
+        "confirmed_symptoms": [
+          "Denies auditory hallucinations (no voices heard that others cannot hear)",
+          "Denies thought insertion, withdrawal, or broadcasting; experiences thoughts as private and under own control",
+          "Reports clear, organized thinking without jumbled or disorganized thoughts",
+          "No marked negative symptoms such as apathy, social withdrawal beyond delusion‑driven avoidance, or self‑neglect"
+        ],
+        "count": 4
+      },
+      {
+        "group": "mood_symptoms_exclusion",
+        "confirmed_symptoms": [
+          "No history of prolonged periods of depressed mood that clearly stand out from baseline",
+          "No history of prolonged periods of elevated, expansive, or markedly increased energy or activity",
+          "Current distress and worry are secondary to delusional beliefs rather than independent mood episodes"
+        ],
+        "count": 3
+      }
+    ],
+    "duration_verified": "Patient reports continuous presence of these delusional beliefs for almost two years, clearly more than six months without remission.",
+    "functional_impairment": true,
+    "traumatic_stressor": null,
+    "psychosocial_stressor": true,
+    "additional_requirements": [
+      "Onset in a person without a longstanding pattern of suspiciousness or paranoid personality traits confirmed",
+      "Beliefs not attributable to substance use or recent change in substance use",
+      "Delusional content not accepted as normal within the patient’s cultural or subcultural group",
+      "No evidence of schizophrenia‑defining symptoms such as persistent hallucinations, thought interference, or marked negative symptoms"
+    ]
+  }
+}
+=====================================
+

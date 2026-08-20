@@ -1,0 +1,1260 @@
+--- turn 00 ---
+
+[call 01] doctor-opening-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "opening question",
+  "subcategory": null,
+  "question": "Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?"
+}
+=====================================
+
+--- turn 01 ---
+
+[call 02] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ binge_episode
+  - Eating_Large_Amount: Eating, in a discrete period of time, an amount of food that is definitely larger than what most individuals would eat in a similar period of time under similar circumstances.
+  - Loss_of_Control: A sense of lack of control over eating during the episode (e.g., a feeling that one cannot stop eating or control what or how much one is eating).
+▸ binge_episode_related
+  - Rapid_Eating: Eating much more rapidly than normal.
+  - Negative_Affect_After_Binge: Feeling disgusted with oneself, depressed, or very guilty afterward.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 1 months
+  - Additional: The binge eating occurs, on average, at least once a week for 3 months
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 1
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["binge_episode", "binge_episode.Eating_Large_Amount", "binge_episode.Loss_of_Control"], "answer_strategy": "Briefly explain that what brought you in is your ongoing problem with episodes of eating very large amounts of food in a short period of time, and feeling like you completely lose control during these episodes. Use a straightforward, honest tone, focusing only on describing these binge episodes as your main concern, without going into other details or consequences yet."}
+=====================================
+
+[call 03] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Binge-Eating Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ binge_episode
+  - Eating_Large_Amount: Eating, in a discrete period of time, an amount of food that is definitely larger than what most individuals would eat in a similar period of time under similar circumstances.
+  - Loss_of_Control: A sense of lack of control over eating during the episode (e.g., a feeling that one cannot stop eating or control what or how much one is eating).
+▸ binge_episode_related
+  - Rapid_Eating: Eating much more rapidly than normal.
+  - Negative_Affect_After_Binge: Feeling disgusted with oneself, depressed, or very guilty afterward.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 1 months
+  - Additional: The binge eating occurs, on average, at least once a week for 3 months
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Eating_Large_Amount
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: binge_episode, binge_episode.Eating_Large_Amount, binge_episode.Loss_of_Control
+Answer strategy: Briefly explain that what brought you in is your ongoing problem with episodes of eating very large amounts of food in a short period of time, and feeling like you completely lose control during these episodes. Use a straightforward, honest tone, focusing only on describing these binge episodes as your main concern, without going into other details or consequences yet.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+========== OUTPUT [patient] ==========
+I’ve been having these episodes where I eat a really large amount of food in one sitting, way more than feels normal. It’s starting to scare me because it feels like it’s getting worse, and I don’t really understand why I’m doing it.
+=====================================
+
+[call 04] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these episodes where I eat a really large amount of food in one sitting, way more than feels normal. It’s starting to scare me because it feels like it’s getting worse, and I don’t really understand why I’m doing it.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F50.8", "F50.9"], "note": "Initial presentation only establishes that the patient has recurrent episodes of eating unusually large amounts of food with associated distress and perceived loss of control, which suggests an eating disorder but is not yet specific. At this very early stage, there is not enough information to distinguish between specific eating disorders (e.g., whether there are compensatory behaviors, body image disturbance, frequency/duration criteria, or other features). Therefore, the current candidates are broad: an other specified eating disorder category and an unspecified eating disorder category. No previous candidate list was provided, so this is the initial differential set.", "is_final": false}
+=====================================
+
+[call 05] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F50.8
+- F50.9
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F50.8", "F50.9"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these episodes where I eat a really large amount of food in one sitting, way more than feels normal. It’s starting to scare me because it feels like it’s getting worse, and I don’t really understand why I’m doing it.
+
+Patient: I’ve been having these episodes where I eat a really large amount of food in one sitting, way more than feels normal. It’s starting to scare me because it feels like it’s getting worse, and I don’t really understand why I’m doing it.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "compensatory behaviors",
+  "question": "After these episodes of eating a large amount of food, do you ever try to compensate in any way, like making yourself vomit, using laxatives, fasting, or exercising excessively to get rid of the calories?"
+}
+=====================================
+
+--- turn 02 ---
+
+[call 06] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ binge_episode
+  - Eating_Large_Amount: Eating, in a discrete period of time, an amount of food that is definitely larger than what most individuals would eat in a similar period of time under similar circumstances.
+  - Loss_of_Control: A sense of lack of control over eating during the episode (e.g., a feeling that one cannot stop eating or control what or how much one is eating).
+▸ binge_episode_related
+  - Rapid_Eating: Eating much more rapidly than normal.
+  - Negative_Affect_After_Binge: Feeling disgusted with oneself, depressed, or very guilty afterward.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 1 months
+  - Additional: The binge eating occurs, on average, at least once a week for 3 months
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 2
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+After these episodes of eating a large amount of food, do you ever try to compensate in any way, like making yourself vomit, using laxatives, fasting, or exercising excessively to get rid of the calories?
+
+========== OUTPUT [patient] ==========
+{"matched": false, "matched_sections": [], "answer_strategy": "This specific question about compensatory behaviors (vomiting, laxatives, fasting, excessive exercise) is not mentioned in your symptom profile, so answer based on your real experience. Briefly say whether you do any of these things after binge episodes, and if so, which ones and how often. If you don’t, you can simply say something like, “No, I don’t usually do anything to compensate afterward.”"}
+=====================================
+
+[call 07] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Binge-Eating Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ binge_episode
+  - Eating_Large_Amount: Eating, in a discrete period of time, an amount of food that is definitely larger than what most individuals would eat in a similar period of time under similar circumstances.
+  - Loss_of_Control: A sense of lack of control over eating during the episode (e.g., a feeling that one cannot stop eating or control what or how much one is eating).
+▸ binge_episode_related
+  - Rapid_Eating: Eating much more rapidly than normal.
+  - Negative_Affect_After_Binge: Feeling disgusted with oneself, depressed, or very guilty afterward.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 1 months
+  - Additional: The binge eating occurs, on average, at least once a week for 3 months
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Eating_Large_Amount
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(No match in profile or inference only)
+Answer strategy: This specific question about compensatory behaviors (vomiting, laxatives, fasting, excessive exercise) is not mentioned in your symptom profile, so answer based on your real experience. Briefly say whether you do any of these things after binge episodes, and if so, which ones and how often. If you don’t, you can simply say something like, “No, I don’t usually do anything to compensate afterward.”
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these episodes where I eat a really large amount of food in one sitting, way more than feels normal. It’s starting to scare me because it feels like it’s getting worse, and I don’t really understand why I’m doing it.
+
+Doctor: After these episodes of eating a large amount of food, do you ever try to compensate in any way, like making yourself vomit, using laxatives, fasting, or exercising excessively to get rid of the calories?
+
+========== OUTPUT [patient] ==========
+No, I don’t usually do anything like that afterward. I don’t make myself vomit or use laxatives or anything extreme; I just kind of sit with it and feel bad, but I don’t try to “undo” it.
+=====================================
+
+[call 08] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F50.8", "F50.9"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these episodes where I eat a really large amount of food in one sitting, way more than feels normal. It’s starting to scare me because it feels like it’s getting worse, and I don’t really understand why I’m doing it.
+
+Doctor: After these episodes of eating a large amount of food, do you ever try to compensate in any way, like making yourself vomit, using laxatives, fasting, or exercising excessively to get rid of the calories?
+
+Patient: No, I don’t usually do anything like that afterward. I don’t make myself vomit or use laxatives or anything extreme; I just kind of sit with it and feel bad, but I don’t try to “undo” it.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F50.8", "F50.9", "F50.2"], "note": "Previously the candidates were [F50.8, F50.9], reflecting an unspecified or other eating disorder based on limited information. Now we know the patient has recurrent episodes of eating very large amounts of food without any compensatory behaviors (no vomiting, laxatives, or excessive exercise). This pattern raises concern for a binge-type eating disorder without purging, which in ICD-10 is often coded under F50.2 (bulimia nervosa) variants or related categories, though the absence of compensatory behaviors makes the exact fit unclear. Because of this, F50.2 is added to the differential for now, while F50.8 and F50.9 remain until we clarify frequency, loss of control, associated distress, body image concerns, and duration. Further questioning is needed to distinguish between these possibilities and decide if criteria for a specific syndrome are met.", "is_final": false}
+=====================================
+
+[call 09] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F50.8
+- F50.9
+- F50.2
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F50.8", "F50.9", "F50.2"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these episodes where I eat a really large amount of food in one sitting, way more than feels normal. It’s starting to scare me because it feels like it’s getting worse, and I don’t really understand why I’m doing it.
+
+Doctor: After these episodes of eating a large amount of food, do you ever try to compensate in any way, like making yourself vomit, using laxatives, fasting, or exercising excessively to get rid of the calories?
+
+Patient: No, I don’t usually do anything like that afterward. I don’t make myself vomit or use laxatives or anything extreme; I just kind of sit with it and feel bad, but I don’t try to “undo” it.
+
+Patient: No, I don’t usually do anything like that afterward. I don’t make myself vomit or use laxatives or anything extreme; I just kind of sit with it and feel bad, but I don’t try to “undo” it.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "loss of control and associated features",
+  "question": "During these episodes, do you feel like you’ve lost control over your eating, and do they happen at least once a week and cause you significant distress or problems in your life?"
+}
+=====================================
+
+--- turn 03 ---
+
+[call 10] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ binge_episode
+  - Eating_Large_Amount: Eating, in a discrete period of time, an amount of food that is definitely larger than what most individuals would eat in a similar period of time under similar circumstances.
+  - Loss_of_Control: A sense of lack of control over eating during the episode (e.g., a feeling that one cannot stop eating or control what or how much one is eating).
+▸ binge_episode_related
+  - Rapid_Eating: Eating much more rapidly than normal.
+  - Negative_Affect_After_Binge: Feeling disgusted with oneself, depressed, or very guilty afterward.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 1 months
+  - Additional: The binge eating occurs, on average, at least once a week for 3 months
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 3
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+During these episodes, do you feel like you’ve lost control over your eating, and do they happen at least once a week and cause you significant distress or problems in your life?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["binge_episode.Loss_of_Control", "Critical Diagnostic Criteria.Duration", "Critical Diagnostic Criteria.Additional", "binge_episode_related.Negative_Affect_After_Binge"], "answer_strategy": "Answer clearly about both parts: 1) Confirm that during these episodes you do feel a loss of control over your eating (or deny it if not true), and briefly describe what that loss of control feels like. 2) Confirm that they have been happening at least once a week for the past year and a month, and mention that they cause you significant distress (e.g., feeling disgusted, guilty, depressed, or that they create problems in your life). Keep the tone honest and straightforward, focusing on frequency, loss of control, and how upsetting or impairing these episodes are for you."}
+=====================================
+
+[call 11] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Binge-Eating Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ binge_episode
+  - Eating_Large_Amount: Eating, in a discrete period of time, an amount of food that is definitely larger than what most individuals would eat in a similar period of time under similar circumstances.
+  - Loss_of_Control: A sense of lack of control over eating during the episode (e.g., a feeling that one cannot stop eating or control what or how much one is eating).
+▸ binge_episode_related
+  - Rapid_Eating: Eating much more rapidly than normal.
+  - Negative_Affect_After_Binge: Feeling disgusted with oneself, depressed, or very guilty afterward.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 1 months
+  - Additional: The binge eating occurs, on average, at least once a week for 3 months
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Eating_Large_Amount
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: binge_episode.Loss_of_Control, Critical Diagnostic Criteria.Duration, Critical Diagnostic Criteria.Additional, binge_episode_related.Negative_Affect_After_Binge
+Answer strategy: Answer clearly about both parts: 1) Confirm that during these episodes you do feel a loss of control over your eating (or deny it if not true), and briefly describe what that loss of control feels like. 2) Confirm that they have been happening at least once a week for the past year and a month, and mention that they cause you significant distress (e.g., feeling disgusted, guilty, depressed, or that they create problems in your life). Keep the tone honest and straightforward, focusing on frequency, loss of control, and how upsetting or impairing these episodes are for you.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these episodes where I eat a really large amount of food in one sitting, way more than feels normal. It’s starting to scare me because it feels like it’s getting worse, and I don’t really understand why I’m doing it.
+
+Doctor: After these episodes of eating a large amount of food, do you ever try to compensate in any way, like making yourself vomit, using laxatives, fasting, or exercising excessively to get rid of the calories?
+
+Patient: No, I don’t usually do anything like that afterward. I don’t make myself vomit or use laxatives or anything extreme; I just kind of sit with it and feel bad, but I don’t try to “undo” it.
+
+Doctor: During these episodes, do you feel like you’ve lost control over your eating, and do they happen at least once a week and cause you significant distress or problems in your life?
+
+========== OUTPUT [patient] ==========
+Yeah, during those episodes I definitely feel like I’ve lost control, like I can’t stop even when I’m uncomfortably full. They’ve been happening at least once a week for over a year now, and afterward I feel really disgusted with myself and guilty, and it’s starting to affect my mood and how I see myself.
+=====================================
+
+[call 12] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F50.8", "F50.9", "F50.2"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these episodes where I eat a really large amount of food in one sitting, way more than feels normal. It’s starting to scare me because it feels like it’s getting worse, and I don’t really understand why I’m doing it.
+
+Doctor: After these episodes of eating a large amount of food, do you ever try to compensate in any way, like making yourself vomit, using laxatives, fasting, or exercising excessively to get rid of the calories?
+
+Patient: No, I don’t usually do anything like that afterward. I don’t make myself vomit or use laxatives or anything extreme; I just kind of sit with it and feel bad, but I don’t try to “undo” it.
+
+Doctor: During these episodes, do you feel like you’ve lost control over your eating, and do they happen at least once a week and cause you significant distress or problems in your life?
+
+Patient: Yeah, during those episodes I definitely feel like I’ve lost control, like I can’t stop even when I’m uncomfortably full. They’ve been happening at least once a week for over a year now, and afterward I feel really disgusted with myself and guilty, and it’s starting to affect my mood and how I see myself.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F50.8"], "note": "Previously the candidates were [F50.8, F50.9, F50.2]. The patient reports recurrent episodes of eating an unusually large amount of food with a clear sense of loss of control, occurring at least once a week for over a year, associated with marked guilt and self-disgust. They explicitly deny any regular compensatory behaviors such as self-induced vomiting, laxative misuse, or excessive exercise. This pattern is consistent with a specific eating disorder characterized by recurrent binge episodes without compensatory behaviors, which falls under F50.8. F50.2 (which requires regular compensatory behaviors) is now unlikely and has been removed. F50.9 (unspecified eating disorder) is no longer needed because the presentation fits a more specific category, so it has been removed. The current candidate list is therefore narrowed to [F50.8]. Further assessment about weight history, body image, and comorbid conditions could still be useful, so the process is not yet final.", "is_final": false}
+=====================================
+
+[call 13] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F50.8
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F50.8"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these episodes where I eat a really large amount of food in one sitting, way more than feels normal. It’s starting to scare me because it feels like it’s getting worse, and I don’t really understand why I’m doing it.
+
+Doctor: After these episodes of eating a large amount of food, do you ever try to compensate in any way, like making yourself vomit, using laxatives, fasting, or exercising excessively to get rid of the calories?
+
+Patient: No, I don’t usually do anything like that afterward. I don’t make myself vomit or use laxatives or anything extreme; I just kind of sit with it and feel bad, but I don’t try to “undo” it.
+
+Doctor: During these episodes, do you feel like you’ve lost control over your eating, and do they happen at least once a week and cause you significant distress or problems in your life?
+
+Patient: Yeah, during those episodes I definitely feel like I’ve lost control, like I can’t stop even when I’m uncomfortably full. They’ve been happening at least once a week for over a year now, and afterward I feel really disgusted with myself and guilty, and it’s starting to affect my mood and how I see myself.
+
+Patient: Yeah, during those episodes I definitely feel like I’ve lost control, like I can’t stop even when I’m uncomfortably full. They’ve been happening at least once a week for over a year now, and afterward I feel really disgusted with myself and guilty, and it’s starting to affect my mood and how I see myself.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "eating pattern context",
+  "question": "Outside of these binge episodes, do you generally follow strict diets, skip meals, or severely restrict what you eat, or is your eating between episodes relatively typical for you?"
+}
+=====================================
+
+--- turn 04 ---
+
+[call 14] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ binge_episode
+  - Eating_Large_Amount: Eating, in a discrete period of time, an amount of food that is definitely larger than what most individuals would eat in a similar period of time under similar circumstances.
+  - Loss_of_Control: A sense of lack of control over eating during the episode (e.g., a feeling that one cannot stop eating or control what or how much one is eating).
+▸ binge_episode_related
+  - Rapid_Eating: Eating much more rapidly than normal.
+  - Negative_Affect_After_Binge: Feeling disgusted with oneself, depressed, or very guilty afterward.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 1 months
+  - Additional: The binge eating occurs, on average, at least once a week for 3 months
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 4
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Outside of these binge episodes, do you generally follow strict diets, skip meals, or severely restrict what you eat, or is your eating between episodes relatively typical for you?
+
+========== OUTPUT [patient] ==========
+{"matched": false, "matched_sections": [], "answer_strategy": "This isn’t covered in the profile, so answer based on your own experience. Briefly describe what your eating is like between binge episodes: whether you diet strictly, skip meals, or restrict a lot, or if you eat in a more typical, regular way for you. If you’re unsure, it’s fine to say you haven’t really paid attention to that pattern."}
+=====================================
+
+[call 15] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Binge-Eating Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ binge_episode
+  - Eating_Large_Amount: Eating, in a discrete period of time, an amount of food that is definitely larger than what most individuals would eat in a similar period of time under similar circumstances.
+  - Loss_of_Control: A sense of lack of control over eating during the episode (e.g., a feeling that one cannot stop eating or control what or how much one is eating).
+▸ binge_episode_related
+  - Rapid_Eating: Eating much more rapidly than normal.
+  - Negative_Affect_After_Binge: Feeling disgusted with oneself, depressed, or very guilty afterward.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 1 months
+  - Additional: The binge eating occurs, on average, at least once a week for 3 months
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Eating_Large_Amount
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(No match in profile or inference only)
+Answer strategy: This isn’t covered in the profile, so answer based on your own experience. Briefly describe what your eating is like between binge episodes: whether you diet strictly, skip meals, or restrict a lot, or if you eat in a more typical, regular way for you. If you’re unsure, it’s fine to say you haven’t really paid attention to that pattern.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these episodes where I eat a really large amount of food in one sitting, way more than feels normal. It’s starting to scare me because it feels like it’s getting worse, and I don’t really understand why I’m doing it.
+
+Doctor: After these episodes of eating a large amount of food, do you ever try to compensate in any way, like making yourself vomit, using laxatives, fasting, or exercising excessively to get rid of the calories?
+
+Patient: No, I don’t usually do anything like that afterward. I don’t make myself vomit or use laxatives or anything extreme; I just kind of sit with it and feel bad, but I don’t try to “undo” it.
+
+Doctor: During these episodes, do you feel like you’ve lost control over your eating, and do they happen at least once a week and cause you significant distress or problems in your life?
+
+Patient: Yeah, during those episodes I definitely feel like I’ve lost control, like I can’t stop even when I’m uncomfortably full. They’ve been happening at least once a week for over a year now, and afterward I feel really disgusted with myself and guilty, and it’s starting to affect my mood and how I see myself.
+
+Doctor: Outside of these binge episodes, do you generally follow strict diets, skip meals, or severely restrict what you eat, or is your eating between episodes relatively typical for you?
+
+========== OUTPUT [patient] ==========
+Between episodes my eating is more or less “normal” for me—I’m not on any strict diet. I don’t usually skip a lot of meals or severely restrict; I just try to eat reasonably, though I’m probably more careful after a binge for a day or so.
+=====================================
+
+[call 16] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F50.8"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these episodes where I eat a really large amount of food in one sitting, way more than feels normal. It’s starting to scare me because it feels like it’s getting worse, and I don’t really understand why I’m doing it.
+
+Doctor: After these episodes of eating a large amount of food, do you ever try to compensate in any way, like making yourself vomit, using laxatives, fasting, or exercising excessively to get rid of the calories?
+
+Patient: No, I don’t usually do anything like that afterward. I don’t make myself vomit or use laxatives or anything extreme; I just kind of sit with it and feel bad, but I don’t try to “undo” it.
+
+Doctor: During these episodes, do you feel like you’ve lost control over your eating, and do they happen at least once a week and cause you significant distress or problems in your life?
+
+Patient: Yeah, during those episodes I definitely feel like I’ve lost control, like I can’t stop even when I’m uncomfortably full. They’ve been happening at least once a week for over a year now, and afterward I feel really disgusted with myself and guilty, and it’s starting to affect my mood and how I see myself.
+
+Doctor: Outside of these binge episodes, do you generally follow strict diets, skip meals, or severely restrict what you eat, or is your eating between episodes relatively typical for you?
+
+Patient: Between episodes my eating is more or less “normal” for me—I’m not on any strict diet. I don’t usually skip a lot of meals or severely restrict; I just try to eat reasonably, though I’m probably more careful after a binge for a day or so.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F50.8", "F50.9"], "note": "Previously the only candidate was F50.8 (other eating disorders). The history now clearly describes recurrent episodes of eating objectively large amounts of food with loss of control, at least weekly for over a year, with marked guilt and distress, and no regular compensatory behaviors such as vomiting, laxatives, or excessive exercise. This pattern is highly consistent with a specific eating disorder characterized by binge episodes without compensatory behaviors, which in ICD-10 is typically coded under F50.8 rather than the more generic F50.9. However, we have not yet fully ruled out other eating or feeding conditions, medical contributors, or clarified weight/BMI, body image concerns, and impact on functioning, so I am adding F50.9 (unspecified eating disorder) as a residual option while we complete the diagnostic interview. The core candidate (F50.8) remains, and F50.9 is included as a backup until more information is obtained.", "is_final": false}
+=====================================
+
+[call 17] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F50.8
+- F50.9
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F50.8", "F50.9"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these episodes where I eat a really large amount of food in one sitting, way more than feels normal. It’s starting to scare me because it feels like it’s getting worse, and I don’t really understand why I’m doing it.
+
+Doctor: After these episodes of eating a large amount of food, do you ever try to compensate in any way, like making yourself vomit, using laxatives, fasting, or exercising excessively to get rid of the calories?
+
+Patient: No, I don’t usually do anything like that afterward. I don’t make myself vomit or use laxatives or anything extreme; I just kind of sit with it and feel bad, but I don’t try to “undo” it.
+
+Doctor: During these episodes, do you feel like you’ve lost control over your eating, and do they happen at least once a week and cause you significant distress or problems in your life?
+
+Patient: Yeah, during those episodes I definitely feel like I’ve lost control, like I can’t stop even when I’m uncomfortably full. They’ve been happening at least once a week for over a year now, and afterward I feel really disgusted with myself and guilty, and it’s starting to affect my mood and how I see myself.
+
+Doctor: Outside of these binge episodes, do you generally follow strict diets, skip meals, or severely restrict what you eat, or is your eating between episodes relatively typical for you?
+
+Patient: Between episodes my eating is more or less “normal” for me—I’m not on any strict diet. I don’t usually skip a lot of meals or severely restrict; I just try to eat reasonably, though I’m probably more careful after a binge for a day or so.
+
+Patient: Between episodes my eating is more or less “normal” for me—I’m not on any strict diet. I don’t usually skip a lot of meals or severely restrict; I just try to eat reasonably, though I’m probably more careful after a binge for a day or so.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "body image/weight concern",
+  "question": "How much do your weight or body shape affect how you feel about yourself overall—for example, would you say they are the main way you judge your self-worth, or just one part among many things that matter to you?"
+}
+=====================================
+
+--- turn 05 ---
+
+[call 18] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ binge_episode
+  - Eating_Large_Amount: Eating, in a discrete period of time, an amount of food that is definitely larger than what most individuals would eat in a similar period of time under similar circumstances.
+  - Loss_of_Control: A sense of lack of control over eating during the episode (e.g., a feeling that one cannot stop eating or control what or how much one is eating).
+▸ binge_episode_related
+  - Rapid_Eating: Eating much more rapidly than normal.
+  - Negative_Affect_After_Binge: Feeling disgusted with oneself, depressed, or very guilty afterward.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 1 months
+  - Additional: The binge eating occurs, on average, at least once a week for 3 months
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 5
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+How much do your weight or body shape affect how you feel about yourself overall—for example, would you say they are the main way you judge your self-worth, or just one part among many things that matter to you?
+
+========== OUTPUT [patient] ==========
+{"matched": false, "matched_sections": [], "answer_strategy": "This isn’t covered in the profile, so answer based on your own feelings. Briefly describe how important your weight and body shape are to your self-esteem. For example, you could say whether they’re the main thing that determines how you feel about yourself, or just one factor among others like work, relationships, or hobbies. If you’re unsure, it’s fine to say you haven’t really thought about it and give your best guess."}
+=====================================
+
+[call 19] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Binge-Eating Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ binge_episode
+  - Eating_Large_Amount: Eating, in a discrete period of time, an amount of food that is definitely larger than what most individuals would eat in a similar period of time under similar circumstances.
+  - Loss_of_Control: A sense of lack of control over eating during the episode (e.g., a feeling that one cannot stop eating or control what or how much one is eating).
+▸ binge_episode_related
+  - Rapid_Eating: Eating much more rapidly than normal.
+  - Negative_Affect_After_Binge: Feeling disgusted with oneself, depressed, or very guilty afterward.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 1 months
+  - Additional: The binge eating occurs, on average, at least once a week for 3 months
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Eating_Large_Amount
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(No match in profile or inference only)
+Answer strategy: This isn’t covered in the profile, so answer based on your own feelings. Briefly describe how important your weight and body shape are to your self-esteem. For example, you could say whether they’re the main thing that determines how you feel about yourself, or just one factor among others like work, relationships, or hobbies. If you’re unsure, it’s fine to say you haven’t really thought about it and give your best guess.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these episodes where I eat a really large amount of food in one sitting, way more than feels normal. It’s starting to scare me because it feels like it’s getting worse, and I don’t really understand why I’m doing it.
+
+Doctor: After these episodes of eating a large amount of food, do you ever try to compensate in any way, like making yourself vomit, using laxatives, fasting, or exercising excessively to get rid of the calories?
+
+Patient: No, I don’t usually do anything like that afterward. I don’t make myself vomit or use laxatives or anything extreme; I just kind of sit with it and feel bad, but I don’t try to “undo” it.
+
+Doctor: During these episodes, do you feel like you’ve lost control over your eating, and do they happen at least once a week and cause you significant distress or problems in your life?
+
+Patient: Yeah, during those episodes I definitely feel like I’ve lost control, like I can’t stop even when I’m uncomfortably full. They’ve been happening at least once a week for over a year now, and afterward I feel really disgusted with myself and guilty, and it’s starting to affect my mood and how I see myself.
+
+Doctor: Outside of these binge episodes, do you generally follow strict diets, skip meals, or severely restrict what you eat, or is your eating between episodes relatively typical for you?
+
+Patient: Between episodes my eating is more or less “normal” for me—I’m not on any strict diet. I don’t usually skip a lot of meals or severely restrict; I just try to eat reasonably, though I’m probably more careful after a binge for a day or so.
+
+Doctor: How much do your weight or body shape affect how you feel about yourself overall—for example, would you say they are the main way you judge your self-worth, or just one part among many things that matter to you?
+
+========== OUTPUT [patient] ==========
+I’d say my weight and body shape are a pretty big part of how I feel about myself, maybe more than they should be. They’re not the only thing that matters—I care about my work and relationships too—but if I’m unhappy with my body, it kind of overshadows everything else.
+=====================================
+
+[call 20] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F50.8", "F50.9"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these episodes where I eat a really large amount of food in one sitting, way more than feels normal. It’s starting to scare me because it feels like it’s getting worse, and I don’t really understand why I’m doing it.
+
+Doctor: After these episodes of eating a large amount of food, do you ever try to compensate in any way, like making yourself vomit, using laxatives, fasting, or exercising excessively to get rid of the calories?
+
+Patient: No, I don’t usually do anything like that afterward. I don’t make myself vomit or use laxatives or anything extreme; I just kind of sit with it and feel bad, but I don’t try to “undo” it.
+
+Doctor: During these episodes, do you feel like you’ve lost control over your eating, and do they happen at least once a week and cause you significant distress or problems in your life?
+
+Patient: Yeah, during those episodes I definitely feel like I’ve lost control, like I can’t stop even when I’m uncomfortably full. They’ve been happening at least once a week for over a year now, and afterward I feel really disgusted with myself and guilty, and it’s starting to affect my mood and how I see myself.
+
+Doctor: Outside of these binge episodes, do you generally follow strict diets, skip meals, or severely restrict what you eat, or is your eating between episodes relatively typical for you?
+
+Patient: Between episodes my eating is more or less “normal” for me—I’m not on any strict diet. I don’t usually skip a lot of meals or severely restrict; I just try to eat reasonably, though I’m probably more careful after a binge for a day or so.
+
+Doctor: How much do your weight or body shape affect how you feel about yourself overall—for example, would you say they are the main way you judge your self-worth, or just one part among many things that matter to you?
+
+Patient: I’d say my weight and body shape are a pretty big part of how I feel about myself, maybe more than they should be. They’re not the only thing that matters—I care about my work and relationships too—but if I’m unhappy with my body, it kind of overshadows everything else.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F50.8"], "note": "Previously the candidates were [F50.8, F50.9]. The history now clearly describes recurrent episodes (≥1x/week for >1 year) of objectively large food intake with loss of control, marked distress, absence of regular compensatory behaviors (no vomiting, laxatives, fasting, or excessive exercise), and no pattern of severe restriction between episodes. This is consistent with a specific eating pattern characterized by binge episodes without compensatory behaviors, rather than an unspecified eating disorder. Therefore F50.9 (unspecified) is no longer needed, and the current candidate is F50.8. I am not yet marking this as final because I still need to clarify weight/BMI, medical consequences, and rule out other conditions (e.g., mood or psychotic disorders, substance use, or medical causes) that could better explain the eating behavior.", "is_final": false}
+=====================================
+
+[call 21] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F50.8
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F50.8"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these episodes where I eat a really large amount of food in one sitting, way more than feels normal. It’s starting to scare me because it feels like it’s getting worse, and I don’t really understand why I’m doing it.
+
+Doctor: After these episodes of eating a large amount of food, do you ever try to compensate in any way, like making yourself vomit, using laxatives, fasting, or exercising excessively to get rid of the calories?
+
+Patient: No, I don’t usually do anything like that afterward. I don’t make myself vomit or use laxatives or anything extreme; I just kind of sit with it and feel bad, but I don’t try to “undo” it.
+
+Doctor: During these episodes, do you feel like you’ve lost control over your eating, and do they happen at least once a week and cause you significant distress or problems in your life?
+
+Patient: Yeah, during those episodes I definitely feel like I’ve lost control, like I can’t stop even when I’m uncomfortably full. They’ve been happening at least once a week for over a year now, and afterward I feel really disgusted with myself and guilty, and it’s starting to affect my mood and how I see myself.
+
+Doctor: Outside of these binge episodes, do you generally follow strict diets, skip meals, or severely restrict what you eat, or is your eating between episodes relatively typical for you?
+
+Patient: Between episodes my eating is more or less “normal” for me—I’m not on any strict diet. I don’t usually skip a lot of meals or severely restrict; I just try to eat reasonably, though I’m probably more careful after a binge for a day or so.
+
+Doctor: How much do your weight or body shape affect how you feel about yourself overall—for example, would you say they are the main way you judge your self-worth, or just one part among many things that matter to you?
+
+Patient: I’d say my weight and body shape are a pretty big part of how I feel about myself, maybe more than they should be. They’re not the only thing that matters—I care about my work and relationships too—but if I’m unhappy with my body, it kind of overshadows everything else.
+
+Patient: I’d say my weight and body shape are a pretty big part of how I feel about myself, maybe more than they should be. They’re not the only thing that matters—I care about my work and relationships too—but if I’m unhappy with my body, it kind of overshadows everything else.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "medical/weight history",
+  "question": "Has your doctor ever told you that your weight is in an underweight range or that they’re concerned you might not be eating enough overall, outside of the binge episodes?"
+}
+=====================================
+
+--- turn 06 ---
+
+[call 22] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ binge_episode
+  - Eating_Large_Amount: Eating, in a discrete period of time, an amount of food that is definitely larger than what most individuals would eat in a similar period of time under similar circumstances.
+  - Loss_of_Control: A sense of lack of control over eating during the episode (e.g., a feeling that one cannot stop eating or control what or how much one is eating).
+▸ binge_episode_related
+  - Rapid_Eating: Eating much more rapidly than normal.
+  - Negative_Affect_After_Binge: Feeling disgusted with oneself, depressed, or very guilty afterward.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 1 months
+  - Additional: The binge eating occurs, on average, at least once a week for 3 months
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 6
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Has your doctor ever told you that your weight is in an underweight range or that they’re concerned you might not be eating enough overall, outside of the binge episodes?
+
+========== OUTPUT [patient] ==========
+{"matched": false, "matched_sections": [], "answer_strategy": "This isn’t mentioned in the profile. Briefly say whether any doctor has ever told you that you’re underweight or not eating enough overall, or say you’re not sure or haven’t discussed it with a doctor."}
+=====================================
+
+[call 23] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Binge-Eating Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ binge_episode
+  - Eating_Large_Amount: Eating, in a discrete period of time, an amount of food that is definitely larger than what most individuals would eat in a similar period of time under similar circumstances.
+  - Loss_of_Control: A sense of lack of control over eating during the episode (e.g., a feeling that one cannot stop eating or control what or how much one is eating).
+▸ binge_episode_related
+  - Rapid_Eating: Eating much more rapidly than normal.
+  - Negative_Affect_After_Binge: Feeling disgusted with oneself, depressed, or very guilty afterward.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 1 months
+  - Additional: The binge eating occurs, on average, at least once a week for 3 months
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Eating_Large_Amount
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(No match in profile or inference only)
+Answer strategy: This isn’t mentioned in the profile. Briefly say whether any doctor has ever told you that you’re underweight or not eating enough overall, or say you’re not sure or haven’t discussed it with a doctor.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these episodes where I eat a really large amount of food in one sitting, way more than feels normal. It’s starting to scare me because it feels like it’s getting worse, and I don’t really understand why I’m doing it.
+
+Doctor: After these episodes of eating a large amount of food, do you ever try to compensate in any way, like making yourself vomit, using laxatives, fasting, or exercising excessively to get rid of the calories?
+
+Patient: No, I don’t usually do anything like that afterward. I don’t make myself vomit or use laxatives or anything extreme; I just kind of sit with it and feel bad, but I don’t try to “undo” it.
+
+Doctor: During these episodes, do you feel like you’ve lost control over your eating, and do they happen at least once a week and cause you significant distress or problems in your life?
+
+Patient: Yeah, during those episodes I definitely feel like I’ve lost control, like I can’t stop even when I’m uncomfortably full. They’ve been happening at least once a week for over a year now, and afterward I feel really disgusted with myself and guilty, and it’s starting to affect my mood and how I see myself.
+
+Doctor: Outside of these binge episodes, do you generally follow strict diets, skip meals, or severely restrict what you eat, or is your eating between episodes relatively typical for you?
+
+Patient: Between episodes my eating is more or less “normal” for me—I’m not on any strict diet. I don’t usually skip a lot of meals or severely restrict; I just try to eat reasonably, though I’m probably more careful after a binge for a day or so.
+
+Doctor: How much do your weight or body shape affect how you feel about yourself overall—for example, would you say they are the main way you judge your self-worth, or just one part among many things that matter to you?
+
+Patient: I’d say my weight and body shape are a pretty big part of how I feel about myself, maybe more than they should be. They’re not the only thing that matters—I care about my work and relationships too—but if I’m unhappy with my body, it kind of overshadows everything else.
+
+Doctor: Has your doctor ever told you that your weight is in an underweight range or that they’re concerned you might not be eating enough overall, outside of the binge episodes?
+
+========== OUTPUT [patient] ==========
+No, I’ve never been told I’m underweight. No doctor has said they’re worried I’m not eating enough overall.
+=====================================
+
+[call 24] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F50.8"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these episodes where I eat a really large amount of food in one sitting, way more than feels normal. It’s starting to scare me because it feels like it’s getting worse, and I don’t really understand why I’m doing it.
+
+Doctor: After these episodes of eating a large amount of food, do you ever try to compensate in any way, like making yourself vomit, using laxatives, fasting, or exercising excessively to get rid of the calories?
+
+Patient: No, I don’t usually do anything like that afterward. I don’t make myself vomit or use laxatives or anything extreme; I just kind of sit with it and feel bad, but I don’t try to “undo” it.
+
+Doctor: During these episodes, do you feel like you’ve lost control over your eating, and do they happen at least once a week and cause you significant distress or problems in your life?
+
+Patient: Yeah, during those episodes I definitely feel like I’ve lost control, like I can’t stop even when I’m uncomfortably full. They’ve been happening at least once a week for over a year now, and afterward I feel really disgusted with myself and guilty, and it’s starting to affect my mood and how I see myself.
+
+Doctor: Outside of these binge episodes, do you generally follow strict diets, skip meals, or severely restrict what you eat, or is your eating between episodes relatively typical for you?
+
+Patient: Between episodes my eating is more or less “normal” for me—I’m not on any strict diet. I don’t usually skip a lot of meals or severely restrict; I just try to eat reasonably, though I’m probably more careful after a binge for a day or so.
+
+Doctor: How much do your weight or body shape affect how you feel about yourself overall—for example, would you say they are the main way you judge your self-worth, or just one part among many things that matter to you?
+
+Patient: I’d say my weight and body shape are a pretty big part of how I feel about myself, maybe more than they should be. They’re not the only thing that matters—I care about my work and relationships too—but if I’m unhappy with my body, it kind of overshadows everything else.
+
+Doctor: Has your doctor ever told you that your weight is in an underweight range or that they’re concerned you might not be eating enough overall, outside of the binge episodes?
+
+Patient: No, I’ve never been told I’m underweight. No doctor has said they’re worried I’m not eating enough overall.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F50.8", "F50.9"], "note": "Previously the only candidate was F50.8 (other eating disorders). The history now clearly describes recurrent episodes of eating objectively large amounts of food, with loss of control, at least weekly for over a year, significant distress, no regular compensatory behaviors, no marked dietary restriction between episodes, and no underweight. This pattern is most consistent with a binge‑type eating disorder without compensatory behaviors. In ICD-10 there is no specific separate code for this presentation, so it typically falls under F50.8, but F50.9 (unspecified eating disorder) is also kept on the list because the exact ICD-10 categorization can vary depending on local coding practices and whether criteria are fully met/documented. There is no evidence for other conditions like those involving underweight, extreme restriction, or regular purging, so other eating-disorder codes are not included. The candidate list is thus expanded from [F50.8] to [F50.8, F50.9] to reflect this diagnostic uncertainty in coding rather than in the clinical picture.", "is_final": true}
+=====================================
+
+[call 25] doctor-final-diagnosis
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the full interview transcript and the differential diagnosis candidates, write the final diagnosis report.
+
+Both the "diagnosis" and "candidates" MUST be ICD-10 codes.
+
+[Field Instructions]
+- diagnosis: The single diagnosis code of ICD-10.
+- candidates: Top 2–3 differential candidates of ICD-10 codes considered until the end.
+- reason: Brief diagnostic rationale.
+- diagnostic_checklist: Structured evidence summary organized by diagnostic criterion type.
+  List only symptom groups that are relevant to your diagnosis, with the symptoms the patient actually confirmed.
+
+Output Format (JSON only, no other text):
+{
+  "diagnosis": "Final Diagnosis ICD-10 code",
+  "candidates": ["Disease Code1", "Disease Code2"],
+  "reason": "Brief diagnostic rationale.",
+  "diagnostic_checklist": {
+    "symptom_groups": [
+      {
+        "group": "clinical group name (e.g., inattention, manic_episode, psychotic_symptoms)",
+        "confirmed_symptoms": ["natural language description of each confirmed symptom in this group"],
+        "count": <integer>
+      }
+    ],
+    "duration_verified": "Description of how the duration criterion was established (e.g., 'symptoms present for over 6 months since childhood'), or null if not assessed.",
+    "functional_impairment": <true if functional impairment was confirmed, false if denied, null if not assessed>,
+    "traumatic_stressor": <true if a qualifying traumatic stressor was confirmed, null if not applicable or not assessed>,
+    "psychosocial_stressor": <true if a qualifying psychosocial stressor was confirmed, null if not applicable or not assessed>,
+    "additional_requirements": ["Each additional criterion that was explicitly verified during the interview (e.g., 'Onset prior to age 12 confirmed')"]
+  }
+}
+
+[2. USER]
+Candidate Diseases: 
+["F50.8", "F50.9"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these episodes where I eat a really large amount of food in one sitting, way more than feels normal. It’s starting to scare me because it feels like it’s getting worse, and I don’t really understand why I’m doing it.
+
+Doctor: After these episodes of eating a large amount of food, do you ever try to compensate in any way, like making yourself vomit, using laxatives, fasting, or exercising excessively to get rid of the calories?
+
+Patient: No, I don’t usually do anything like that afterward. I don’t make myself vomit or use laxatives or anything extreme; I just kind of sit with it and feel bad, but I don’t try to “undo” it.
+
+Doctor: During these episodes, do you feel like you’ve lost control over your eating, and do they happen at least once a week and cause you significant distress or problems in your life?
+
+Patient: Yeah, during those episodes I definitely feel like I’ve lost control, like I can’t stop even when I’m uncomfortably full. They’ve been happening at least once a week for over a year now, and afterward I feel really disgusted with myself and guilty, and it’s starting to affect my mood and how I see myself.
+
+Doctor: Outside of these binge episodes, do you generally follow strict diets, skip meals, or severely restrict what you eat, or is your eating between episodes relatively typical for you?
+
+Patient: Between episodes my eating is more or less “normal” for me—I’m not on any strict diet. I don’t usually skip a lot of meals or severely restrict; I just try to eat reasonably, though I’m probably more careful after a binge for a day or so.
+
+Doctor: How much do your weight or body shape affect how you feel about yourself overall—for example, would you say they are the main way you judge your self-worth, or just one part among many things that matter to you?
+
+Patient: I’d say my weight and body shape are a pretty big part of how I feel about myself, maybe more than they should be. They’re not the only thing that matters—I care about my work and relationships too—but if I’m unhappy with my body, it kind of overshadows everything else.
+
+Doctor: Has your doctor ever told you that your weight is in an underweight range or that they’re concerned you might not be eating enough overall, outside of the binge episodes?
+
+Patient: No, I’ve never been told I’m underweight. No doctor has said they’re worried I’m not eating enough overall.
+
+========== OUTPUT [doctor] ==========
+{
+  "diagnosis": "F50.8",
+  "candidates": ["F50.8", "F50.9"],
+  "reason": "The patient has recurrent binge eating episodes (≥1/week for >1 year) characterized by loss of control and marked distress, without regular inappropriate compensatory behaviors and without underweight. This is most consistent with binge eating disorder, which is classified under F50.8 (other eating disorders). F50.9 (eating disorder, unspecified) is less appropriate because the presentation clearly meets criteria for a specified binge-type eating disorder.",
+  "diagnostic_checklist": {
+    "symptom_groups": [
+      {
+        "group": "binge_eating",
+        "confirmed_symptoms": [
+          "Recurrent episodes of eating an objectively large amount of food in a discrete period of time",
+          "Subjective loss of control over eating during episodes (feels unable to stop even when uncomfortably full)",
+          "Episodes occur at least once per week",
+          "Episodes have been occurring for over a year",
+          "Marked distress, guilt, and disgust about binge episodes"
+        ],
+        "count": 5
+      },
+      {
+        "group": "absence_of_compensatory_behaviors",
+        "confirmed_symptoms": [
+          "Denies self-induced vomiting after binges",
+          "Denies misuse of laxatives or other medications to compensate",
+          "Denies extreme fasting or excessive exercise as regular compensatory behavior"
+        ],
+        "count": 3
+      },
+      {
+        "group": "body_image_concerns",
+        "confirmed_symptoms": [
+          "Weight and body shape are a major, though not exclusive, factor in self-evaluation",
+          "Negative body image tends to overshadow other domains when patient is unhappy with their body"
+        ],
+        "count": 2
+      }
+    ],
+    "duration_verified": "Patient reports binge episodes occurring at least once a week for over a year.",
+    "functional_impairment": true,
+    "traumatic_stressor": null,
+    "psychosocial_stressor": true,
+    "additional_requirements": [
+      "No history of being underweight or medical concern for insufficient intake outside binge episodes",
+      "No regular inappropriate compensatory behaviors reported"
+    ]
+  }
+}
+=====================================
+

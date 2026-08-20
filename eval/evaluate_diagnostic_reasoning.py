@@ -158,9 +158,11 @@ def main() -> None:
     _get_run_dir, _llm_chat, load_symptom_names, build_gt_criteria_text, \
         judge_checklist, compute_score, score_episode = _setup()
 
-    run_dir     = _get_run_dir()
-    results_dir = args.results if args.results else BASE_DIR / "results" / run_dir
-    logs_dir    = args.logs    if args.logs    else BASE_DIR / "logs"    / run_dir
+    from utils.paths import batch_artifact_dirs
+    run_dir = _get_run_dir()
+    default_results_dir, default_logs_dir, _ = batch_artifact_dirs(run_dir)
+    results_dir = args.results if args.results else default_results_dir
+    logs_dir = args.logs if args.logs else default_logs_dir
 
     # Load KG
     criteria   = json.loads((KG_DIR / "diagnostic_criteria.json").read_text(encoding="utf-8"))

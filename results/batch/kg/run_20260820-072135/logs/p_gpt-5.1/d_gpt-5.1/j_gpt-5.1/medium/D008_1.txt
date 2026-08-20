@@ -1,0 +1,2421 @@
+--- turn 00 ---
+
+[call 01] doctor-opening-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "opening question",
+  "subcategory": null,
+  "question": "Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?"
+}
+=====================================
+
+--- turn 01 ---
+
+[call 02] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ manic_episode
+  - Elevated Mood: A mood that is abnormally high, euphoric, and full of unmotivated happiness and vitality.
+  - Irritable Mood: A state where one gets angry or aggressive even at minor stimuli.
+  - Mood Lability: Rapid shifts in mood, alternating unpredictably between euphoria and irritability.
+  - Increased Energy: Overflowing physical and mental energy, leading to an inability to stay still and a desire to keep moving.
+  - Hyperactivity: Doing far more work than usual or starting multiple activities simultaneously.
+  - Psychomotor Agitation: Inability to tolerate resting or stopping, driven by a constant need to do something.
+  - Talkativeness: Speaking far more than usual and continuing to talk without rest.
+  - Rapid Speech: Speech speed is so fast that it is difficult for others to understand or interrupt.
+  - Pressured Speech: Cannot stop talking or tolerate silence due to an internal pressure to keep speaking.
+  - Racing Thoughts: Thoughts spinning too fast in the head, constantly jumping from one idea to another.
+  - Flooding of Thoughts: Too many thoughts emerging simultaneously, making them disorganized.
+  - Inability to Control Thoughts: Unable to stop or slow down thoughts and unable to calm the mind.
+  Duration: 8 months
+▸ depressive_episode
+  - Depressed Mood: A persistently sunken mood or feeling of depression.
+  - Tearfulness: A state of frequent crying or inability to hold back tears.
+  - Sadness: A state where a sad or gloomy mood is maintained continuously.
+  - Emptiness: A feeling of inner emptiness or a state of feeling no emotion.
+  - Emotional Numbness: A state where emotions feel dulled or paralyzed.
+  - Significant Weight Loss: Weight loss of more than 5% in a month without dieting.
+  - Weight Gain: Weight gain of more than 5% in a month.
+  - Decrease in Appetite: Decrease in appetite occurring nearly every day.
+  - Increase in Appetite: Increase in appetite occurring nearly every day.
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  Duration: 1 year and 1 months
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 1
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["manic_episode", "depressive_episode"], "answer_strategy": "Respond in a simple, conversational way focusing on what feels like the *main* current problem (chief complaint), not listing every symptom. Briefly describe the most troubling mood issue that led you to seek help (for example, either the long-lasting low mood, emptiness, sleep/appetite changes, or the period of very elevated, irritable, over-energized state), but don’t go into a full checklist. Emphasize how long it’s been going on and how it’s affecting daily life. Avoid bringing up additional details beyond the main mood problem at this first reply."}
+=====================================
+
+[call 03] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Bipolar I Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ manic_episode
+  - Elevated Mood: A mood that is abnormally high, euphoric, and full of unmotivated happiness and vitality.
+  - Irritable Mood: A state where one gets angry or aggressive even at minor stimuli.
+  - Mood Lability: Rapid shifts in mood, alternating unpredictably between euphoria and irritability.
+  - Increased Energy: Overflowing physical and mental energy, leading to an inability to stay still and a desire to keep moving.
+  - Hyperactivity: Doing far more work than usual or starting multiple activities simultaneously.
+  - Psychomotor Agitation: Inability to tolerate resting or stopping, driven by a constant need to do something.
+  - Talkativeness: Speaking far more than usual and continuing to talk without rest.
+  - Rapid Speech: Speech speed is so fast that it is difficult for others to understand or interrupt.
+  - Pressured Speech: Cannot stop talking or tolerate silence due to an internal pressure to keep speaking.
+  - Racing Thoughts: Thoughts spinning too fast in the head, constantly jumping from one idea to another.
+  - Flooding of Thoughts: Too many thoughts emerging simultaneously, making them disorganized.
+  - Inability to Control Thoughts: Unable to stop or slow down thoughts and unable to calm the mind.
+  Duration: 8 months
+▸ depressive_episode
+  - Depressed Mood: A persistently sunken mood or feeling of depression.
+  - Tearfulness: A state of frequent crying or inability to hold back tears.
+  - Sadness: A state where a sad or gloomy mood is maintained continuously.
+  - Emptiness: A feeling of inner emptiness or a state of feeling no emotion.
+  - Emotional Numbness: A state where emotions feel dulled or paralyzed.
+  - Significant Weight Loss: Weight loss of more than 5% in a month without dieting.
+  - Weight Gain: Weight gain of more than 5% in a month.
+  - Decrease in Appetite: Decrease in appetite occurring nearly every day.
+  - Increase in Appetite: Increase in appetite occurring nearly every day.
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  Duration: 1 year and 1 months
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Elevated_Irritable_Mood
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: manic_episode, depressive_episode
+Answer strategy: Respond in a simple, conversational way focusing on what feels like the *main* current problem (chief complaint), not listing every symptom. Briefly describe the most troubling mood issue that led you to seek help (for example, either the long-lasting low mood, emptiness, sleep/appetite changes, or the period of very elevated, irritable, over-energized state), but don’t go into a full checklist. Emphasize how long it’s been going on and how it’s affecting daily life. Avoid bringing up additional details beyond the main mood problem at this first reply.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+========== OUTPUT [patient] ==========
+Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+=====================================
+
+[call 04] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F30.1", "F31.81", "F32.1", "F41.1"], "note": "Initial step: with only a brief opening statement, I need to keep the list broad and provisional. The patient reports predominantly elevated or \"up\" mood with marked irritability and anger outbursts causing interpersonal problems and a sense of loss of control. This raises concern for an episodic mood syndrome with possible hypomanic or manic features, so I include a manic-type episode (F30.1) and a bipolar-spectrum condition with hypomanic features (F31.81). However, I do not yet know duration, associated symptoms (sleep, energy, impulsivity, grandiosity, psychosis), or past history. Irritability and mood lability can also appear in unipolar depression and anxiety, so I add a moderate depressive episode (F32.1) and generalized anxiety-type condition (F41.1) as broader differentials. There was no previous candidate list provided, so this is the initial set; it will likely narrow significantly once I obtain more detail about episode duration, functional impairment, and associated symptoms.", "is_final": false}
+=====================================
+
+[call 05] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F30.1
+- F31.81
+- F32.1
+- F41.1
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F30.1", "F31.81", "F32.1", "F41.1"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "bipolar vs unipolar vs anxiety",
+  "question": "During these “up” periods, do you also notice needing much less sleep, feeling unusually confident or driven, or doing things that are risky or out of character for you (like overspending, impulsive sex, or sudden big plans)?"
+}
+=====================================
+
+--- turn 02 ---
+
+[call 06] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ manic_episode
+  - Elevated Mood: A mood that is abnormally high, euphoric, and full of unmotivated happiness and vitality.
+  - Irritable Mood: A state where one gets angry or aggressive even at minor stimuli.
+  - Mood Lability: Rapid shifts in mood, alternating unpredictably between euphoria and irritability.
+  - Increased Energy: Overflowing physical and mental energy, leading to an inability to stay still and a desire to keep moving.
+  - Hyperactivity: Doing far more work than usual or starting multiple activities simultaneously.
+  - Psychomotor Agitation: Inability to tolerate resting or stopping, driven by a constant need to do something.
+  - Talkativeness: Speaking far more than usual and continuing to talk without rest.
+  - Rapid Speech: Speech speed is so fast that it is difficult for others to understand or interrupt.
+  - Pressured Speech: Cannot stop talking or tolerate silence due to an internal pressure to keep speaking.
+  - Racing Thoughts: Thoughts spinning too fast in the head, constantly jumping from one idea to another.
+  - Flooding of Thoughts: Too many thoughts emerging simultaneously, making them disorganized.
+  - Inability to Control Thoughts: Unable to stop or slow down thoughts and unable to calm the mind.
+  Duration: 8 months
+▸ depressive_episode
+  - Depressed Mood: A persistently sunken mood or feeling of depression.
+  - Tearfulness: A state of frequent crying or inability to hold back tears.
+  - Sadness: A state where a sad or gloomy mood is maintained continuously.
+  - Emptiness: A feeling of inner emptiness or a state of feeling no emotion.
+  - Emotional Numbness: A state where emotions feel dulled or paralyzed.
+  - Significant Weight Loss: Weight loss of more than 5% in a month without dieting.
+  - Weight Gain: Weight gain of more than 5% in a month.
+  - Decrease in Appetite: Decrease in appetite occurring nearly every day.
+  - Increase in Appetite: Increase in appetite occurring nearly every day.
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  Duration: 1 year and 1 months
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 2
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+During these “up” periods, do you also notice needing much less sleep, feeling unusually confident or driven, or doing things that are risky or out of character for you (like overspending, impulsive sex, or sudden big plans)?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["manic_episode - Increased Energy", "manic_episode - Hyperactivity", "manic_episode - Psychomotor Agitation"], "answer_strategy": "Answer clearly about how your sleep, confidence, drive, and behavior change during the \"up\" periods, based on what feels true to you. Since the profile already shows a lot of increased energy and activity, it would be consistent to describe sleeping less or feeling like you don’t need as much rest, being more driven or goal-focused, and whether you’ve actually done risky or uncharacteristic things (overspending, impulsive sex, sudden big plans, etc.). If some of these don’t apply, say so directly. Keep the tone straightforward and concrete: mention specific examples (e.g., how many hours you sleep, any recent impulsive decisions or spending) and roughly how often this happens during these periods."}
+=====================================
+
+[call 07] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Bipolar I Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ manic_episode
+  - Elevated Mood: A mood that is abnormally high, euphoric, and full of unmotivated happiness and vitality.
+  - Irritable Mood: A state where one gets angry or aggressive even at minor stimuli.
+  - Mood Lability: Rapid shifts in mood, alternating unpredictably between euphoria and irritability.
+  - Increased Energy: Overflowing physical and mental energy, leading to an inability to stay still and a desire to keep moving.
+  - Hyperactivity: Doing far more work than usual or starting multiple activities simultaneously.
+  - Psychomotor Agitation: Inability to tolerate resting or stopping, driven by a constant need to do something.
+  - Talkativeness: Speaking far more than usual and continuing to talk without rest.
+  - Rapid Speech: Speech speed is so fast that it is difficult for others to understand or interrupt.
+  - Pressured Speech: Cannot stop talking or tolerate silence due to an internal pressure to keep speaking.
+  - Racing Thoughts: Thoughts spinning too fast in the head, constantly jumping from one idea to another.
+  - Flooding of Thoughts: Too many thoughts emerging simultaneously, making them disorganized.
+  - Inability to Control Thoughts: Unable to stop or slow down thoughts and unable to calm the mind.
+  Duration: 8 months
+▸ depressive_episode
+  - Depressed Mood: A persistently sunken mood or feeling of depression.
+  - Tearfulness: A state of frequent crying or inability to hold back tears.
+  - Sadness: A state where a sad or gloomy mood is maintained continuously.
+  - Emptiness: A feeling of inner emptiness or a state of feeling no emotion.
+  - Emotional Numbness: A state where emotions feel dulled or paralyzed.
+  - Significant Weight Loss: Weight loss of more than 5% in a month without dieting.
+  - Weight Gain: Weight gain of more than 5% in a month.
+  - Decrease in Appetite: Decrease in appetite occurring nearly every day.
+  - Increase in Appetite: Increase in appetite occurring nearly every day.
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  Duration: 1 year and 1 months
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Elevated_Irritable_Mood
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: manic_episode - Increased Energy, manic_episode - Hyperactivity, manic_episode - Psychomotor Agitation
+Answer strategy: Answer clearly about how your sleep, confidence, drive, and behavior change during the "up" periods, based on what feels true to you. Since the profile already shows a lot of increased energy and activity, it would be consistent to describe sleeping less or feeling like you don’t need as much rest, being more driven or goal-focused, and whether you’ve actually done risky or uncharacteristic things (overspending, impulsive sex, sudden big plans, etc.). If some of these don’t apply, say so directly. Keep the tone straightforward and concrete: mention specific examples (e.g., how many hours you sleep, any recent impulsive decisions or spending) and roughly how often this happens during these periods.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+Doctor: During these “up” periods, do you also notice needing much less sleep, feeling unusually confident or driven, or doing things that are risky or out of character for you (like overspending, impulsive sex, or sudden big plans)?
+
+========== OUTPUT [patient] ==========
+Yeah, when I’m in those “up” phases I sleep maybe 3–4 hours and still feel wired, like I don’t need rest. I feel really confident and driven, start a bunch of projects at once, and I’ve definitely spent too much money on things I don’t really need, but I haven’t done anything like risky sexual stuff.
+=====================================
+
+[call 08] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F30.1", "F31.81", "F32.1", "F41.1"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+Doctor: During these “up” periods, do you also notice needing much less sleep, feeling unusually confident or driven, or doing things that are risky or out of character for you (like overspending, impulsive sex, or sudden big plans)?
+
+Patient: Yeah, when I’m in those “up” phases I sleep maybe 3–4 hours and still feel wired, like I don’t need rest. I feel really confident and driven, start a bunch of projects at once, and I’ve definitely spent too much money on things I don’t really need, but I haven’t done anything like risky sexual stuff.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F30.1", "F31.81"], "note": "Previously the candidates were [F30.1, F31.81, F32.1, F41.1]. The patient describes clear periods of elevated mood with markedly reduced need for sleep (3–4 hours and still feeling wired), increased goal-directed activity, inflated confidence, and impulsive overspending that is causing interpersonal problems. This pattern strongly supports a mood episode on the elevated side rather than a primary anxiety or unipolar depressive disorder, so F32.1 (moderate depressive episode) and F41.1 (generalized anxiety disorder) move down in likelihood and are removed from the current differential. What remains to clarify is whether these elevated periods meet criteria for a hypomanic vs manic episode, and whether there is any history of distinct depressive episodes, which would distinguish between the remaining two mood diagnoses. Therefore the current candidates are [F30.1, F31.81]. Further questioning is needed about duration and severity of the elevated periods, any psychotic symptoms, and past depressive episodes, so this is not final yet.", "is_final": false}
+=====================================
+
+[call 09] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F30.1
+- F31.81
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F30.1", "F31.81"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+Doctor: During these “up” periods, do you also notice needing much less sleep, feeling unusually confident or driven, or doing things that are risky or out of character for you (like overspending, impulsive sex, or sudden big plans)?
+
+Patient: Yeah, when I’m in those “up” phases I sleep maybe 3–4 hours and still feel wired, like I don’t need rest. I feel really confident and driven, start a bunch of projects at once, and I’ve definitely spent too much money on things I don’t really need, but I haven’t done anything like risky sexual stuff.
+
+Patient: Yeah, when I’m in those “up” phases I sleep maybe 3–4 hours and still feel wired, like I don’t need rest. I feel really confident and driven, start a bunch of projects at once, and I’ve definitely spent too much money on things I don’t really need, but I haven’t done anything like risky sexual stuff.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "history of depression",
+  "question": "Have you also had periods lasting at least two weeks where you felt very down or depressed most of the day, nearly every day, with low energy or loss of interest in things you usually enjoy?"
+}
+=====================================
+
+--- turn 03 ---
+
+[call 10] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ manic_episode
+  - Elevated Mood: A mood that is abnormally high, euphoric, and full of unmotivated happiness and vitality.
+  - Irritable Mood: A state where one gets angry or aggressive even at minor stimuli.
+  - Mood Lability: Rapid shifts in mood, alternating unpredictably between euphoria and irritability.
+  - Increased Energy: Overflowing physical and mental energy, leading to an inability to stay still and a desire to keep moving.
+  - Hyperactivity: Doing far more work than usual or starting multiple activities simultaneously.
+  - Psychomotor Agitation: Inability to tolerate resting or stopping, driven by a constant need to do something.
+  - Talkativeness: Speaking far more than usual and continuing to talk without rest.
+  - Rapid Speech: Speech speed is so fast that it is difficult for others to understand or interrupt.
+  - Pressured Speech: Cannot stop talking or tolerate silence due to an internal pressure to keep speaking.
+  - Racing Thoughts: Thoughts spinning too fast in the head, constantly jumping from one idea to another.
+  - Flooding of Thoughts: Too many thoughts emerging simultaneously, making them disorganized.
+  - Inability to Control Thoughts: Unable to stop or slow down thoughts and unable to calm the mind.
+  Duration: 8 months
+▸ depressive_episode
+  - Depressed Mood: A persistently sunken mood or feeling of depression.
+  - Tearfulness: A state of frequent crying or inability to hold back tears.
+  - Sadness: A state where a sad or gloomy mood is maintained continuously.
+  - Emptiness: A feeling of inner emptiness or a state of feeling no emotion.
+  - Emotional Numbness: A state where emotions feel dulled or paralyzed.
+  - Significant Weight Loss: Weight loss of more than 5% in a month without dieting.
+  - Weight Gain: Weight gain of more than 5% in a month.
+  - Decrease in Appetite: Decrease in appetite occurring nearly every day.
+  - Increase in Appetite: Increase in appetite occurring nearly every day.
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  Duration: 1 year and 1 months
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 3
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Have you also had periods lasting at least two weeks where you felt very down or depressed most of the day, nearly every day, with low energy or loss of interest in things you usually enjoy?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["depressive_episode: Depressed Mood", "depressive_episode: Sadness", "depressive_episode: Emptiness", "depressive_episode: Emotional Numbness", "depressive_episode: Non-Restorative Sleep", "depressive_episode: Duration: 1 year and 1 months"], "answer_strategy": "Answer clearly that you HAVE had such periods, because the profile describes a depressive episode lasting over a year with persistent low mood. Briefly describe that you have felt depressed or very down most of the day, nearly every day, for a long time, with low energy and loss of interest or emotional numbness. Keep the tone straightforward and factual, and you can mention how long this has been going on in simple terms (e.g., more than a year)."}
+=====================================
+
+[call 11] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Bipolar I Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ manic_episode
+  - Elevated Mood: A mood that is abnormally high, euphoric, and full of unmotivated happiness and vitality.
+  - Irritable Mood: A state where one gets angry or aggressive even at minor stimuli.
+  - Mood Lability: Rapid shifts in mood, alternating unpredictably between euphoria and irritability.
+  - Increased Energy: Overflowing physical and mental energy, leading to an inability to stay still and a desire to keep moving.
+  - Hyperactivity: Doing far more work than usual or starting multiple activities simultaneously.
+  - Psychomotor Agitation: Inability to tolerate resting or stopping, driven by a constant need to do something.
+  - Talkativeness: Speaking far more than usual and continuing to talk without rest.
+  - Rapid Speech: Speech speed is so fast that it is difficult for others to understand or interrupt.
+  - Pressured Speech: Cannot stop talking or tolerate silence due to an internal pressure to keep speaking.
+  - Racing Thoughts: Thoughts spinning too fast in the head, constantly jumping from one idea to another.
+  - Flooding of Thoughts: Too many thoughts emerging simultaneously, making them disorganized.
+  - Inability to Control Thoughts: Unable to stop or slow down thoughts and unable to calm the mind.
+  Duration: 8 months
+▸ depressive_episode
+  - Depressed Mood: A persistently sunken mood or feeling of depression.
+  - Tearfulness: A state of frequent crying or inability to hold back tears.
+  - Sadness: A state where a sad or gloomy mood is maintained continuously.
+  - Emptiness: A feeling of inner emptiness or a state of feeling no emotion.
+  - Emotional Numbness: A state where emotions feel dulled or paralyzed.
+  - Significant Weight Loss: Weight loss of more than 5% in a month without dieting.
+  - Weight Gain: Weight gain of more than 5% in a month.
+  - Decrease in Appetite: Decrease in appetite occurring nearly every day.
+  - Increase in Appetite: Increase in appetite occurring nearly every day.
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  Duration: 1 year and 1 months
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Elevated_Irritable_Mood
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: depressive_episode: Depressed Mood, depressive_episode: Sadness, depressive_episode: Emptiness, depressive_episode: Emotional Numbness, depressive_episode: Non-Restorative Sleep, depressive_episode: Duration: 1 year and 1 months
+Answer strategy: Answer clearly that you HAVE had such periods, because the profile describes a depressive episode lasting over a year with persistent low mood. Briefly describe that you have felt depressed or very down most of the day, nearly every day, for a long time, with low energy and loss of interest or emotional numbness. Keep the tone straightforward and factual, and you can mention how long this has been going on in simple terms (e.g., more than a year).
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+Doctor: During these “up” periods, do you also notice needing much less sleep, feeling unusually confident or driven, or doing things that are risky or out of character for you (like overspending, impulsive sex, or sudden big plans)?
+
+Patient: Yeah, when I’m in those “up” phases I sleep maybe 3–4 hours and still feel wired, like I don’t need rest. I feel really confident and driven, start a bunch of projects at once, and I’ve definitely spent too much money on things I don’t really need, but I haven’t done anything like risky sexual stuff.
+
+Doctor: Have you also had periods lasting at least two weeks where you felt very down or depressed most of the day, nearly every day, with low energy or loss of interest in things you usually enjoy?
+
+========== OUTPUT [patient] ==========
+Yeah, I’ve had stretches like that, where for weeks I just feel really down most of the day and nothing feels enjoyable. It’s been happening on and off for over a year, and during those times my energy is really low and I feel kind of empty or numb.
+=====================================
+
+[call 12] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F30.1", "F31.81"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+Doctor: During these “up” periods, do you also notice needing much less sleep, feeling unusually confident or driven, or doing things that are risky or out of character for you (like overspending, impulsive sex, or sudden big plans)?
+
+Patient: Yeah, when I’m in those “up” phases I sleep maybe 3–4 hours and still feel wired, like I don’t need rest. I feel really confident and driven, start a bunch of projects at once, and I’ve definitely spent too much money on things I don’t really need, but I haven’t done anything like risky sexual stuff.
+
+Doctor: Have you also had periods lasting at least two weeks where you felt very down or depressed most of the day, nearly every day, with low energy or loss of interest in things you usually enjoy?
+
+Patient: Yeah, I’ve had stretches like that, where for weeks I just feel really down most of the day and nothing feels enjoyable. It’s been happening on and off for over a year, and during those times my energy is really low and I feel kind of empty or numb.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F30.1", "F31.81"], "note": "Previously the candidates were [F30.1 (a single moderate elevated mood episode) and F31.81 (a recurrent mood condition with both elevated and depressed periods)]. Based on the new information, the patient clearly describes recurrent episodes of elevated mood with decreased need for sleep, increased goal-directed activity, overspending, and irritability, as well as separate periods of at least two weeks of depressed mood with low energy and anhedonia, recurring over more than a year. This pattern strongly supports a recurrent mood disorder with both elevated and depressive episodes rather than a single isolated elevated episode. Therefore, F30.1 as a standalone episode becomes less likely, while the recurrent mood condition (F31.81) remains the leading candidate. However, because we have not yet clarified the exact duration, severity, and functional impairment of the elevated episodes (to distinguish between shorter, milder episodes vs. more severe ones), I will keep both codes in the differential for now, with F31.81 as more probable. Further questions about episode duration, impact on work/relationships, any psychotic features, and family history are still needed, so this is not yet final.", "is_final": false}
+=====================================
+
+[call 13] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F30.1
+- F31.81
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F30.1", "F31.81"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+Doctor: During these “up” periods, do you also notice needing much less sleep, feeling unusually confident or driven, or doing things that are risky or out of character for you (like overspending, impulsive sex, or sudden big plans)?
+
+Patient: Yeah, when I’m in those “up” phases I sleep maybe 3–4 hours and still feel wired, like I don’t need rest. I feel really confident and driven, start a bunch of projects at once, and I’ve definitely spent too much money on things I don’t really need, but I haven’t done anything like risky sexual stuff.
+
+Doctor: Have you also had periods lasting at least two weeks where you felt very down or depressed most of the day, nearly every day, with low energy or loss of interest in things you usually enjoy?
+
+Patient: Yeah, I’ve had stretches like that, where for weeks I just feel really down most of the day and nothing feels enjoyable. It’s been happening on and off for over a year, and during those times my energy is really low and I feel kind of empty or numb.
+
+Patient: Yeah, I’ve had stretches like that, where for weeks I just feel really down most of the day and nothing feels enjoyable. It’s been happening on and off for over a year, and during those times my energy is really low and I feel kind of empty or numb.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "severity and impairment of elevated mood episodes",
+  "question": "During your most “up” phases, have your symptoms ever become so intense that you needed to go to the hospital or were unable to function at work or in daily life, or have they stayed noticeable but still manageable without hospitalization?"
+}
+=====================================
+
+--- turn 04 ---
+
+[call 14] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ manic_episode
+  - Elevated Mood: A mood that is abnormally high, euphoric, and full of unmotivated happiness and vitality.
+  - Irritable Mood: A state where one gets angry or aggressive even at minor stimuli.
+  - Mood Lability: Rapid shifts in mood, alternating unpredictably between euphoria and irritability.
+  - Increased Energy: Overflowing physical and mental energy, leading to an inability to stay still and a desire to keep moving.
+  - Hyperactivity: Doing far more work than usual or starting multiple activities simultaneously.
+  - Psychomotor Agitation: Inability to tolerate resting or stopping, driven by a constant need to do something.
+  - Talkativeness: Speaking far more than usual and continuing to talk without rest.
+  - Rapid Speech: Speech speed is so fast that it is difficult for others to understand or interrupt.
+  - Pressured Speech: Cannot stop talking or tolerate silence due to an internal pressure to keep speaking.
+  - Racing Thoughts: Thoughts spinning too fast in the head, constantly jumping from one idea to another.
+  - Flooding of Thoughts: Too many thoughts emerging simultaneously, making them disorganized.
+  - Inability to Control Thoughts: Unable to stop or slow down thoughts and unable to calm the mind.
+  Duration: 8 months
+▸ depressive_episode
+  - Depressed Mood: A persistently sunken mood or feeling of depression.
+  - Tearfulness: A state of frequent crying or inability to hold back tears.
+  - Sadness: A state where a sad or gloomy mood is maintained continuously.
+  - Emptiness: A feeling of inner emptiness or a state of feeling no emotion.
+  - Emotional Numbness: A state where emotions feel dulled or paralyzed.
+  - Significant Weight Loss: Weight loss of more than 5% in a month without dieting.
+  - Weight Gain: Weight gain of more than 5% in a month.
+  - Decrease in Appetite: Decrease in appetite occurring nearly every day.
+  - Increase in Appetite: Increase in appetite occurring nearly every day.
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  Duration: 1 year and 1 months
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 4
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+During your most “up” phases, have your symptoms ever become so intense that you needed to go to the hospital or were unable to function at work or in daily life, or have they stayed noticeable but still manageable without hospitalization?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["manic_episode - Elevated Mood", "manic_episode - Irritable Mood", "manic_episode - Mood Lability", "manic_episode - Increased Energy", "manic_episode - Hyperactivity", "manic_episode - Psychomotor Agitation", "manic_episode - Talkativeness", "manic_episode - Rapid Speech", "manic_episode - Pressured Speech", "manic_episode - Racing Thoughts", "manic_episode - Flooding of Thoughts", "manic_episode - Inability to Control Thoughts"], "answer_strategy": "Answer by focusing on how severe your manic (\"up\") episodes have been in terms of impact on daily functioning. Briefly state whether you have ever needed hospitalization or emergency care during these periods, or if you have been able to manage without going to the hospital. Then give 1–2 concrete examples of how your symptoms (like racing thoughts, not being able to stop moving or talking, irritability) affected work, school, or home life: for instance, whether you missed work, got into serious conflicts, couldn’t sleep for days, or were too agitated to do normal tasks. Keep the tone straightforward and factual, and if you’re unsure whether it ‘counts’ as needing hospitalization, say that clearly and just describe what actually happened."}
+=====================================
+
+[call 15] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Bipolar I Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ manic_episode
+  - Elevated Mood: A mood that is abnormally high, euphoric, and full of unmotivated happiness and vitality.
+  - Irritable Mood: A state where one gets angry or aggressive even at minor stimuli.
+  - Mood Lability: Rapid shifts in mood, alternating unpredictably between euphoria and irritability.
+  - Increased Energy: Overflowing physical and mental energy, leading to an inability to stay still and a desire to keep moving.
+  - Hyperactivity: Doing far more work than usual or starting multiple activities simultaneously.
+  - Psychomotor Agitation: Inability to tolerate resting or stopping, driven by a constant need to do something.
+  - Talkativeness: Speaking far more than usual and continuing to talk without rest.
+  - Rapid Speech: Speech speed is so fast that it is difficult for others to understand or interrupt.
+  - Pressured Speech: Cannot stop talking or tolerate silence due to an internal pressure to keep speaking.
+  - Racing Thoughts: Thoughts spinning too fast in the head, constantly jumping from one idea to another.
+  - Flooding of Thoughts: Too many thoughts emerging simultaneously, making them disorganized.
+  - Inability to Control Thoughts: Unable to stop or slow down thoughts and unable to calm the mind.
+  Duration: 8 months
+▸ depressive_episode
+  - Depressed Mood: A persistently sunken mood or feeling of depression.
+  - Tearfulness: A state of frequent crying or inability to hold back tears.
+  - Sadness: A state where a sad or gloomy mood is maintained continuously.
+  - Emptiness: A feeling of inner emptiness or a state of feeling no emotion.
+  - Emotional Numbness: A state where emotions feel dulled or paralyzed.
+  - Significant Weight Loss: Weight loss of more than 5% in a month without dieting.
+  - Weight Gain: Weight gain of more than 5% in a month.
+  - Decrease in Appetite: Decrease in appetite occurring nearly every day.
+  - Increase in Appetite: Increase in appetite occurring nearly every day.
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  Duration: 1 year and 1 months
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Elevated_Irritable_Mood
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: manic_episode - Elevated Mood, manic_episode - Irritable Mood, manic_episode - Mood Lability, manic_episode - Increased Energy, manic_episode - Hyperactivity, manic_episode - Psychomotor Agitation, manic_episode - Talkativeness, manic_episode - Rapid Speech, manic_episode - Pressured Speech, manic_episode - Racing Thoughts, manic_episode - Flooding of Thoughts, manic_episode - Inability to Control Thoughts
+Answer strategy: Answer by focusing on how severe your manic ("up") episodes have been in terms of impact on daily functioning. Briefly state whether you have ever needed hospitalization or emergency care during these periods, or if you have been able to manage without going to the hospital. Then give 1–2 concrete examples of how your symptoms (like racing thoughts, not being able to stop moving or talking, irritability) affected work, school, or home life: for instance, whether you missed work, got into serious conflicts, couldn’t sleep for days, or were too agitated to do normal tasks. Keep the tone straightforward and factual, and if you’re unsure whether it ‘counts’ as needing hospitalization, say that clearly and just describe what actually happened.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+Doctor: During these “up” periods, do you also notice needing much less sleep, feeling unusually confident or driven, or doing things that are risky or out of character for you (like overspending, impulsive sex, or sudden big plans)?
+
+Patient: Yeah, when I’m in those “up” phases I sleep maybe 3–4 hours and still feel wired, like I don’t need rest. I feel really confident and driven, start a bunch of projects at once, and I’ve definitely spent too much money on things I don’t really need, but I haven’t done anything like risky sexual stuff.
+
+Doctor: Have you also had periods lasting at least two weeks where you felt very down or depressed most of the day, nearly every day, with low energy or loss of interest in things you usually enjoy?
+
+Patient: Yeah, I’ve had stretches like that, where for weeks I just feel really down most of the day and nothing feels enjoyable. It’s been happening on and off for over a year, and during those times my energy is really low and I feel kind of empty or numb.
+
+Doctor: During your most “up” phases, have your symptoms ever become so intense that you needed to go to the hospital or were unable to function at work or in daily life, or have they stayed noticeable but still manageable without hospitalization?
+
+========== OUTPUT [patient] ==========
+I haven’t gone to the hospital, but there have been times I probably should have, because I was barely functioning. I’ve stayed up almost all night for days, talking nonstop and jumping from task to task, and it got bad enough that I missed work and had big blow‑ups with people because I was so irritable and agitated.
+=====================================
+
+[call 16] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F30.1", "F31.81"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+Doctor: During these “up” periods, do you also notice needing much less sleep, feeling unusually confident or driven, or doing things that are risky or out of character for you (like overspending, impulsive sex, or sudden big plans)?
+
+Patient: Yeah, when I’m in those “up” phases I sleep maybe 3–4 hours and still feel wired, like I don’t need rest. I feel really confident and driven, start a bunch of projects at once, and I’ve definitely spent too much money on things I don’t really need, but I haven’t done anything like risky sexual stuff.
+
+Doctor: Have you also had periods lasting at least two weeks where you felt very down or depressed most of the day, nearly every day, with low energy or loss of interest in things you usually enjoy?
+
+Patient: Yeah, I’ve had stretches like that, where for weeks I just feel really down most of the day and nothing feels enjoyable. It’s been happening on and off for over a year, and during those times my energy is really low and I feel kind of empty or numb.
+
+Doctor: During your most “up” phases, have your symptoms ever become so intense that you needed to go to the hospital or were unable to function at work or in daily life, or have they stayed noticeable but still manageable without hospitalization?
+
+Patient: I haven’t gone to the hospital, but there have been times I probably should have, because I was barely functioning. I’ve stayed up almost all night for days, talking nonstop and jumping from task to task, and it got bad enough that I missed work and had big blow‑ups with people because I was so irritable and agitated.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F30.1", "F31.81"], "note": "Previously the candidates were [F30.1, F31.81]. The patient clearly describes recurrent elevated/irritable periods with markedly reduced need for sleep, increased activity, overspending, pressured behavior, and significant impairment (missed work, major interpersonal conflict), along with distinct multi‑week episodes of depressed mood and low energy over more than a year. This pattern supports a recurrent mood disorder with both elevated and depressive episodes. However, from this brief exchange it is still not fully clear whether the elevated episodes have ever reached the severity, duration, and associated features required to classify them as full episodes of the more severe type versus a less severe but still impairing form, and we do not yet have detail on psychotic symptoms, exact episode duration, or full longitudinal course. Therefore, both original candidates remain under consideration and no new candidates are added or removed. More detailed questioning about episode length, psychotic features, and functional impact is still needed, so the list is unchanged.", "is_final": false}
+=====================================
+
+[call 17] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F30.1
+- F31.81
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F30.1", "F31.81"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+Doctor: During these “up” periods, do you also notice needing much less sleep, feeling unusually confident or driven, or doing things that are risky or out of character for you (like overspending, impulsive sex, or sudden big plans)?
+
+Patient: Yeah, when I’m in those “up” phases I sleep maybe 3–4 hours and still feel wired, like I don’t need rest. I feel really confident and driven, start a bunch of projects at once, and I’ve definitely spent too much money on things I don’t really need, but I haven’t done anything like risky sexual stuff.
+
+Doctor: Have you also had periods lasting at least two weeks where you felt very down or depressed most of the day, nearly every day, with low energy or loss of interest in things you usually enjoy?
+
+Patient: Yeah, I’ve had stretches like that, where for weeks I just feel really down most of the day and nothing feels enjoyable. It’s been happening on and off for over a year, and during those times my energy is really low and I feel kind of empty or numb.
+
+Doctor: During your most “up” phases, have your symptoms ever become so intense that you needed to go to the hospital or were unable to function at work or in daily life, or have they stayed noticeable but still manageable without hospitalization?
+
+Patient: I haven’t gone to the hospital, but there have been times I probably should have, because I was barely functioning. I’ve stayed up almost all night for days, talking nonstop and jumping from task to task, and it got bad enough that I missed work and had big blow‑ups with people because I was so irritable and agitated.
+
+Patient: I haven’t gone to the hospital, but there have been times I probably should have, because I was barely functioning. I’ve stayed up almost all night for days, talking nonstop and jumping from task to task, and it got bad enough that I missed work and had big blow‑ups with people because I was so irritable and agitated.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "episode duration/impairment",
+  "question": "When you have these most intense “up” phases where you’re barely functioning and missing work, how long do they usually last from start to finish—are we talking about several days, or at least a full week or more at that high level?"
+}
+=====================================
+
+--- turn 05 ---
+
+[call 18] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ manic_episode
+  - Elevated Mood: A mood that is abnormally high, euphoric, and full of unmotivated happiness and vitality.
+  - Irritable Mood: A state where one gets angry or aggressive even at minor stimuli.
+  - Mood Lability: Rapid shifts in mood, alternating unpredictably between euphoria and irritability.
+  - Increased Energy: Overflowing physical and mental energy, leading to an inability to stay still and a desire to keep moving.
+  - Hyperactivity: Doing far more work than usual or starting multiple activities simultaneously.
+  - Psychomotor Agitation: Inability to tolerate resting or stopping, driven by a constant need to do something.
+  - Talkativeness: Speaking far more than usual and continuing to talk without rest.
+  - Rapid Speech: Speech speed is so fast that it is difficult for others to understand or interrupt.
+  - Pressured Speech: Cannot stop talking or tolerate silence due to an internal pressure to keep speaking.
+  - Racing Thoughts: Thoughts spinning too fast in the head, constantly jumping from one idea to another.
+  - Flooding of Thoughts: Too many thoughts emerging simultaneously, making them disorganized.
+  - Inability to Control Thoughts: Unable to stop or slow down thoughts and unable to calm the mind.
+  Duration: 8 months
+▸ depressive_episode
+  - Depressed Mood: A persistently sunken mood or feeling of depression.
+  - Tearfulness: A state of frequent crying or inability to hold back tears.
+  - Sadness: A state where a sad or gloomy mood is maintained continuously.
+  - Emptiness: A feeling of inner emptiness or a state of feeling no emotion.
+  - Emotional Numbness: A state where emotions feel dulled or paralyzed.
+  - Significant Weight Loss: Weight loss of more than 5% in a month without dieting.
+  - Weight Gain: Weight gain of more than 5% in a month.
+  - Decrease in Appetite: Decrease in appetite occurring nearly every day.
+  - Increase in Appetite: Increase in appetite occurring nearly every day.
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  Duration: 1 year and 1 months
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 5
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+When you have these most intense “up” phases where you’re barely functioning and missing work, how long do they usually last from start to finish—are we talking about several days, or at least a full week or more at that high level?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["manic_episode - Duration: 8 months"], "answer_strategy": "Connect the doctor’s question to the known duration of the manic symptoms. Clearly state how long your most intense \"up\" phases tend to last (e.g., several days, about a week, or longer) and, if relevant, that this current/most recent elevated period has been going on for about 8 months. Keep the reply concrete and time-focused, like: \"This high phase has been going on for about 8 months without really going back to normal, and the really intense parts usually last at least a week or more.\""}
+=====================================
+
+[call 19] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Bipolar I Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ manic_episode
+  - Elevated Mood: A mood that is abnormally high, euphoric, and full of unmotivated happiness and vitality.
+  - Irritable Mood: A state where one gets angry or aggressive even at minor stimuli.
+  - Mood Lability: Rapid shifts in mood, alternating unpredictably between euphoria and irritability.
+  - Increased Energy: Overflowing physical and mental energy, leading to an inability to stay still and a desire to keep moving.
+  - Hyperactivity: Doing far more work than usual or starting multiple activities simultaneously.
+  - Psychomotor Agitation: Inability to tolerate resting or stopping, driven by a constant need to do something.
+  - Talkativeness: Speaking far more than usual and continuing to talk without rest.
+  - Rapid Speech: Speech speed is so fast that it is difficult for others to understand or interrupt.
+  - Pressured Speech: Cannot stop talking or tolerate silence due to an internal pressure to keep speaking.
+  - Racing Thoughts: Thoughts spinning too fast in the head, constantly jumping from one idea to another.
+  - Flooding of Thoughts: Too many thoughts emerging simultaneously, making them disorganized.
+  - Inability to Control Thoughts: Unable to stop or slow down thoughts and unable to calm the mind.
+  Duration: 8 months
+▸ depressive_episode
+  - Depressed Mood: A persistently sunken mood or feeling of depression.
+  - Tearfulness: A state of frequent crying or inability to hold back tears.
+  - Sadness: A state where a sad or gloomy mood is maintained continuously.
+  - Emptiness: A feeling of inner emptiness or a state of feeling no emotion.
+  - Emotional Numbness: A state where emotions feel dulled or paralyzed.
+  - Significant Weight Loss: Weight loss of more than 5% in a month without dieting.
+  - Weight Gain: Weight gain of more than 5% in a month.
+  - Decrease in Appetite: Decrease in appetite occurring nearly every day.
+  - Increase in Appetite: Increase in appetite occurring nearly every day.
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  Duration: 1 year and 1 months
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Elevated_Irritable_Mood
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: manic_episode - Duration: 8 months
+Answer strategy: Connect the doctor’s question to the known duration of the manic symptoms. Clearly state how long your most intense "up" phases tend to last (e.g., several days, about a week, or longer) and, if relevant, that this current/most recent elevated period has been going on for about 8 months. Keep the reply concrete and time-focused, like: "This high phase has been going on for about 8 months without really going back to normal, and the really intense parts usually last at least a week or more."
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+Doctor: During these “up” periods, do you also notice needing much less sleep, feeling unusually confident or driven, or doing things that are risky or out of character for you (like overspending, impulsive sex, or sudden big plans)?
+
+Patient: Yeah, when I’m in those “up” phases I sleep maybe 3–4 hours and still feel wired, like I don’t need rest. I feel really confident and driven, start a bunch of projects at once, and I’ve definitely spent too much money on things I don’t really need, but I haven’t done anything like risky sexual stuff.
+
+Doctor: Have you also had periods lasting at least two weeks where you felt very down or depressed most of the day, nearly every day, with low energy or loss of interest in things you usually enjoy?
+
+Patient: Yeah, I’ve had stretches like that, where for weeks I just feel really down most of the day and nothing feels enjoyable. It’s been happening on and off for over a year, and during those times my energy is really low and I feel kind of empty or numb.
+
+Doctor: During your most “up” phases, have your symptoms ever become so intense that you needed to go to the hospital or were unable to function at work or in daily life, or have they stayed noticeable but still manageable without hospitalization?
+
+Patient: I haven’t gone to the hospital, but there have been times I probably should have, because I was barely functioning. I’ve stayed up almost all night for days, talking nonstop and jumping from task to task, and it got bad enough that I missed work and had big blow‑ups with people because I was so irritable and agitated.
+
+Doctor: When you have these most intense “up” phases where you’re barely functioning and missing work, how long do they usually last from start to finish—are we talking about several days, or at least a full week or more at that high level?
+
+========== OUTPUT [patient] ==========
+The really intense “up” parts usually last at least a week, sometimes a couple of weeks before they ease up a bit. But overall this high, wired kind of state has been going on for around 8 months without ever really going back to what I’d call normal.
+=====================================
+
+[call 20] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F30.1", "F31.81"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+Doctor: During these “up” periods, do you also notice needing much less sleep, feeling unusually confident or driven, or doing things that are risky or out of character for you (like overspending, impulsive sex, or sudden big plans)?
+
+Patient: Yeah, when I’m in those “up” phases I sleep maybe 3–4 hours and still feel wired, like I don’t need rest. I feel really confident and driven, start a bunch of projects at once, and I’ve definitely spent too much money on things I don’t really need, but I haven’t done anything like risky sexual stuff.
+
+Doctor: Have you also had periods lasting at least two weeks where you felt very down or depressed most of the day, nearly every day, with low energy or loss of interest in things you usually enjoy?
+
+Patient: Yeah, I’ve had stretches like that, where for weeks I just feel really down most of the day and nothing feels enjoyable. It’s been happening on and off for over a year, and during those times my energy is really low and I feel kind of empty or numb.
+
+Doctor: During your most “up” phases, have your symptoms ever become so intense that you needed to go to the hospital or were unable to function at work or in daily life, or have they stayed noticeable but still manageable without hospitalization?
+
+Patient: I haven’t gone to the hospital, but there have been times I probably should have, because I was barely functioning. I’ve stayed up almost all night for days, talking nonstop and jumping from task to task, and it got bad enough that I missed work and had big blow‑ups with people because I was so irritable and agitated.
+
+Doctor: When you have these most intense “up” phases where you’re barely functioning and missing work, how long do they usually last from start to finish—are we talking about several days, or at least a full week or more at that high level?
+
+Patient: The really intense “up” parts usually last at least a week, sometimes a couple of weeks before they ease up a bit. But overall this high, wired kind of state has been going on for around 8 months without ever really going back to what I’d call normal.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F30.2"], "note": "Previously the candidates were [F30.1, F31.81]. The history now clearly indicates a sustained elevated/irritable mood with markedly reduced need for sleep, pressured speech, increased goal-directed activity, overspending, significant functional impairment (missing work, major interpersonal conflicts), and episodes of at least a week at this intensity, within an 8‑month period of persistently high/wired state. This exceeds the threshold for a moderate hypomanic episode and is more consistent with a manic episode. There is also a history of multi‑week depressive periods, but we do not yet have enough detail to be certain these meet full criteria for a major depressive episode within a bipolar course, nor do we have a clear longitudinal pattern to distinguish a single manic episode from a recurrent bipolar disorder. Because of that, a single current manic episode is the most defensible working diagnosis at this stage, and F31.81 (which refers to a bipolar spectrum with hypomanic rather than clearly manic episodes) is now less likely. The current candidate is therefore F30.2. Further questioning is needed to clarify the depressive episodes, psychotic features, and longitudinal course, so this is not yet final.", "is_final": false}
+=====================================
+
+[call 21] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F30.2
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F30.2"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+Doctor: During these “up” periods, do you also notice needing much less sleep, feeling unusually confident or driven, or doing things that are risky or out of character for you (like overspending, impulsive sex, or sudden big plans)?
+
+Patient: Yeah, when I’m in those “up” phases I sleep maybe 3–4 hours and still feel wired, like I don’t need rest. I feel really confident and driven, start a bunch of projects at once, and I’ve definitely spent too much money on things I don’t really need, but I haven’t done anything like risky sexual stuff.
+
+Doctor: Have you also had periods lasting at least two weeks where you felt very down or depressed most of the day, nearly every day, with low energy or loss of interest in things you usually enjoy?
+
+Patient: Yeah, I’ve had stretches like that, where for weeks I just feel really down most of the day and nothing feels enjoyable. It’s been happening on and off for over a year, and during those times my energy is really low and I feel kind of empty or numb.
+
+Doctor: During your most “up” phases, have your symptoms ever become so intense that you needed to go to the hospital or were unable to function at work or in daily life, or have they stayed noticeable but still manageable without hospitalization?
+
+Patient: I haven’t gone to the hospital, but there have been times I probably should have, because I was barely functioning. I’ve stayed up almost all night for days, talking nonstop and jumping from task to task, and it got bad enough that I missed work and had big blow‑ups with people because I was so irritable and agitated.
+
+Doctor: When you have these most intense “up” phases where you’re barely functioning and missing work, how long do they usually last from start to finish—are we talking about several days, or at least a full week or more at that high level?
+
+Patient: The really intense “up” parts usually last at least a week, sometimes a couple of weeks before they ease up a bit. But overall this high, wired kind of state has been going on for around 8 months without ever really going back to what I’d call normal.
+
+Patient: The really intense “up” parts usually last at least a week, sometimes a couple of weeks before they ease up a bit. But overall this high, wired kind of state has been going on for around 8 months without ever really going back to what I’d call normal.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "psychotic symptoms",
+  "question": "During your most intense “up” phases, have you ever had experiences like hearing or seeing things that others don’t, or strongly believing things that others say aren’t true (for example, feeling you have special powers or a special mission)?"
+}
+=====================================
+
+--- turn 06 ---
+
+[call 22] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ manic_episode
+  - Elevated Mood: A mood that is abnormally high, euphoric, and full of unmotivated happiness and vitality.
+  - Irritable Mood: A state where one gets angry or aggressive even at minor stimuli.
+  - Mood Lability: Rapid shifts in mood, alternating unpredictably between euphoria and irritability.
+  - Increased Energy: Overflowing physical and mental energy, leading to an inability to stay still and a desire to keep moving.
+  - Hyperactivity: Doing far more work than usual or starting multiple activities simultaneously.
+  - Psychomotor Agitation: Inability to tolerate resting or stopping, driven by a constant need to do something.
+  - Talkativeness: Speaking far more than usual and continuing to talk without rest.
+  - Rapid Speech: Speech speed is so fast that it is difficult for others to understand or interrupt.
+  - Pressured Speech: Cannot stop talking or tolerate silence due to an internal pressure to keep speaking.
+  - Racing Thoughts: Thoughts spinning too fast in the head, constantly jumping from one idea to another.
+  - Flooding of Thoughts: Too many thoughts emerging simultaneously, making them disorganized.
+  - Inability to Control Thoughts: Unable to stop or slow down thoughts and unable to calm the mind.
+  Duration: 8 months
+▸ depressive_episode
+  - Depressed Mood: A persistently sunken mood or feeling of depression.
+  - Tearfulness: A state of frequent crying or inability to hold back tears.
+  - Sadness: A state where a sad or gloomy mood is maintained continuously.
+  - Emptiness: A feeling of inner emptiness or a state of feeling no emotion.
+  - Emotional Numbness: A state where emotions feel dulled or paralyzed.
+  - Significant Weight Loss: Weight loss of more than 5% in a month without dieting.
+  - Weight Gain: Weight gain of more than 5% in a month.
+  - Decrease in Appetite: Decrease in appetite occurring nearly every day.
+  - Increase in Appetite: Increase in appetite occurring nearly every day.
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  Duration: 1 year and 1 months
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 6
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+During your most intense “up” phases, have you ever had experiences like hearing or seeing things that others don’t, or strongly believing things that others say aren’t true (for example, feeling you have special powers or a special mission)?
+
+========== OUTPUT [patient] ==========
+{"matched": false, "matched_sections": [], "answer_strategy": "This isn’t mentioned in your symptom list, so answer based only on your actual experience. If you have had hallucinations (seeing/hearing things others don’t) or delusions (fixed strong beliefs others say are untrue, like special powers or a mission), briefly describe them, when they happened, and how sure you were they were real. If you’ve never had anything like that, say clearly that you haven’t noticed such experiences. Keep the reply straightforward and concise."}
+=====================================
+
+[call 23] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Bipolar I Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ manic_episode
+  - Elevated Mood: A mood that is abnormally high, euphoric, and full of unmotivated happiness and vitality.
+  - Irritable Mood: A state where one gets angry or aggressive even at minor stimuli.
+  - Mood Lability: Rapid shifts in mood, alternating unpredictably between euphoria and irritability.
+  - Increased Energy: Overflowing physical and mental energy, leading to an inability to stay still and a desire to keep moving.
+  - Hyperactivity: Doing far more work than usual or starting multiple activities simultaneously.
+  - Psychomotor Agitation: Inability to tolerate resting or stopping, driven by a constant need to do something.
+  - Talkativeness: Speaking far more than usual and continuing to talk without rest.
+  - Rapid Speech: Speech speed is so fast that it is difficult for others to understand or interrupt.
+  - Pressured Speech: Cannot stop talking or tolerate silence due to an internal pressure to keep speaking.
+  - Racing Thoughts: Thoughts spinning too fast in the head, constantly jumping from one idea to another.
+  - Flooding of Thoughts: Too many thoughts emerging simultaneously, making them disorganized.
+  - Inability to Control Thoughts: Unable to stop or slow down thoughts and unable to calm the mind.
+  Duration: 8 months
+▸ depressive_episode
+  - Depressed Mood: A persistently sunken mood or feeling of depression.
+  - Tearfulness: A state of frequent crying or inability to hold back tears.
+  - Sadness: A state where a sad or gloomy mood is maintained continuously.
+  - Emptiness: A feeling of inner emptiness or a state of feeling no emotion.
+  - Emotional Numbness: A state where emotions feel dulled or paralyzed.
+  - Significant Weight Loss: Weight loss of more than 5% in a month without dieting.
+  - Weight Gain: Weight gain of more than 5% in a month.
+  - Decrease in Appetite: Decrease in appetite occurring nearly every day.
+  - Increase in Appetite: Increase in appetite occurring nearly every day.
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  Duration: 1 year and 1 months
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Elevated_Irritable_Mood
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(No match in profile or inference only)
+Answer strategy: This isn’t mentioned in your symptom list, so answer based only on your actual experience. If you have had hallucinations (seeing/hearing things others don’t) or delusions (fixed strong beliefs others say are untrue, like special powers or a mission), briefly describe them, when they happened, and how sure you were they were real. If you’ve never had anything like that, say clearly that you haven’t noticed such experiences. Keep the reply straightforward and concise.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+Doctor: During these “up” periods, do you also notice needing much less sleep, feeling unusually confident or driven, or doing things that are risky or out of character for you (like overspending, impulsive sex, or sudden big plans)?
+
+Patient: Yeah, when I’m in those “up” phases I sleep maybe 3–4 hours and still feel wired, like I don’t need rest. I feel really confident and driven, start a bunch of projects at once, and I’ve definitely spent too much money on things I don’t really need, but I haven’t done anything like risky sexual stuff.
+
+Doctor: Have you also had periods lasting at least two weeks where you felt very down or depressed most of the day, nearly every day, with low energy or loss of interest in things you usually enjoy?
+
+Patient: Yeah, I’ve had stretches like that, where for weeks I just feel really down most of the day and nothing feels enjoyable. It’s been happening on and off for over a year, and during those times my energy is really low and I feel kind of empty or numb.
+
+Doctor: During your most “up” phases, have your symptoms ever become so intense that you needed to go to the hospital or were unable to function at work or in daily life, or have they stayed noticeable but still manageable without hospitalization?
+
+Patient: I haven’t gone to the hospital, but there have been times I probably should have, because I was barely functioning. I’ve stayed up almost all night for days, talking nonstop and jumping from task to task, and it got bad enough that I missed work and had big blow‑ups with people because I was so irritable and agitated.
+
+Doctor: When you have these most intense “up” phases where you’re barely functioning and missing work, how long do they usually last from start to finish—are we talking about several days, or at least a full week or more at that high level?
+
+Patient: The really intense “up” parts usually last at least a week, sometimes a couple of weeks before they ease up a bit. But overall this high, wired kind of state has been going on for around 8 months without ever really going back to what I’d call normal.
+
+Doctor: During your most intense “up” phases, have you ever had experiences like hearing or seeing things that others don’t, or strongly believing things that others say aren’t true (for example, feeling you have special powers or a special mission)?
+
+========== OUTPUT [patient] ==========
+I don’t think I’ve ever seen or heard things that weren’t there. Sometimes I feel like I have this big, important purpose or that I’m meant to do something huge, but I still kind of know it might be over the top and I can be talked out of it.
+=====================================
+
+[call 24] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F30.2"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+Doctor: During these “up” periods, do you also notice needing much less sleep, feeling unusually confident or driven, or doing things that are risky or out of character for you (like overspending, impulsive sex, or sudden big plans)?
+
+Patient: Yeah, when I’m in those “up” phases I sleep maybe 3–4 hours and still feel wired, like I don’t need rest. I feel really confident and driven, start a bunch of projects at once, and I’ve definitely spent too much money on things I don’t really need, but I haven’t done anything like risky sexual stuff.
+
+Doctor: Have you also had periods lasting at least two weeks where you felt very down or depressed most of the day, nearly every day, with low energy or loss of interest in things you usually enjoy?
+
+Patient: Yeah, I’ve had stretches like that, where for weeks I just feel really down most of the day and nothing feels enjoyable. It’s been happening on and off for over a year, and during those times my energy is really low and I feel kind of empty or numb.
+
+Doctor: During your most “up” phases, have your symptoms ever become so intense that you needed to go to the hospital or were unable to function at work or in daily life, or have they stayed noticeable but still manageable without hospitalization?
+
+Patient: I haven’t gone to the hospital, but there have been times I probably should have, because I was barely functioning. I’ve stayed up almost all night for days, talking nonstop and jumping from task to task, and it got bad enough that I missed work and had big blow‑ups with people because I was so irritable and agitated.
+
+Doctor: When you have these most intense “up” phases where you’re barely functioning and missing work, how long do they usually last from start to finish—are we talking about several days, or at least a full week or more at that high level?
+
+Patient: The really intense “up” parts usually last at least a week, sometimes a couple of weeks before they ease up a bit. But overall this high, wired kind of state has been going on for around 8 months without ever really going back to what I’d call normal.
+
+Doctor: During your most intense “up” phases, have you ever had experiences like hearing or seeing things that others don’t, or strongly believing things that others say aren’t true (for example, feeling you have special powers or a special mission)?
+
+Patient: I don’t think I’ve ever seen or heard things that weren’t there. Sometimes I feel like I have this big, important purpose or that I’m meant to do something huge, but I still kind of know it might be over the top and I can be talked out of it.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F31.2"], "note": "Previously the only candidate was F30.2, based on clear episodes of elevated/irritable mood with decreased need for sleep, increased activity, overspending, and significant functional impairment. With the new information, the patient also reports recurrent multi‑week periods of low mood, anhedonia, and low energy over more than a year, which indicates both elevated and depressive episodes. This pattern is more consistent with a bipolar spectrum condition rather than a single episode of elevated mood. The current 8‑month period of predominantly elevated/irritable mood with marked functional impairment, lasting at least a week at its most intense, still supports a severe episode without psychotic symptoms. Because there is clear history of depressive episodes, the picture fits a severe current episode within a recurrent bipolar course rather than a single manic episode, so the candidate shifts from an isolated severe elevated episode to a recurrent mood disorder diagnosis that includes severe elevation without psychosis. Therefore the current candidate is F31.2. Further questioning is needed to clarify full longitudinal course, substance use, medical causes, and functional impact, so is_final remains false.", "is_final": false}
+=====================================
+
+[call 25] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F31.2
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F31.2"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+Doctor: During these “up” periods, do you also notice needing much less sleep, feeling unusually confident or driven, or doing things that are risky or out of character for you (like overspending, impulsive sex, or sudden big plans)?
+
+Patient: Yeah, when I’m in those “up” phases I sleep maybe 3–4 hours and still feel wired, like I don’t need rest. I feel really confident and driven, start a bunch of projects at once, and I’ve definitely spent too much money on things I don’t really need, but I haven’t done anything like risky sexual stuff.
+
+Doctor: Have you also had periods lasting at least two weeks where you felt very down or depressed most of the day, nearly every day, with low energy or loss of interest in things you usually enjoy?
+
+Patient: Yeah, I’ve had stretches like that, where for weeks I just feel really down most of the day and nothing feels enjoyable. It’s been happening on and off for over a year, and during those times my energy is really low and I feel kind of empty or numb.
+
+Doctor: During your most “up” phases, have your symptoms ever become so intense that you needed to go to the hospital or were unable to function at work or in daily life, or have they stayed noticeable but still manageable without hospitalization?
+
+Patient: I haven’t gone to the hospital, but there have been times I probably should have, because I was barely functioning. I’ve stayed up almost all night for days, talking nonstop and jumping from task to task, and it got bad enough that I missed work and had big blow‑ups with people because I was so irritable and agitated.
+
+Doctor: When you have these most intense “up” phases where you’re barely functioning and missing work, how long do they usually last from start to finish—are we talking about several days, or at least a full week or more at that high level?
+
+Patient: The really intense “up” parts usually last at least a week, sometimes a couple of weeks before they ease up a bit. But overall this high, wired kind of state has been going on for around 8 months without ever really going back to what I’d call normal.
+
+Doctor: During your most intense “up” phases, have you ever had experiences like hearing or seeing things that others don’t, or strongly believing things that others say aren’t true (for example, feeling you have special powers or a special mission)?
+
+Patient: I don’t think I’ve ever seen or heard things that weren’t there. Sometimes I feel like I have this big, important purpose or that I’m meant to do something huge, but I still kind of know it might be over the top and I can be talked out of it.
+
+Patient: I don’t think I’ve ever seen or heard things that weren’t there. Sometimes I feel like I have this big, important purpose or that I’m meant to do something huge, but I still kind of know it might be over the top and I can be talked out of it.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "psychotic features during mood episodes",
+  "question": "During your most intense “up” or “down” periods, has your thinking ever become so disconnected from reality that others said you were talking nonsense or you couldn’t be reasoned with, or have you always been able to recognize that your thoughts might be exaggerated or unrealistic when people challenge you on them?"
+}
+=====================================
+
+--- turn 07 ---
+
+[call 26] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ manic_episode
+  - Elevated Mood: A mood that is abnormally high, euphoric, and full of unmotivated happiness and vitality.
+  - Irritable Mood: A state where one gets angry or aggressive even at minor stimuli.
+  - Mood Lability: Rapid shifts in mood, alternating unpredictably between euphoria and irritability.
+  - Increased Energy: Overflowing physical and mental energy, leading to an inability to stay still and a desire to keep moving.
+  - Hyperactivity: Doing far more work than usual or starting multiple activities simultaneously.
+  - Psychomotor Agitation: Inability to tolerate resting or stopping, driven by a constant need to do something.
+  - Talkativeness: Speaking far more than usual and continuing to talk without rest.
+  - Rapid Speech: Speech speed is so fast that it is difficult for others to understand or interrupt.
+  - Pressured Speech: Cannot stop talking or tolerate silence due to an internal pressure to keep speaking.
+  - Racing Thoughts: Thoughts spinning too fast in the head, constantly jumping from one idea to another.
+  - Flooding of Thoughts: Too many thoughts emerging simultaneously, making them disorganized.
+  - Inability to Control Thoughts: Unable to stop or slow down thoughts and unable to calm the mind.
+  Duration: 8 months
+▸ depressive_episode
+  - Depressed Mood: A persistently sunken mood or feeling of depression.
+  - Tearfulness: A state of frequent crying or inability to hold back tears.
+  - Sadness: A state where a sad or gloomy mood is maintained continuously.
+  - Emptiness: A feeling of inner emptiness or a state of feeling no emotion.
+  - Emotional Numbness: A state where emotions feel dulled or paralyzed.
+  - Significant Weight Loss: Weight loss of more than 5% in a month without dieting.
+  - Weight Gain: Weight gain of more than 5% in a month.
+  - Decrease in Appetite: Decrease in appetite occurring nearly every day.
+  - Increase in Appetite: Increase in appetite occurring nearly every day.
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  Duration: 1 year and 1 months
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 7
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+During your most intense “up” or “down” periods, has your thinking ever become so disconnected from reality that others said you were talking nonsense or you couldn’t be reasoned with, or have you always been able to recognize that your thoughts might be exaggerated or unrealistic when people challenge you on them?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["manic_episode - Racing Thoughts", "manic_episode - Flooding of Thoughts", "manic_episode - Inability to Control Thoughts"], "answer_strategy": "Answer by focusing on how your thinking has been during your highest and lowest mood states. Specifically describe whether your racing, crowded, or uncontrollable thoughts during the 8‑month elevated period ever became so disorganized that others said you were talking nonsense or could not be reasoned with, or whether, even when your thoughts were very fast and intense, you could still recognize that they might be exaggerated or unrealistic when people questioned you. Be concrete: mention what others told you about how you sounded, and whether you could step back and see that your ideas were over the top or if you fully believed them at the time."}
+=====================================
+
+[call 27] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Bipolar I Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ manic_episode
+  - Elevated Mood: A mood that is abnormally high, euphoric, and full of unmotivated happiness and vitality.
+  - Irritable Mood: A state where one gets angry or aggressive even at minor stimuli.
+  - Mood Lability: Rapid shifts in mood, alternating unpredictably between euphoria and irritability.
+  - Increased Energy: Overflowing physical and mental energy, leading to an inability to stay still and a desire to keep moving.
+  - Hyperactivity: Doing far more work than usual or starting multiple activities simultaneously.
+  - Psychomotor Agitation: Inability to tolerate resting or stopping, driven by a constant need to do something.
+  - Talkativeness: Speaking far more than usual and continuing to talk without rest.
+  - Rapid Speech: Speech speed is so fast that it is difficult for others to understand or interrupt.
+  - Pressured Speech: Cannot stop talking or tolerate silence due to an internal pressure to keep speaking.
+  - Racing Thoughts: Thoughts spinning too fast in the head, constantly jumping from one idea to another.
+  - Flooding of Thoughts: Too many thoughts emerging simultaneously, making them disorganized.
+  - Inability to Control Thoughts: Unable to stop or slow down thoughts and unable to calm the mind.
+  Duration: 8 months
+▸ depressive_episode
+  - Depressed Mood: A persistently sunken mood or feeling of depression.
+  - Tearfulness: A state of frequent crying or inability to hold back tears.
+  - Sadness: A state where a sad or gloomy mood is maintained continuously.
+  - Emptiness: A feeling of inner emptiness or a state of feeling no emotion.
+  - Emotional Numbness: A state where emotions feel dulled or paralyzed.
+  - Significant Weight Loss: Weight loss of more than 5% in a month without dieting.
+  - Weight Gain: Weight gain of more than 5% in a month.
+  - Decrease in Appetite: Decrease in appetite occurring nearly every day.
+  - Increase in Appetite: Increase in appetite occurring nearly every day.
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  Duration: 1 year and 1 months
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Elevated_Irritable_Mood
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: manic_episode - Racing Thoughts, manic_episode - Flooding of Thoughts, manic_episode - Inability to Control Thoughts
+Answer strategy: Answer by focusing on how your thinking has been during your highest and lowest mood states. Specifically describe whether your racing, crowded, or uncontrollable thoughts during the 8‑month elevated period ever became so disorganized that others said you were talking nonsense or could not be reasoned with, or whether, even when your thoughts were very fast and intense, you could still recognize that they might be exaggerated or unrealistic when people questioned you. Be concrete: mention what others told you about how you sounded, and whether you could step back and see that your ideas were over the top or if you fully believed them at the time.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+Doctor: During these “up” periods, do you also notice needing much less sleep, feeling unusually confident or driven, or doing things that are risky or out of character for you (like overspending, impulsive sex, or sudden big plans)?
+
+Patient: Yeah, when I’m in those “up” phases I sleep maybe 3–4 hours and still feel wired, like I don’t need rest. I feel really confident and driven, start a bunch of projects at once, and I’ve definitely spent too much money on things I don’t really need, but I haven’t done anything like risky sexual stuff.
+
+Doctor: Have you also had periods lasting at least two weeks where you felt very down or depressed most of the day, nearly every day, with low energy or loss of interest in things you usually enjoy?
+
+Patient: Yeah, I’ve had stretches like that, where for weeks I just feel really down most of the day and nothing feels enjoyable. It’s been happening on and off for over a year, and during those times my energy is really low and I feel kind of empty or numb.
+
+Doctor: During your most “up” phases, have your symptoms ever become so intense that you needed to go to the hospital or were unable to function at work or in daily life, or have they stayed noticeable but still manageable without hospitalization?
+
+Patient: I haven’t gone to the hospital, but there have been times I probably should have, because I was barely functioning. I’ve stayed up almost all night for days, talking nonstop and jumping from task to task, and it got bad enough that I missed work and had big blow‑ups with people because I was so irritable and agitated.
+
+Doctor: When you have these most intense “up” phases where you’re barely functioning and missing work, how long do they usually last from start to finish—are we talking about several days, or at least a full week or more at that high level?
+
+Patient: The really intense “up” parts usually last at least a week, sometimes a couple of weeks before they ease up a bit. But overall this high, wired kind of state has been going on for around 8 months without ever really going back to what I’d call normal.
+
+Doctor: During your most intense “up” phases, have you ever had experiences like hearing or seeing things that others don’t, or strongly believing things that others say aren’t true (for example, feeling you have special powers or a special mission)?
+
+Patient: I don’t think I’ve ever seen or heard things that weren’t there. Sometimes I feel like I have this big, important purpose or that I’m meant to do something huge, but I still kind of know it might be over the top and I can be talked out of it.
+
+Doctor: During your most intense “up” or “down” periods, has your thinking ever become so disconnected from reality that others said you were talking nonsense or you couldn’t be reasoned with, or have you always been able to recognize that your thoughts might be exaggerated or unrealistic when people challenge you on them?
+
+========== OUTPUT [patient] ==========
+People have told me I was talking so fast and jumping between ideas that they couldn’t follow me, but not that I was completely talking nonsense. Even when I’m really “up” or really low, if someone pushes back I can usually step back a bit and realize I might be going overboard or not thinking totally realistically.
+=====================================
+
+[call 28] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F31.2"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+Doctor: During these “up” periods, do you also notice needing much less sleep, feeling unusually confident or driven, or doing things that are risky or out of character for you (like overspending, impulsive sex, or sudden big plans)?
+
+Patient: Yeah, when I’m in those “up” phases I sleep maybe 3–4 hours and still feel wired, like I don’t need rest. I feel really confident and driven, start a bunch of projects at once, and I’ve definitely spent too much money on things I don’t really need, but I haven’t done anything like risky sexual stuff.
+
+Doctor: Have you also had periods lasting at least two weeks where you felt very down or depressed most of the day, nearly every day, with low energy or loss of interest in things you usually enjoy?
+
+Patient: Yeah, I’ve had stretches like that, where for weeks I just feel really down most of the day and nothing feels enjoyable. It’s been happening on and off for over a year, and during those times my energy is really low and I feel kind of empty or numb.
+
+Doctor: During your most “up” phases, have your symptoms ever become so intense that you needed to go to the hospital or were unable to function at work or in daily life, or have they stayed noticeable but still manageable without hospitalization?
+
+Patient: I haven’t gone to the hospital, but there have been times I probably should have, because I was barely functioning. I’ve stayed up almost all night for days, talking nonstop and jumping from task to task, and it got bad enough that I missed work and had big blow‑ups with people because I was so irritable and agitated.
+
+Doctor: When you have these most intense “up” phases where you’re barely functioning and missing work, how long do they usually last from start to finish—are we talking about several days, or at least a full week or more at that high level?
+
+Patient: The really intense “up” parts usually last at least a week, sometimes a couple of weeks before they ease up a bit. But overall this high, wired kind of state has been going on for around 8 months without ever really going back to what I’d call normal.
+
+Doctor: During your most intense “up” phases, have you ever had experiences like hearing or seeing things that others don’t, or strongly believing things that others say aren’t true (for example, feeling you have special powers or a special mission)?
+
+Patient: I don’t think I’ve ever seen or heard things that weren’t there. Sometimes I feel like I have this big, important purpose or that I’m meant to do something huge, but I still kind of know it might be over the top and I can be talked out of it.
+
+Doctor: During your most intense “up” or “down” periods, has your thinking ever become so disconnected from reality that others said you were talking nonsense or you couldn’t be reasoned with, or have you always been able to recognize that your thoughts might be exaggerated or unrealistic when people challenge you on them?
+
+Patient: People have told me I was talking so fast and jumping between ideas that they couldn’t follow me, but not that I was completely talking nonsense. Even when I’m really “up” or really low, if someone pushes back I can usually step back a bit and realize I might be going overboard or not thinking totally realistically.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F31.1", "F31.7"], "note": "Previously the only candidate was F31.2, which implies mood‑congruent psychotic symptoms during a manic episode. In this interview, the patient describes clear episodes of elevated/irritable mood lasting at least a week with markedly reduced sleep, increased goal‑directed activity, overspending, and significant functional impairment (missing work, major interpersonal conflict), along with recurrent multi‑week depressive episodes over more than a year. This supports a bipolar spectrum disorder with at least one full manic episode. However, the patient denies hallucinations and describes only somewhat grandiose ideas that remain reality‑tested (they can be talked out of them and recognize exaggeration). They also deny thought disorder or loss of contact with reality. This makes a current or past psychotic manic episode (needed for F31.2) unlikely based on the information so far. Therefore F31.2 is removed. The main remaining possibilities are a bipolar disorder with current manic episode without psychotic symptoms (F31.1) or a more chronic, fluctuating bipolar course that might fit other bipolar affective disorder categories such as F31.7, given the 8‑month period of persistently elevated/irritable mood with no return to baseline. Further questioning is needed to clarify full episode structure, duration, and inter‑episode recovery, so the diagnosis is not yet final.", "is_final": false}
+=====================================
+
+[call 29] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F31.1
+- F31.7
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F31.1", "F31.7"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+Doctor: During these “up” periods, do you also notice needing much less sleep, feeling unusually confident or driven, or doing things that are risky or out of character for you (like overspending, impulsive sex, or sudden big plans)?
+
+Patient: Yeah, when I’m in those “up” phases I sleep maybe 3–4 hours and still feel wired, like I don’t need rest. I feel really confident and driven, start a bunch of projects at once, and I’ve definitely spent too much money on things I don’t really need, but I haven’t done anything like risky sexual stuff.
+
+Doctor: Have you also had periods lasting at least two weeks where you felt very down or depressed most of the day, nearly every day, with low energy or loss of interest in things you usually enjoy?
+
+Patient: Yeah, I’ve had stretches like that, where for weeks I just feel really down most of the day and nothing feels enjoyable. It’s been happening on and off for over a year, and during those times my energy is really low and I feel kind of empty or numb.
+
+Doctor: During your most “up” phases, have your symptoms ever become so intense that you needed to go to the hospital or were unable to function at work or in daily life, or have they stayed noticeable but still manageable without hospitalization?
+
+Patient: I haven’t gone to the hospital, but there have been times I probably should have, because I was barely functioning. I’ve stayed up almost all night for days, talking nonstop and jumping from task to task, and it got bad enough that I missed work and had big blow‑ups with people because I was so irritable and agitated.
+
+Doctor: When you have these most intense “up” phases where you’re barely functioning and missing work, how long do they usually last from start to finish—are we talking about several days, or at least a full week or more at that high level?
+
+Patient: The really intense “up” parts usually last at least a week, sometimes a couple of weeks before they ease up a bit. But overall this high, wired kind of state has been going on for around 8 months without ever really going back to what I’d call normal.
+
+Doctor: During your most intense “up” phases, have you ever had experiences like hearing or seeing things that others don’t, or strongly believing things that others say aren’t true (for example, feeling you have special powers or a special mission)?
+
+Patient: I don’t think I’ve ever seen or heard things that weren’t there. Sometimes I feel like I have this big, important purpose or that I’m meant to do something huge, but I still kind of know it might be over the top and I can be talked out of it.
+
+Doctor: During your most intense “up” or “down” periods, has your thinking ever become so disconnected from reality that others said you were talking nonsense or you couldn’t be reasoned with, or have you always been able to recognize that your thoughts might be exaggerated or unrealistic when people challenge you on them?
+
+Patient: People have told me I was talking so fast and jumping between ideas that they couldn’t follow me, but not that I was completely talking nonsense. Even when I’m really “up” or really low, if someone pushes back I can usually step back a bit and realize I might be going overboard or not thinking totally realistically.
+
+Patient: People have told me I was talking so fast and jumping between ideas that they couldn’t follow me, but not that I was completely talking nonsense. Even when I’m really “up” or really low, if someone pushes back I can usually step back a bit and realize I might be going overboard or not thinking totally realistically.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "current mood state and episode pattern",
+  "question": "Right now, over the past month or so, would you say you’ve mostly been in a high/wired state, mostly depressed, or has your mood been relatively stable without clear episodes in either direction?"
+}
+=====================================
+
+--- turn 08 ---
+
+[call 30] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ manic_episode
+  - Elevated Mood: A mood that is abnormally high, euphoric, and full of unmotivated happiness and vitality.
+  - Irritable Mood: A state where one gets angry or aggressive even at minor stimuli.
+  - Mood Lability: Rapid shifts in mood, alternating unpredictably between euphoria and irritability.
+  - Increased Energy: Overflowing physical and mental energy, leading to an inability to stay still and a desire to keep moving.
+  - Hyperactivity: Doing far more work than usual or starting multiple activities simultaneously.
+  - Psychomotor Agitation: Inability to tolerate resting or stopping, driven by a constant need to do something.
+  - Talkativeness: Speaking far more than usual and continuing to talk without rest.
+  - Rapid Speech: Speech speed is so fast that it is difficult for others to understand or interrupt.
+  - Pressured Speech: Cannot stop talking or tolerate silence due to an internal pressure to keep speaking.
+  - Racing Thoughts: Thoughts spinning too fast in the head, constantly jumping from one idea to another.
+  - Flooding of Thoughts: Too many thoughts emerging simultaneously, making them disorganized.
+  - Inability to Control Thoughts: Unable to stop or slow down thoughts and unable to calm the mind.
+  Duration: 8 months
+▸ depressive_episode
+  - Depressed Mood: A persistently sunken mood or feeling of depression.
+  - Tearfulness: A state of frequent crying or inability to hold back tears.
+  - Sadness: A state where a sad or gloomy mood is maintained continuously.
+  - Emptiness: A feeling of inner emptiness or a state of feeling no emotion.
+  - Emotional Numbness: A state where emotions feel dulled or paralyzed.
+  - Significant Weight Loss: Weight loss of more than 5% in a month without dieting.
+  - Weight Gain: Weight gain of more than 5% in a month.
+  - Decrease in Appetite: Decrease in appetite occurring nearly every day.
+  - Increase in Appetite: Increase in appetite occurring nearly every day.
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  Duration: 1 year and 1 months
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 8
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Right now, over the past month or so, would you say you’ve mostly been in a high/wired state, mostly depressed, or has your mood been relatively stable without clear episodes in either direction?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["manic_episode: Elevated Mood", "manic_episode: Irritable Mood", "manic_episode: Mood Lability", "manic_episode: Increased Energy", "depressive_episode: Depressed Mood", "depressive_episode: Sadness", "depressive_episode: Emptiness", "depressive_episode: Emotional Numbness"], "answer_strategy": "Answer by focusing on how your mood has actually been over the *past month*, even if your symptoms have been going on longer. Decide which of the three options best fits: mostly high/wired, mostly depressed, or relatively stable. If you’ve been shifting a lot between high and low, briefly say that your mood has been unstable and describe which side (high or low) has been more prominent. Keep it concrete and short, e.g., ‘In the past month I’ve mostly been…’ and mention key features like energy, sleep, and emotional tone only as needed to clarify your choice."}
+=====================================
+
+[call 31] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Bipolar I Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ manic_episode
+  - Elevated Mood: A mood that is abnormally high, euphoric, and full of unmotivated happiness and vitality.
+  - Irritable Mood: A state where one gets angry or aggressive even at minor stimuli.
+  - Mood Lability: Rapid shifts in mood, alternating unpredictably between euphoria and irritability.
+  - Increased Energy: Overflowing physical and mental energy, leading to an inability to stay still and a desire to keep moving.
+  - Hyperactivity: Doing far more work than usual or starting multiple activities simultaneously.
+  - Psychomotor Agitation: Inability to tolerate resting or stopping, driven by a constant need to do something.
+  - Talkativeness: Speaking far more than usual and continuing to talk without rest.
+  - Rapid Speech: Speech speed is so fast that it is difficult for others to understand or interrupt.
+  - Pressured Speech: Cannot stop talking or tolerate silence due to an internal pressure to keep speaking.
+  - Racing Thoughts: Thoughts spinning too fast in the head, constantly jumping from one idea to another.
+  - Flooding of Thoughts: Too many thoughts emerging simultaneously, making them disorganized.
+  - Inability to Control Thoughts: Unable to stop or slow down thoughts and unable to calm the mind.
+  Duration: 8 months
+▸ depressive_episode
+  - Depressed Mood: A persistently sunken mood or feeling of depression.
+  - Tearfulness: A state of frequent crying or inability to hold back tears.
+  - Sadness: A state where a sad or gloomy mood is maintained continuously.
+  - Emptiness: A feeling of inner emptiness or a state of feeling no emotion.
+  - Emotional Numbness: A state where emotions feel dulled or paralyzed.
+  - Significant Weight Loss: Weight loss of more than 5% in a month without dieting.
+  - Weight Gain: Weight gain of more than 5% in a month.
+  - Decrease in Appetite: Decrease in appetite occurring nearly every day.
+  - Increase in Appetite: Increase in appetite occurring nearly every day.
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  Duration: 1 year and 1 months
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Elevated_Irritable_Mood
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: manic_episode: Elevated Mood, manic_episode: Irritable Mood, manic_episode: Mood Lability, manic_episode: Increased Energy, depressive_episode: Depressed Mood, depressive_episode: Sadness, depressive_episode: Emptiness, depressive_episode: Emotional Numbness
+Answer strategy: Answer by focusing on how your mood has actually been over the *past month*, even if your symptoms have been going on longer. Decide which of the three options best fits: mostly high/wired, mostly depressed, or relatively stable. If you’ve been shifting a lot between high and low, briefly say that your mood has been unstable and describe which side (high or low) has been more prominent. Keep it concrete and short, e.g., ‘In the past month I’ve mostly been…’ and mention key features like energy, sleep, and emotional tone only as needed to clarify your choice.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+Doctor: During these “up” periods, do you also notice needing much less sleep, feeling unusually confident or driven, or doing things that are risky or out of character for you (like overspending, impulsive sex, or sudden big plans)?
+
+Patient: Yeah, when I’m in those “up” phases I sleep maybe 3–4 hours and still feel wired, like I don’t need rest. I feel really confident and driven, start a bunch of projects at once, and I’ve definitely spent too much money on things I don’t really need, but I haven’t done anything like risky sexual stuff.
+
+Doctor: Have you also had periods lasting at least two weeks where you felt very down or depressed most of the day, nearly every day, with low energy or loss of interest in things you usually enjoy?
+
+Patient: Yeah, I’ve had stretches like that, where for weeks I just feel really down most of the day and nothing feels enjoyable. It’s been happening on and off for over a year, and during those times my energy is really low and I feel kind of empty or numb.
+
+Doctor: During your most “up” phases, have your symptoms ever become so intense that you needed to go to the hospital or were unable to function at work or in daily life, or have they stayed noticeable but still manageable without hospitalization?
+
+Patient: I haven’t gone to the hospital, but there have been times I probably should have, because I was barely functioning. I’ve stayed up almost all night for days, talking nonstop and jumping from task to task, and it got bad enough that I missed work and had big blow‑ups with people because I was so irritable and agitated.
+
+Doctor: When you have these most intense “up” phases where you’re barely functioning and missing work, how long do they usually last from start to finish—are we talking about several days, or at least a full week or more at that high level?
+
+Patient: The really intense “up” parts usually last at least a week, sometimes a couple of weeks before they ease up a bit. But overall this high, wired kind of state has been going on for around 8 months without ever really going back to what I’d call normal.
+
+Doctor: During your most intense “up” phases, have you ever had experiences like hearing or seeing things that others don’t, or strongly believing things that others say aren’t true (for example, feeling you have special powers or a special mission)?
+
+Patient: I don’t think I’ve ever seen or heard things that weren’t there. Sometimes I feel like I have this big, important purpose or that I’m meant to do something huge, but I still kind of know it might be over the top and I can be talked out of it.
+
+Doctor: During your most intense “up” or “down” periods, has your thinking ever become so disconnected from reality that others said you were talking nonsense or you couldn’t be reasoned with, or have you always been able to recognize that your thoughts might be exaggerated or unrealistic when people challenge you on them?
+
+Patient: People have told me I was talking so fast and jumping between ideas that they couldn’t follow me, but not that I was completely talking nonsense. Even when I’m really “up” or really low, if someone pushes back I can usually step back a bit and realize I might be going overboard or not thinking totally realistically.
+
+Doctor: Right now, over the past month or so, would you say you’ve mostly been in a high/wired state, mostly depressed, or has your mood been relatively stable without clear episodes in either direction?
+
+========== OUTPUT [patient] ==========
+In the past month I’ve mostly been in that high, wired state. I still have some dips where I feel down and kind of empty, but the “up,” irritable, over‑energized side has definitely been more prominent.
+=====================================
+
+[call 32] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F31.1", "F31.7"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+Doctor: During these “up” periods, do you also notice needing much less sleep, feeling unusually confident or driven, or doing things that are risky or out of character for you (like overspending, impulsive sex, or sudden big plans)?
+
+Patient: Yeah, when I’m in those “up” phases I sleep maybe 3–4 hours and still feel wired, like I don’t need rest. I feel really confident and driven, start a bunch of projects at once, and I’ve definitely spent too much money on things I don’t really need, but I haven’t done anything like risky sexual stuff.
+
+Doctor: Have you also had periods lasting at least two weeks where you felt very down or depressed most of the day, nearly every day, with low energy or loss of interest in things you usually enjoy?
+
+Patient: Yeah, I’ve had stretches like that, where for weeks I just feel really down most of the day and nothing feels enjoyable. It’s been happening on and off for over a year, and during those times my energy is really low and I feel kind of empty or numb.
+
+Doctor: During your most “up” phases, have your symptoms ever become so intense that you needed to go to the hospital or were unable to function at work or in daily life, or have they stayed noticeable but still manageable without hospitalization?
+
+Patient: I haven’t gone to the hospital, but there have been times I probably should have, because I was barely functioning. I’ve stayed up almost all night for days, talking nonstop and jumping from task to task, and it got bad enough that I missed work and had big blow‑ups with people because I was so irritable and agitated.
+
+Doctor: When you have these most intense “up” phases where you’re barely functioning and missing work, how long do they usually last from start to finish—are we talking about several days, or at least a full week or more at that high level?
+
+Patient: The really intense “up” parts usually last at least a week, sometimes a couple of weeks before they ease up a bit. But overall this high, wired kind of state has been going on for around 8 months without ever really going back to what I’d call normal.
+
+Doctor: During your most intense “up” phases, have you ever had experiences like hearing or seeing things that others don’t, or strongly believing things that others say aren’t true (for example, feeling you have special powers or a special mission)?
+
+Patient: I don’t think I’ve ever seen or heard things that weren’t there. Sometimes I feel like I have this big, important purpose or that I’m meant to do something huge, but I still kind of know it might be over the top and I can be talked out of it.
+
+Doctor: During your most intense “up” or “down” periods, has your thinking ever become so disconnected from reality that others said you were talking nonsense or you couldn’t be reasoned with, or have you always been able to recognize that your thoughts might be exaggerated or unrealistic when people challenge you on them?
+
+Patient: People have told me I was talking so fast and jumping between ideas that they couldn’t follow me, but not that I was completely talking nonsense. Even when I’m really “up” or really low, if someone pushes back I can usually step back a bit and realize I might be going overboard or not thinking totally realistically.
+
+Doctor: Right now, over the past month or so, would you say you’ve mostly been in a high/wired state, mostly depressed, or has your mood been relatively stable without clear episodes in either direction?
+
+Patient: In the past month I’ve mostly been in that high, wired state. I still have some dips where I feel down and kind of empty, but the “up,” irritable, over‑energized side has definitely been more prominent.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F31.1"], "note": "Previously the candidates were [F31.1, F31.7]. F31.7 was included because it was unclear whether the current presentation met full criteria for a manic episode versus a milder or mixed picture. In this segment, the patient describes: (1) clearly episodic elevated/irritable mood with markedly decreased need for sleep (3–4 hours, wired), increased activity, overspending, pressured/rapid speech, and significant functional impairment (missing work, major interpersonal blow‑ups) lasting at least a week at a time; (2) no psychotic symptoms and preserved, though impaired, reality testing; (3) distinct multi‑week depressive episodes with low mood, anhedonia, and low energy; and (4) an overall course of about 8 months without return to baseline, but with clear periods of intensified symptoms. This pattern is most consistent with a current manic episode without psychotic symptoms, in the context of recurrent depressive episodes—i.e., bipolar disorder with a current manic episode. The presence of clear, syndromal mania with significant impairment makes a residual or unspecified bipolar category (previously represented by F31.7) less likely, so F31.7 is removed and F31.1 remains as the single current candidate. Further questioning about substance use, medical conditions, and detailed functional impact is still needed before a final diagnosis, so is_final remains false.", "is_final": false}
+=====================================
+
+[call 33] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F31.1
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F31.1"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+Doctor: During these “up” periods, do you also notice needing much less sleep, feeling unusually confident or driven, or doing things that are risky or out of character for you (like overspending, impulsive sex, or sudden big plans)?
+
+Patient: Yeah, when I’m in those “up” phases I sleep maybe 3–4 hours and still feel wired, like I don’t need rest. I feel really confident and driven, start a bunch of projects at once, and I’ve definitely spent too much money on things I don’t really need, but I haven’t done anything like risky sexual stuff.
+
+Doctor: Have you also had periods lasting at least two weeks where you felt very down or depressed most of the day, nearly every day, with low energy or loss of interest in things you usually enjoy?
+
+Patient: Yeah, I’ve had stretches like that, where for weeks I just feel really down most of the day and nothing feels enjoyable. It’s been happening on and off for over a year, and during those times my energy is really low and I feel kind of empty or numb.
+
+Doctor: During your most “up” phases, have your symptoms ever become so intense that you needed to go to the hospital or were unable to function at work or in daily life, or have they stayed noticeable but still manageable without hospitalization?
+
+Patient: I haven’t gone to the hospital, but there have been times I probably should have, because I was barely functioning. I’ve stayed up almost all night for days, talking nonstop and jumping from task to task, and it got bad enough that I missed work and had big blow‑ups with people because I was so irritable and agitated.
+
+Doctor: When you have these most intense “up” phases where you’re barely functioning and missing work, how long do they usually last from start to finish—are we talking about several days, or at least a full week or more at that high level?
+
+Patient: The really intense “up” parts usually last at least a week, sometimes a couple of weeks before they ease up a bit. But overall this high, wired kind of state has been going on for around 8 months without ever really going back to what I’d call normal.
+
+Doctor: During your most intense “up” phases, have you ever had experiences like hearing or seeing things that others don’t, or strongly believing things that others say aren’t true (for example, feeling you have special powers or a special mission)?
+
+Patient: I don’t think I’ve ever seen or heard things that weren’t there. Sometimes I feel like I have this big, important purpose or that I’m meant to do something huge, but I still kind of know it might be over the top and I can be talked out of it.
+
+Doctor: During your most intense “up” or “down” periods, has your thinking ever become so disconnected from reality that others said you were talking nonsense or you couldn’t be reasoned with, or have you always been able to recognize that your thoughts might be exaggerated or unrealistic when people challenge you on them?
+
+Patient: People have told me I was talking so fast and jumping between ideas that they couldn’t follow me, but not that I was completely talking nonsense. Even when I’m really “up” or really low, if someone pushes back I can usually step back a bit and realize I might be going overboard or not thinking totally realistically.
+
+Doctor: Right now, over the past month or so, would you say you’ve mostly been in a high/wired state, mostly depressed, or has your mood been relatively stable without clear episodes in either direction?
+
+Patient: In the past month I’ve mostly been in that high, wired state. I still have some dips where I feel down and kind of empty, but the “up,” irritable, over‑energized side has definitely been more prominent.
+
+Patient: In the past month I’ve mostly been in that high, wired state. I still have some dips where I feel down and kind of empty, but the “up,” irritable, over‑energized side has definitely been more prominent.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "duration",
+  "subcategory": "episode pattern",
+  "question": "Before these past 8 months of feeling mostly high and wired, did you ever have clear, separate episodes in earlier years where you felt similarly “up” for at least several days at a time, with periods of feeling more or less back to your usual self in between?"
+}
+=====================================
+
+--- turn 09 ---
+
+[call 34] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ manic_episode
+  - Elevated Mood: A mood that is abnormally high, euphoric, and full of unmotivated happiness and vitality.
+  - Irritable Mood: A state where one gets angry or aggressive even at minor stimuli.
+  - Mood Lability: Rapid shifts in mood, alternating unpredictably between euphoria and irritability.
+  - Increased Energy: Overflowing physical and mental energy, leading to an inability to stay still and a desire to keep moving.
+  - Hyperactivity: Doing far more work than usual or starting multiple activities simultaneously.
+  - Psychomotor Agitation: Inability to tolerate resting or stopping, driven by a constant need to do something.
+  - Talkativeness: Speaking far more than usual and continuing to talk without rest.
+  - Rapid Speech: Speech speed is so fast that it is difficult for others to understand or interrupt.
+  - Pressured Speech: Cannot stop talking or tolerate silence due to an internal pressure to keep speaking.
+  - Racing Thoughts: Thoughts spinning too fast in the head, constantly jumping from one idea to another.
+  - Flooding of Thoughts: Too many thoughts emerging simultaneously, making them disorganized.
+  - Inability to Control Thoughts: Unable to stop or slow down thoughts and unable to calm the mind.
+  Duration: 8 months
+▸ depressive_episode
+  - Depressed Mood: A persistently sunken mood or feeling of depression.
+  - Tearfulness: A state of frequent crying or inability to hold back tears.
+  - Sadness: A state where a sad or gloomy mood is maintained continuously.
+  - Emptiness: A feeling of inner emptiness or a state of feeling no emotion.
+  - Emotional Numbness: A state where emotions feel dulled or paralyzed.
+  - Significant Weight Loss: Weight loss of more than 5% in a month without dieting.
+  - Weight Gain: Weight gain of more than 5% in a month.
+  - Decrease in Appetite: Decrease in appetite occurring nearly every day.
+  - Increase in Appetite: Increase in appetite occurring nearly every day.
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  Duration: 1 year and 1 months
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 9
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Before these past 8 months of feeling mostly high and wired, did you ever have clear, separate episodes in earlier years where you felt similarly “up” for at least several days at a time, with periods of feeling more or less back to your usual self in between?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["manic_episode: Duration: 8 months", "depressive_episode: Duration: 1 year and 1 months"], "answer_strategy": "The doctor is asking about whether there were distinct, earlier manic-like episodes before the current 8‑month period. You only have duration information in the profile, and nothing about prior lifetime episodes, so you cannot answer from the profile alone. Briefly explain whether you recall any earlier periods (before these 8 months) when you felt similarly high/energized for several days or longer, clearly different from your normal self, and separated by times when you felt back to baseline. If you’re unsure or haven’t really thought about it, say so directly (e.g., ‘I don’t really remember having clear episodes like that before’ or ‘I’m not sure; this is the first time it’s been this obvious’). Keep the reply concise and focused on whether such past distinct episodes existed, their approximate duration, and how clearly they were separated by more normal periods."}
+=====================================
+
+[call 35] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Bipolar I Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ manic_episode
+  - Elevated Mood: A mood that is abnormally high, euphoric, and full of unmotivated happiness and vitality.
+  - Irritable Mood: A state where one gets angry or aggressive even at minor stimuli.
+  - Mood Lability: Rapid shifts in mood, alternating unpredictably between euphoria and irritability.
+  - Increased Energy: Overflowing physical and mental energy, leading to an inability to stay still and a desire to keep moving.
+  - Hyperactivity: Doing far more work than usual or starting multiple activities simultaneously.
+  - Psychomotor Agitation: Inability to tolerate resting or stopping, driven by a constant need to do something.
+  - Talkativeness: Speaking far more than usual and continuing to talk without rest.
+  - Rapid Speech: Speech speed is so fast that it is difficult for others to understand or interrupt.
+  - Pressured Speech: Cannot stop talking or tolerate silence due to an internal pressure to keep speaking.
+  - Racing Thoughts: Thoughts spinning too fast in the head, constantly jumping from one idea to another.
+  - Flooding of Thoughts: Too many thoughts emerging simultaneously, making them disorganized.
+  - Inability to Control Thoughts: Unable to stop or slow down thoughts and unable to calm the mind.
+  Duration: 8 months
+▸ depressive_episode
+  - Depressed Mood: A persistently sunken mood or feeling of depression.
+  - Tearfulness: A state of frequent crying or inability to hold back tears.
+  - Sadness: A state where a sad or gloomy mood is maintained continuously.
+  - Emptiness: A feeling of inner emptiness or a state of feeling no emotion.
+  - Emotional Numbness: A state where emotions feel dulled or paralyzed.
+  - Significant Weight Loss: Weight loss of more than 5% in a month without dieting.
+  - Weight Gain: Weight gain of more than 5% in a month.
+  - Decrease in Appetite: Decrease in appetite occurring nearly every day.
+  - Increase in Appetite: Increase in appetite occurring nearly every day.
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  Duration: 1 year and 1 months
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Elevated_Irritable_Mood
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: manic_episode: Duration: 8 months, depressive_episode: Duration: 1 year and 1 months
+Answer strategy: The doctor is asking about whether there were distinct, earlier manic-like episodes before the current 8‑month period. You only have duration information in the profile, and nothing about prior lifetime episodes, so you cannot answer from the profile alone. Briefly explain whether you recall any earlier periods (before these 8 months) when you felt similarly high/energized for several days or longer, clearly different from your normal self, and separated by times when you felt back to baseline. If you’re unsure or haven’t really thought about it, say so directly (e.g., ‘I don’t really remember having clear episodes like that before’ or ‘I’m not sure; this is the first time it’s been this obvious’). Keep the reply concise and focused on whether such past distinct episodes existed, their approximate duration, and how clearly they were separated by more normal periods.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+Doctor: During these “up” periods, do you also notice needing much less sleep, feeling unusually confident or driven, or doing things that are risky or out of character for you (like overspending, impulsive sex, or sudden big plans)?
+
+Patient: Yeah, when I’m in those “up” phases I sleep maybe 3–4 hours and still feel wired, like I don’t need rest. I feel really confident and driven, start a bunch of projects at once, and I’ve definitely spent too much money on things I don’t really need, but I haven’t done anything like risky sexual stuff.
+
+Doctor: Have you also had periods lasting at least two weeks where you felt very down or depressed most of the day, nearly every day, with low energy or loss of interest in things you usually enjoy?
+
+Patient: Yeah, I’ve had stretches like that, where for weeks I just feel really down most of the day and nothing feels enjoyable. It’s been happening on and off for over a year, and during those times my energy is really low and I feel kind of empty or numb.
+
+Doctor: During your most “up” phases, have your symptoms ever become so intense that you needed to go to the hospital or were unable to function at work or in daily life, or have they stayed noticeable but still manageable without hospitalization?
+
+Patient: I haven’t gone to the hospital, but there have been times I probably should have, because I was barely functioning. I’ve stayed up almost all night for days, talking nonstop and jumping from task to task, and it got bad enough that I missed work and had big blow‑ups with people because I was so irritable and agitated.
+
+Doctor: When you have these most intense “up” phases where you’re barely functioning and missing work, how long do they usually last from start to finish—are we talking about several days, or at least a full week or more at that high level?
+
+Patient: The really intense “up” parts usually last at least a week, sometimes a couple of weeks before they ease up a bit. But overall this high, wired kind of state has been going on for around 8 months without ever really going back to what I’d call normal.
+
+Doctor: During your most intense “up” phases, have you ever had experiences like hearing or seeing things that others don’t, or strongly believing things that others say aren’t true (for example, feeling you have special powers or a special mission)?
+
+Patient: I don’t think I’ve ever seen or heard things that weren’t there. Sometimes I feel like I have this big, important purpose or that I’m meant to do something huge, but I still kind of know it might be over the top and I can be talked out of it.
+
+Doctor: During your most intense “up” or “down” periods, has your thinking ever become so disconnected from reality that others said you were talking nonsense or you couldn’t be reasoned with, or have you always been able to recognize that your thoughts might be exaggerated or unrealistic when people challenge you on them?
+
+Patient: People have told me I was talking so fast and jumping between ideas that they couldn’t follow me, but not that I was completely talking nonsense. Even when I’m really “up” or really low, if someone pushes back I can usually step back a bit and realize I might be going overboard or not thinking totally realistically.
+
+Doctor: Right now, over the past month or so, would you say you’ve mostly been in a high/wired state, mostly depressed, or has your mood been relatively stable without clear episodes in either direction?
+
+Patient: In the past month I’ve mostly been in that high, wired state. I still have some dips where I feel down and kind of empty, but the “up,” irritable, over‑energized side has definitely been more prominent.
+
+Doctor: Before these past 8 months of feeling mostly high and wired, did you ever have clear, separate episodes in earlier years where you felt similarly “up” for at least several days at a time, with periods of feeling more or less back to your usual self in between?
+
+========== OUTPUT [patient] ==========
+I don’t really remember having clear “up” episodes like this before these past 8 months. I’ve had times when I was more energetic or in a good mood, but nothing this intense or obviously different from my normal self.
+=====================================
+
+[call 36] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F31.1"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+Doctor: During these “up” periods, do you also notice needing much less sleep, feeling unusually confident or driven, or doing things that are risky or out of character for you (like overspending, impulsive sex, or sudden big plans)?
+
+Patient: Yeah, when I’m in those “up” phases I sleep maybe 3–4 hours and still feel wired, like I don’t need rest. I feel really confident and driven, start a bunch of projects at once, and I’ve definitely spent too much money on things I don’t really need, but I haven’t done anything like risky sexual stuff.
+
+Doctor: Have you also had periods lasting at least two weeks where you felt very down or depressed most of the day, nearly every day, with low energy or loss of interest in things you usually enjoy?
+
+Patient: Yeah, I’ve had stretches like that, where for weeks I just feel really down most of the day and nothing feels enjoyable. It’s been happening on and off for over a year, and during those times my energy is really low and I feel kind of empty or numb.
+
+Doctor: During your most “up” phases, have your symptoms ever become so intense that you needed to go to the hospital or were unable to function at work or in daily life, or have they stayed noticeable but still manageable without hospitalization?
+
+Patient: I haven’t gone to the hospital, but there have been times I probably should have, because I was barely functioning. I’ve stayed up almost all night for days, talking nonstop and jumping from task to task, and it got bad enough that I missed work and had big blow‑ups with people because I was so irritable and agitated.
+
+Doctor: When you have these most intense “up” phases where you’re barely functioning and missing work, how long do they usually last from start to finish—are we talking about several days, or at least a full week or more at that high level?
+
+Patient: The really intense “up” parts usually last at least a week, sometimes a couple of weeks before they ease up a bit. But overall this high, wired kind of state has been going on for around 8 months without ever really going back to what I’d call normal.
+
+Doctor: During your most intense “up” phases, have you ever had experiences like hearing or seeing things that others don’t, or strongly believing things that others say aren’t true (for example, feeling you have special powers or a special mission)?
+
+Patient: I don’t think I’ve ever seen or heard things that weren’t there. Sometimes I feel like I have this big, important purpose or that I’m meant to do something huge, but I still kind of know it might be over the top and I can be talked out of it.
+
+Doctor: During your most intense “up” or “down” periods, has your thinking ever become so disconnected from reality that others said you were talking nonsense or you couldn’t be reasoned with, or have you always been able to recognize that your thoughts might be exaggerated or unrealistic when people challenge you on them?
+
+Patient: People have told me I was talking so fast and jumping between ideas that they couldn’t follow me, but not that I was completely talking nonsense. Even when I’m really “up” or really low, if someone pushes back I can usually step back a bit and realize I might be going overboard or not thinking totally realistically.
+
+Doctor: Right now, over the past month or so, would you say you’ve mostly been in a high/wired state, mostly depressed, or has your mood been relatively stable without clear episodes in either direction?
+
+Patient: In the past month I’ve mostly been in that high, wired state. I still have some dips where I feel down and kind of empty, but the “up,” irritable, over‑energized side has definitely been more prominent.
+
+Doctor: Before these past 8 months of feeling mostly high and wired, did you ever have clear, separate episodes in earlier years where you felt similarly “up” for at least several days at a time, with periods of feeling more or less back to your usual self in between?
+
+Patient: I don’t really remember having clear “up” episodes like this before these past 8 months. I’ve had times when I was more energetic or in a good mood, but nothing this intense or obviously different from my normal self.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F31.2"], "note": "Previously the only candidate was F31.1, reflecting an assumption of a moderate current episode without psychotic symptoms. In this conversation, the patient describes an approximately 8‑month period of persistently elevated/irritable mood with decreased need for sleep, increased goal‑directed activity, overspending, marked irritability, and functional impairment (missing work, major interpersonal conflict). The most intense \"up\" phases last at least a week or longer, and there is no return to a euthymic baseline in between, indicating a sustained manic episode rather than a shorter or clearly episodic pattern. There are also clear past depressive episodes lasting weeks with low mood and anhedonia. The patient denies hallucinations and clear delusions, and retains some insight when challenged, which argues against psychotic symptoms. However, the severity of the manic symptoms has led to marked impairment in occupational and social functioning, approaching a level where hospitalization would be appropriate, which is more consistent with a current severe manic episode without psychotic symptoms. Therefore, the candidate shifts from F31.1 (moderate) to F31.2 (severe without psychotic symptoms). No additional diagnostic categories are added at this time because the history strongly supports a bipolar spectrum condition with a severe current manic episode and recurrent depressive episodes, and there is no evidence presented for primary psychotic, substance‑induced, or personality‑based explanations. Given the clarity and completeness of the episode description, I am confident in this single, more specific candidate.", "is_final": true}
+=====================================
+
+[call 37] doctor-final-diagnosis
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the full interview transcript and the differential diagnosis candidates, write the final diagnosis report.
+
+Both the "diagnosis" and "candidates" MUST be ICD-10 codes.
+
+[Field Instructions]
+- diagnosis: The single diagnosis code of ICD-10.
+- candidates: Top 2–3 differential candidates of ICD-10 codes considered until the end.
+- reason: Brief diagnostic rationale.
+- diagnostic_checklist: Structured evidence summary organized by diagnostic criterion type.
+  List only symptom groups that are relevant to your diagnosis, with the symptoms the patient actually confirmed.
+
+Output Format (JSON only, no other text):
+{
+  "diagnosis": "Final Diagnosis ICD-10 code",
+  "candidates": ["Disease Code1", "Disease Code2"],
+  "reason": "Brief diagnostic rationale.",
+  "diagnostic_checklist": {
+    "symptom_groups": [
+      {
+        "group": "clinical group name (e.g., inattention, manic_episode, psychotic_symptoms)",
+        "confirmed_symptoms": ["natural language description of each confirmed symptom in this group"],
+        "count": <integer>
+      }
+    ],
+    "duration_verified": "Description of how the duration criterion was established (e.g., 'symptoms present for over 6 months since childhood'), or null if not assessed.",
+    "functional_impairment": <true if functional impairment was confirmed, false if denied, null if not assessed>,
+    "traumatic_stressor": <true if a qualifying traumatic stressor was confirmed, null if not applicable or not assessed>,
+    "psychosocial_stressor": <true if a qualifying psychosocial stressor was confirmed, null if not applicable or not assessed>,
+    "additional_requirements": ["Each additional criterion that was explicitly verified during the interview (e.g., 'Onset prior to age 12 confirmed')"]
+  }
+}
+
+[2. USER]
+Candidate Diseases: 
+["F31.2"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: Lately my mood has been all over the place, mostly feeling really “up” and then suddenly getting irritated or angry over the smallest things. It’s starting to cause problems with people around me, and I feel like I can’t really control it anymore.
+
+Doctor: During these “up” periods, do you also notice needing much less sleep, feeling unusually confident or driven, or doing things that are risky or out of character for you (like overspending, impulsive sex, or sudden big plans)?
+
+Patient: Yeah, when I’m in those “up” phases I sleep maybe 3–4 hours and still feel wired, like I don’t need rest. I feel really confident and driven, start a bunch of projects at once, and I’ve definitely spent too much money on things I don’t really need, but I haven’t done anything like risky sexual stuff.
+
+Doctor: Have you also had periods lasting at least two weeks where you felt very down or depressed most of the day, nearly every day, with low energy or loss of interest in things you usually enjoy?
+
+Patient: Yeah, I’ve had stretches like that, where for weeks I just feel really down most of the day and nothing feels enjoyable. It’s been happening on and off for over a year, and during those times my energy is really low and I feel kind of empty or numb.
+
+Doctor: During your most “up” phases, have your symptoms ever become so intense that you needed to go to the hospital or were unable to function at work or in daily life, or have they stayed noticeable but still manageable without hospitalization?
+
+Patient: I haven’t gone to the hospital, but there have been times I probably should have, because I was barely functioning. I’ve stayed up almost all night for days, talking nonstop and jumping from task to task, and it got bad enough that I missed work and had big blow‑ups with people because I was so irritable and agitated.
+
+Doctor: When you have these most intense “up” phases where you’re barely functioning and missing work, how long do they usually last from start to finish—are we talking about several days, or at least a full week or more at that high level?
+
+Patient: The really intense “up” parts usually last at least a week, sometimes a couple of weeks before they ease up a bit. But overall this high, wired kind of state has been going on for around 8 months without ever really going back to what I’d call normal.
+
+Doctor: During your most intense “up” phases, have you ever had experiences like hearing or seeing things that others don’t, or strongly believing things that others say aren’t true (for example, feeling you have special powers or a special mission)?
+
+Patient: I don’t think I’ve ever seen or heard things that weren’t there. Sometimes I feel like I have this big, important purpose or that I’m meant to do something huge, but I still kind of know it might be over the top and I can be talked out of it.
+
+Doctor: During your most intense “up” or “down” periods, has your thinking ever become so disconnected from reality that others said you were talking nonsense or you couldn’t be reasoned with, or have you always been able to recognize that your thoughts might be exaggerated or unrealistic when people challenge you on them?
+
+Patient: People have told me I was talking so fast and jumping between ideas that they couldn’t follow me, but not that I was completely talking nonsense. Even when I’m really “up” or really low, if someone pushes back I can usually step back a bit and realize I might be going overboard or not thinking totally realistically.
+
+Doctor: Right now, over the past month or so, would you say you’ve mostly been in a high/wired state, mostly depressed, or has your mood been relatively stable without clear episodes in either direction?
+
+Patient: In the past month I’ve mostly been in that high, wired state. I still have some dips where I feel down and kind of empty, but the “up,” irritable, over‑energized side has definitely been more prominent.
+
+Doctor: Before these past 8 months of feeling mostly high and wired, did you ever have clear, separate episodes in earlier years where you felt similarly “up” for at least several days at a time, with periods of feeling more or less back to your usual self in between?
+
+Patient: I don’t really remember having clear “up” episodes like this before these past 8 months. I’ve had times when I was more energetic or in a good mood, but nothing this intense or obviously different from my normal self.
+
+========== OUTPUT [doctor] ==========
+{
+  "diagnosis": "F31.2",
+  "candidates": ["F31.1", "F31.7"],
+  "reason": "The patient describes a distinct, sustained period of abnormally elevated/irritable mood and increased energy lasting at least a week at a time, within an 8‑month span of predominantly high/wired state. Manic symptoms include markedly decreased need for sleep, increased goal‑directed activity, pressured/rapid speech, flight of ideas or racing thoughts, inflated sense of purpose, impulsive overspending, and severe irritability with interpersonal blow‑ups. These episodes have led to clear functional impairment, including missing work and being barely able to function, which meets the severity threshold for a manic episode even without hospitalization. The patient also reports recurrent depressive episodes lasting at least two weeks with low mood, anhedonia, and low energy over the past year. There is no evidence of psychotic symptoms or complete loss of insight. The combination of at least one severe manic episode without psychotic features and recurrent depressive episodes is most consistent with Bipolar Affective Disorder, current episode manic without psychotic symptoms (F31.2).",
+  "diagnostic_checklist": {
+    "symptom_groups": [
+      {
+        "group": "manic_episode",
+        "confirmed_symptoms": [
+          "Distinct periods of feeling very 'up,' high, wired, and unusually irritable",
+          "Markedly decreased need for sleep, sleeping only 3–4 hours and still feeling wired",
+          "Increased goal‑directed activity with starting many projects at once",
+          "Pressured, nonstop talking with others unable to follow due to speed and topic shifts",
+          "Racing thoughts or jumping between ideas",
+          "Inflated sense of purpose or feeling meant to do something 'big and important' (recognizes it may be exaggerated)",
+          "Impulsive overspending on unnecessary items",
+          "Marked irritability and agitation leading to arguments and 'big blow‑ups' with others",
+          "Episodes severe enough that the patient missed work and was 'barely functioning'"
+        ],
+        "count": 9
+      },
+      {
+        "group": "depressive_episode",
+        "confirmed_symptoms": [
+          "Periods lasting weeks of feeling very down most of the day, nearly every day",
+          "Loss of interest or pleasure in usual activities ('nothing feels enjoyable')",
+          "Low energy and feelings of emptiness or numbness during these periods",
+          "Recurrent nature of these depressive periods over more than a year"
+        ],
+        "count": 4
+      },
+      {
+        "group": "insight_and_psychosis_screen",
+        "confirmed_symptoms": [
+          "Denies hallucinations (no seeing or hearing things others do not)",
+          "No fixed delusional beliefs; grandiose ideas about purpose are recognized as possibly over the top and can be talked down",
+          "Others perceive speech as very fast and hard to follow but not as nonsensical or disorganized to the point of losing reality testing",
+          "Maintains some ability to recognize that thoughts may be exaggerated when challenged"
+        ],
+        "count": 4
+      }
+    ],
+    "duration_verified": "Manic symptoms have been present in a predominantly high/wired state for approximately 8 months, with the most intense manic periods lasting at least 1–2 weeks each. Depressive episodes have occurred on and off for over a year, each lasting at least several weeks.",
+    "functional_impairment": true,
+    "traumatic_stressor": null,
+    "psychosocial_stressor": true,
+    "additional_requirements": [
+      "At least one manic episode meeting duration (≥1 week) and severity criteria (marked functional impairment) confirmed",
+      "History of recurrent depressive episodes lasting ≥2 weeks confirmed",
+      "No evidence of psychotic symptoms during mood episodes",
+      "Mood symptoms not better explained as a single brief hypomanic episode or cyclothymia based on severity and impairment"
+    ]
+  }
+}
+=====================================
+

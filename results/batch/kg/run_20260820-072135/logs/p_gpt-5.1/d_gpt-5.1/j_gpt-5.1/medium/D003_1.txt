@@ -1,0 +1,2251 @@
+--- turn 00 ---
+
+[call 01] doctor-opening-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "open-ended",
+  "subcategory": null,
+  "question": "Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?"
+}
+=====================================
+
+--- turn 01 ---
+
+[call 02] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.
+  - Blurting_Answers: Often blurts out an answer before a question has been completed.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 7 months
+  - Additional: Onset prior to age 12 years
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 1
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["hyperactivity_impulsivity", "hyperactivity_impulsivity.Constant_Activity", "hyperactivity_impulsivity.Quiet_Activity_Difficulty", "hyperactivity_impulsivity.Blurting_Answers"], "answer_strategy": "Answer in a straightforward, first-person way focusing only on the main problem: feeling overly active and impulsive. Describe that you’ve been very restless, always on the go, having trouble doing things quietly, and often speaking or answering too quickly, and that this has been going on for a long time. Keep the tone honest and simple, and clearly state that you’re seeking help to better control this hyperactive, impulsive behavior in daily life."}
+=====================================
+
+[call 03] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation).
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.
+  - Blurting_Answers: Often blurts out an answer before a question has been completed.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 7 months
+  - Additional: Onset prior to age 12 years
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Quiet_Activity_Difficulty
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: hyperactivity_impulsivity, hyperactivity_impulsivity.Constant_Activity, hyperactivity_impulsivity.Quiet_Activity_Difficulty, hyperactivity_impulsivity.Blurting_Answers
+Answer strategy: Answer in a straightforward, first-person way focusing only on the main problem: feeling overly active and impulsive. Describe that you’ve been very restless, always on the go, having trouble doing things quietly, and often speaking or answering too quickly, and that this has been going on for a long time. Keep the tone honest and simple, and clearly state that you’re seeking help to better control this hyperactive, impulsive behavior in daily life.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+========== OUTPUT [patient] ==========
+I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+=====================================
+
+[call 04] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F90.0", "F41.1", "F32.0"], "note": "Initial candidate list based only on the presenting complaint. The main symptom is persistent restlessness and inability to relax, with functional impairment at work and home. This raises concern for an attention and activity regulation condition (coded here as F90.0) but could also reflect generalized nervousness or agitation (F41.1) or psychomotor agitation related to low mood (F32.0). No prior candidate list was provided, so this is the first differential set. Further history is needed to clarify age of onset, attention/concentration, mood, anxiety, sleep, substance use, and medical factors.", "is_final": false}
+=====================================
+
+[call 05] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F90.0
+- F41.1
+- F32.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F90.0", "F41.1", "F32.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "attention vs. worry vs. mood",
+  "question": "When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?"
+}
+=====================================
+
+--- turn 02 ---
+
+[call 06] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.
+  - Blurting_Answers: Often blurts out an answer before a question has been completed.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 7 months
+  - Additional: Onset prior to age 12 years
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 2
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["hyperactivity_impulsivity > Constant_Activity", "hyperactivity_impulsivity > Quiet_Activity_Difficulty", "hyperactivity_impulsivity > Blurting_Answers"], "answer_strategy": "Answer by focusing on how your attention behaves when you try to concentrate. Describe whether your mind mainly jumps quickly between tasks/ideas and you feel like you’re always ‘on the go’ and can’t stay with one thing, or whether it’s mostly worries and ‘what if’ thoughts that pull you away. Use concrete examples (reading, work, watching a show). Keep the tone straightforward and honest, and clearly choose which description fits you better, or explain if it’s a mix but emphasize the attention-jumping aspect if that matches your usual experience."}
+=====================================
+
+[call 07] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation).
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.
+  - Blurting_Answers: Often blurts out an answer before a question has been completed.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 7 months
+  - Additional: Onset prior to age 12 years
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Quiet_Activity_Difficulty
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: hyperactivity_impulsivity > Constant_Activity, hyperactivity_impulsivity > Quiet_Activity_Difficulty, hyperactivity_impulsivity > Blurting_Answers
+Answer strategy: Answer by focusing on how your attention behaves when you try to concentrate. Describe whether your mind mainly jumps quickly between tasks/ideas and you feel like you’re always ‘on the go’ and can’t stay with one thing, or whether it’s mostly worries and ‘what if’ thoughts that pull you away. Use concrete examples (reading, work, watching a show). Keep the tone straightforward and honest, and clearly choose which description fits you better, or explain if it’s a mix but emphasize the attention-jumping aspect if that matches your usual experience.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+========== OUTPUT [patient] ==========
+It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+=====================================
+
+[call 08] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F90.0", "F41.1", "F32.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F90.0", "F41.1", "F32.0"], "note": "Previously the candidates were [F90.0, F41.1, F32.0]. The new information that the patient’s main difficulty is attention jumping around and inability to stay on one task, without prominent worry or sadness, increases the likelihood of an attention/impulsivity syndrome relative to anxiety or depressive syndromes. This makes F90.0 more likely, while F41.1 and F32.0 become less likely but cannot yet be excluded because we still lack detailed information about mood, vegetative symptoms, and the presence of excessive, uncontrollable worry or physical anxiety symptoms. Therefore the candidate list remains [F90.0, F41.1, F32.0], but the internal ranking has shifted toward F90.0 as the leading possibility.", "is_final": false}
+=====================================
+
+[call 09] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F90.0
+- F41.1
+- F32.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F90.0", "F41.1", "F32.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "pervasiveness and childhood onset",
+  "question": "Have you had this kind of restlessness and trouble staying on one task since you were a child (for example in school), or is it something that only started in the last few months or years?"
+}
+=====================================
+
+--- turn 03 ---
+
+[call 10] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.
+  - Blurting_Answers: Often blurts out an answer before a question has been completed.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 7 months
+  - Additional: Onset prior to age 12 years
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 3
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Have you had this kind of restlessness and trouble staying on one task since you were a child (for example in school), or is it something that only started in the last few months or years?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["Critical Diagnostic Criteria - Duration: 1 year and 7 months", "Critical Diagnostic Criteria - Onset prior to age 12 years"], "answer_strategy": "Clearly state that these symptoms have been present since childhood, not just in the last few months or years. Mention that the restlessness and trouble staying on one task started before age 12, for example in school, and that they have continued up to now. Keep the tone straightforward and factual, focusing on when you first remember these issues and how long they’ve been going on."}
+=====================================
+
+[call 11] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation).
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.
+  - Blurting_Answers: Often blurts out an answer before a question has been completed.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 7 months
+  - Additional: Onset prior to age 12 years
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Quiet_Activity_Difficulty
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: Critical Diagnostic Criteria - Duration: 1 year and 7 months, Critical Diagnostic Criteria - Onset prior to age 12 years
+Answer strategy: Clearly state that these symptoms have been present since childhood, not just in the last few months or years. Mention that the restlessness and trouble staying on one task started before age 12, for example in school, and that they have continued up to now. Keep the tone straightforward and factual, focusing on when you first remember these issues and how long they’ve been going on.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+Doctor: Have you had this kind of restlessness and trouble staying on one task since you were a child (for example in school), or is it something that only started in the last few months or years?
+
+========== OUTPUT [patient] ==========
+It’s been there since I was a kid—I remember getting in trouble in elementary school for not staying in my seat and rushing through work. It’s just kind of always been how I am, and it’s continued right up to now.
+=====================================
+
+[call 12] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F90.0", "F41.1", "F32.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+Doctor: Have you had this kind of restlessness and trouble staying on one task since you were a child (for example in school), or is it something that only started in the last few months or years?
+
+Patient: It’s been there since I was a kid—I remember getting in trouble in elementary school for not staying in my seat and rushing through work. It’s just kind of always been how I am, and it’s continued right up to now.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F90.0"], "note": "Previously the candidates were [F90.0, F41.1, F32.0]. The patient describes lifelong (since elementary school) restlessness, difficulty staying seated, and attention jumping between tasks without a prominent focus on excessive worry or low mood. This pattern strongly supports a hyperkinetic/attention-related condition and makes primary anxiety or depressive episodes less likely as the main explanation. There is no mention of persistent sadness, anhedonia, or pervasive worry dominating their thoughts. Therefore F41.1 and F32.0 are now unlikely as primary diagnoses, and the current candidate is F90.0. I still need more detail on current symptoms, impairment, and any comorbid anxiety or mood features before making a final diagnosis, so is_final remains false.", "is_final": false}
+=====================================
+
+[call 13] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F90.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F90.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+Doctor: Have you had this kind of restlessness and trouble staying on one task since you were a child (for example in school), or is it something that only started in the last few months or years?
+
+Patient: It’s been there since I was a kid—I remember getting in trouble in elementary school for not staying in my seat and rushing through work. It’s just kind of always been how I am, and it’s continued right up to now.
+
+Patient: It’s been there since I was a kid—I remember getting in trouble in elementary school for not staying in my seat and rushing through work. It’s just kind of always been how I am, and it’s continued right up to now.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "symptom presence",
+  "subcategory": "inattention and disorganization",
+  "question": "Besides feeling restless, do you also often lose things, forget appointments or tasks, or make careless mistakes because you miss details, even when you’re really trying to pay attention?"
+}
+=====================================
+
+--- turn 04 ---
+
+[call 14] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.
+  - Blurting_Answers: Often blurts out an answer before a question has been completed.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 7 months
+  - Additional: Onset prior to age 12 years
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 4
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Besides feeling restless, do you also often lose things, forget appointments or tasks, or make careless mistakes because you miss details, even when you’re really trying to pay attention?
+
+========== OUTPUT [patient] ==========
+{"matched": false, "matched_sections": [], "answer_strategy": "This isn’t covered in the profile, so answer from your own experience. Briefly say whether you often lose things, forget appointments or tasks, or make careless mistakes despite trying to pay attention, and if so give one short example; if you’re not sure, say you haven’t really noticed or haven’t thought about it."}
+=====================================
+
+[call 15] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation).
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.
+  - Blurting_Answers: Often blurts out an answer before a question has been completed.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 7 months
+  - Additional: Onset prior to age 12 years
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Quiet_Activity_Difficulty
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(No match in profile or inference only)
+Answer strategy: This isn’t covered in the profile, so answer from your own experience. Briefly say whether you often lose things, forget appointments or tasks, or make careless mistakes despite trying to pay attention, and if so give one short example; if you’re not sure, say you haven’t really noticed or haven’t thought about it.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+Doctor: Have you had this kind of restlessness and trouble staying on one task since you were a child (for example in school), or is it something that only started in the last few months or years?
+
+Patient: It’s been there since I was a kid—I remember getting in trouble in elementary school for not staying in my seat and rushing through work. It’s just kind of always been how I am, and it’s continued right up to now.
+
+Doctor: Besides feeling restless, do you also often lose things, forget appointments or tasks, or make careless mistakes because you miss details, even when you’re really trying to pay attention?
+
+========== OUTPUT [patient] ==========
+Yeah, that happens to me a lot. I’ll forget appointments unless I set multiple reminders, and I misplace things like my keys or work badge all the time even when I’m trying to be careful.
+=====================================
+
+[call 16] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F90.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+Doctor: Have you had this kind of restlessness and trouble staying on one task since you were a child (for example in school), or is it something that only started in the last few months or years?
+
+Patient: It’s been there since I was a kid—I remember getting in trouble in elementary school for not staying in my seat and rushing through work. It’s just kind of always been how I am, and it’s continued right up to now.
+
+Doctor: Besides feeling restless, do you also often lose things, forget appointments or tasks, or make careless mistakes because you miss details, even when you’re really trying to pay attention?
+
+Patient: Yeah, that happens to me a lot. I’ll forget appointments unless I set multiple reminders, and I misplace things like my keys or work badge all the time even when I’m trying to be careful.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F90.0"], "note": "Previously the only candidate was F90.0. The patient now describes lifelong (since elementary school) patterns of restlessness, difficulty remaining seated, rushing through work, distractibility, and frequent forgetfulness/misplacing items, which are all highly consistent with the same condition and its persistence into adulthood. There is no new information suggesting prominent anxiety, mood disorder, substance use, or another medical/psychiatric cause that would warrant adding or changing diagnostic candidates at this stage. Therefore the candidate list remains F90.0 and has not changed.", "is_final": false}
+=====================================
+
+[call 17] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F90.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F90.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+Doctor: Have you had this kind of restlessness and trouble staying on one task since you were a child (for example in school), or is it something that only started in the last few months or years?
+
+Patient: It’s been there since I was a kid—I remember getting in trouble in elementary school for not staying in my seat and rushing through work. It’s just kind of always been how I am, and it’s continued right up to now.
+
+Doctor: Besides feeling restless, do you also often lose things, forget appointments or tasks, or make careless mistakes because you miss details, even when you’re really trying to pay attention?
+
+Patient: Yeah, that happens to me a lot. I’ll forget appointments unless I set multiple reminders, and I misplace things like my keys or work badge all the time even when I’m trying to be careful.
+
+Patient: Yeah, that happens to me a lot. I’ll forget appointments unless I set multiple reminders, and I misplace things like my keys or work badge all the time even when I’m trying to be careful.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "symptom presence",
+  "subcategory": "impulsivity",
+  "question": "Do you also find yourself acting or speaking on impulse—like interrupting others, blurting things out, or making decisions quickly without thinking them through—and then regretting it afterward?"
+}
+=====================================
+
+--- turn 05 ---
+
+[call 18] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.
+  - Blurting_Answers: Often blurts out an answer before a question has been completed.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 7 months
+  - Additional: Onset prior to age 12 years
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 5
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Do you also find yourself acting or speaking on impulse—like interrupting others, blurting things out, or making decisions quickly without thinking them through—and then regretting it afterward?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["hyperactivity_impulsivity", "Blurting_Answers"], "answer_strategy": "Acknowledge directly whether you often act or speak on impulse, especially interrupting or blurting things out before others finish. Relate your answer to how frequently this happens and whether you notice it in conversations or decisions. If you do regret it afterward, briefly describe what that feels like or give a simple example; if you don’t usually regret it, say that clearly. Keep the tone straightforward and honest, focusing on your real-life behavior rather than what you think the doctor wants to hear."}
+=====================================
+
+[call 19] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation).
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.
+  - Blurting_Answers: Often blurts out an answer before a question has been completed.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 7 months
+  - Additional: Onset prior to age 12 years
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Quiet_Activity_Difficulty
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: hyperactivity_impulsivity, Blurting_Answers
+Answer strategy: Acknowledge directly whether you often act or speak on impulse, especially interrupting or blurting things out before others finish. Relate your answer to how frequently this happens and whether you notice it in conversations or decisions. If you do regret it afterward, briefly describe what that feels like or give a simple example; if you don’t usually regret it, say that clearly. Keep the tone straightforward and honest, focusing on your real-life behavior rather than what you think the doctor wants to hear.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+Doctor: Have you had this kind of restlessness and trouble staying on one task since you were a child (for example in school), or is it something that only started in the last few months or years?
+
+Patient: It’s been there since I was a kid—I remember getting in trouble in elementary school for not staying in my seat and rushing through work. It’s just kind of always been how I am, and it’s continued right up to now.
+
+Doctor: Besides feeling restless, do you also often lose things, forget appointments or tasks, or make careless mistakes because you miss details, even when you’re really trying to pay attention?
+
+Patient: Yeah, that happens to me a lot. I’ll forget appointments unless I set multiple reminders, and I misplace things like my keys or work badge all the time even when I’m trying to be careful.
+
+Doctor: Do you also find yourself acting or speaking on impulse—like interrupting others, blurting things out, or making decisions quickly without thinking them through—and then regretting it afterward?
+
+========== OUTPUT [patient] ==========
+Yeah, I do that a lot—I interrupt people or blurt out what I’m thinking before they’re finished talking. I usually realize it right after and feel bad or embarrassed, especially if I’ve cut someone off in a meeting or said something too blunt.
+=====================================
+
+[call 20] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F90.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+Doctor: Have you had this kind of restlessness and trouble staying on one task since you were a child (for example in school), or is it something that only started in the last few months or years?
+
+Patient: It’s been there since I was a kid—I remember getting in trouble in elementary school for not staying in my seat and rushing through work. It’s just kind of always been how I am, and it’s continued right up to now.
+
+Doctor: Besides feeling restless, do you also often lose things, forget appointments or tasks, or make careless mistakes because you miss details, even when you’re really trying to pay attention?
+
+Patient: Yeah, that happens to me a lot. I’ll forget appointments unless I set multiple reminders, and I misplace things like my keys or work badge all the time even when I’m trying to be careful.
+
+Doctor: Do you also find yourself acting or speaking on impulse—like interrupting others, blurting things out, or making decisions quickly without thinking them through—and then regretting it afterward?
+
+Patient: Yeah, I do that a lot—I interrupt people or blurt out what I’m thinking before they’re finished talking. I usually realize it right after and feel bad or embarrassed, especially if I’ve cut someone off in a meeting or said something too blunt.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F90.0"], "note": "Previously the only candidate was F90.0, based on lifelong patterns of inattention and hyperactivity/impulsivity. The new information further supports this: the patient describes chronic restlessness, inability to do things quietly, difficulty sustaining attention without prominent anxiety or low mood, childhood onset with school impairment, forgetfulness, losing items, and impulsive speech/interrupting. These features are all consistent with a hyperkinetic/inattentive-impulsive picture. No new evidence suggests mood, anxiety, psychotic, or substance-related conditions as primary explanations, so no additional candidates are added and F90.0 remains the sole candidate at this stage. Further questioning is still needed to rule out other potential contributors and to assess full diagnostic criteria and comorbidities, so the interview is not yet final.", "is_final": false}
+=====================================
+
+[call 21] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F90.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F90.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+Doctor: Have you had this kind of restlessness and trouble staying on one task since you were a child (for example in school), or is it something that only started in the last few months or years?
+
+Patient: It’s been there since I was a kid—I remember getting in trouble in elementary school for not staying in my seat and rushing through work. It’s just kind of always been how I am, and it’s continued right up to now.
+
+Doctor: Besides feeling restless, do you also often lose things, forget appointments or tasks, or make careless mistakes because you miss details, even when you’re really trying to pay attention?
+
+Patient: Yeah, that happens to me a lot. I’ll forget appointments unless I set multiple reminders, and I misplace things like my keys or work badge all the time even when I’m trying to be careful.
+
+Doctor: Do you also find yourself acting or speaking on impulse—like interrupting others, blurting things out, or making decisions quickly without thinking them through—and then regretting it afterward?
+
+Patient: Yeah, I do that a lot—I interrupt people or blurt out what I’m thinking before they’re finished talking. I usually realize it right after and feel bad or embarrassed, especially if I’ve cut someone off in a meeting or said something too blunt.
+
+Patient: Yeah, I do that a lot—I interrupt people or blurt out what I’m thinking before they’re finished talking. I usually realize it right after and feel bad or embarrassed, especially if I’ve cut someone off in a meeting or said something too blunt.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "symptom presence",
+  "subcategory": "functional impairment across settings",
+  "question": "Do these attention and restlessness problems cause significant difficulties for you in more than one area of life—for example at work or school, at home, and in relationships—not just in one specific situation?"
+}
+=====================================
+
+--- turn 06 ---
+
+[call 22] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.
+  - Blurting_Answers: Often blurts out an answer before a question has been completed.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 7 months
+  - Additional: Onset prior to age 12 years
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 6
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Do these attention and restlessness problems cause significant difficulties for you in more than one area of life—for example at work or school, at home, and in relationships—not just in one specific situation?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["hyperactivity_impulsivity.Constant_Activity", "hyperactivity_impulsivity.Quiet_Activity_Difficulty", "hyperactivity_impulsivity.Blurting_Answers", "Critical Diagnostic Criteria.Duration", "Critical Diagnostic Criteria.Additional"], "answer_strategy": "Answer clearly about whether these symptoms (being constantly on the go, difficulty being quiet, blurting things out) affect you in multiple areas of life, such as school/work, home, and relationships. Give 1–2 concrete examples if they do (e.g., trouble sitting still or blurting in class/meetings, difficulty relaxing at home, interrupting or blurting in conversations with friends or family). If they mostly happen in just one setting, say that honestly. Keep the tone straightforward and focused on how widespread the impact is, not just on how you feel about the symptoms."}
+=====================================
+
+[call 23] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation).
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.
+  - Blurting_Answers: Often blurts out an answer before a question has been completed.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 7 months
+  - Additional: Onset prior to age 12 years
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Quiet_Activity_Difficulty
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: hyperactivity_impulsivity.Constant_Activity, hyperactivity_impulsivity.Quiet_Activity_Difficulty, hyperactivity_impulsivity.Blurting_Answers, Critical Diagnostic Criteria.Duration, Critical Diagnostic Criteria.Additional
+Answer strategy: Answer clearly about whether these symptoms (being constantly on the go, difficulty being quiet, blurting things out) affect you in multiple areas of life, such as school/work, home, and relationships. Give 1–2 concrete examples if they do (e.g., trouble sitting still or blurting in class/meetings, difficulty relaxing at home, interrupting or blurting in conversations with friends or family). If they mostly happen in just one setting, say that honestly. Keep the tone straightforward and focused on how widespread the impact is, not just on how you feel about the symptoms.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+Doctor: Have you had this kind of restlessness and trouble staying on one task since you were a child (for example in school), or is it something that only started in the last few months or years?
+
+Patient: It’s been there since I was a kid—I remember getting in trouble in elementary school for not staying in my seat and rushing through work. It’s just kind of always been how I am, and it’s continued right up to now.
+
+Doctor: Besides feeling restless, do you also often lose things, forget appointments or tasks, or make careless mistakes because you miss details, even when you’re really trying to pay attention?
+
+Patient: Yeah, that happens to me a lot. I’ll forget appointments unless I set multiple reminders, and I misplace things like my keys or work badge all the time even when I’m trying to be careful.
+
+Doctor: Do you also find yourself acting or speaking on impulse—like interrupting others, blurting things out, or making decisions quickly without thinking them through—and then regretting it afterward?
+
+Patient: Yeah, I do that a lot—I interrupt people or blurt out what I’m thinking before they’re finished talking. I usually realize it right after and feel bad or embarrassed, especially if I’ve cut someone off in a meeting or said something too blunt.
+
+Doctor: Do these attention and restlessness problems cause significant difficulties for you in more than one area of life—for example at work or school, at home, and in relationships—not just in one specific situation?
+
+========== OUTPUT [patient] ==========
+Yeah, it affects me pretty much everywhere. At work I have trouble sitting through meetings and staying on one task, and at home I can’t seem to just relax—I’m always pacing or fidgeting, which annoys my partner. It also causes issues in conversations because I jump in or change topics and people get frustrated.
+=====================================
+
+[call 24] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F90.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+Doctor: Have you had this kind of restlessness and trouble staying on one task since you were a child (for example in school), or is it something that only started in the last few months or years?
+
+Patient: It’s been there since I was a kid—I remember getting in trouble in elementary school for not staying in my seat and rushing through work. It’s just kind of always been how I am, and it’s continued right up to now.
+
+Doctor: Besides feeling restless, do you also often lose things, forget appointments or tasks, or make careless mistakes because you miss details, even when you’re really trying to pay attention?
+
+Patient: Yeah, that happens to me a lot. I’ll forget appointments unless I set multiple reminders, and I misplace things like my keys or work badge all the time even when I’m trying to be careful.
+
+Doctor: Do you also find yourself acting or speaking on impulse—like interrupting others, blurting things out, or making decisions quickly without thinking them through—and then regretting it afterward?
+
+Patient: Yeah, I do that a lot—I interrupt people or blurt out what I’m thinking before they’re finished talking. I usually realize it right after and feel bad or embarrassed, especially if I’ve cut someone off in a meeting or said something too blunt.
+
+Doctor: Do these attention and restlessness problems cause significant difficulties for you in more than one area of life—for example at work or school, at home, and in relationships—not just in one specific situation?
+
+Patient: Yeah, it affects me pretty much everywhere. At work I have trouble sitting through meetings and staying on one task, and at home I can’t seem to just relax—I’m always pacing or fidgeting, which annoys my partner. It also causes issues in conversations because I jump in or change topics and people get frustrated.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F90.0"], "note": "Previously the only candidate was F90.0, reflecting a working hypothesis of a hyperkinetic disorder with disturbance of activity and attention. The new information further supports this: the patient reports lifelong onset (since elementary school), pervasive symptoms across settings (work, home, relationships), clear hyperactivity/restlessness, inattention (losing things, forgetting appointments, difficulty sustaining attention), and impulsivity (interrupting, blurting out) causing functional impairment. There is no new evidence suggesting primary anxiety, mood, or other conditions as the main explanation, and no contradictory information about onset or pervasiveness. Therefore, the candidate list remains F90.0 alone, and confidence in this single candidate increases, but additional history (e.g., comorbid symptoms, substance use, medical history) is still needed before a final diagnosis, so is_final remains false.", "is_final": false}
+=====================================
+
+[call 25] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F90.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F90.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+Doctor: Have you had this kind of restlessness and trouble staying on one task since you were a child (for example in school), or is it something that only started in the last few months or years?
+
+Patient: It’s been there since I was a kid—I remember getting in trouble in elementary school for not staying in my seat and rushing through work. It’s just kind of always been how I am, and it’s continued right up to now.
+
+Doctor: Besides feeling restless, do you also often lose things, forget appointments or tasks, or make careless mistakes because you miss details, even when you’re really trying to pay attention?
+
+Patient: Yeah, that happens to me a lot. I’ll forget appointments unless I set multiple reminders, and I misplace things like my keys or work badge all the time even when I’m trying to be careful.
+
+Doctor: Do you also find yourself acting or speaking on impulse—like interrupting others, blurting things out, or making decisions quickly without thinking them through—and then regretting it afterward?
+
+Patient: Yeah, I do that a lot—I interrupt people or blurt out what I’m thinking before they’re finished talking. I usually realize it right after and feel bad or embarrassed, especially if I’ve cut someone off in a meeting or said something too blunt.
+
+Doctor: Do these attention and restlessness problems cause significant difficulties for you in more than one area of life—for example at work or school, at home, and in relationships—not just in one specific situation?
+
+Patient: Yeah, it affects me pretty much everywhere. At work I have trouble sitting through meetings and staying on one task, and at home I can’t seem to just relax—I’m always pacing or fidgeting, which annoys my partner. It also causes issues in conversations because I jump in or change topics and people get frustrated.
+
+Patient: Yeah, it affects me pretty much everywhere. At work I have trouble sitting through meetings and staying on one task, and at home I can’t seem to just relax—I’m always pacing or fidgeting, which annoys my partner. It also causes issues in conversations because I jump in or change topics and people get frustrated.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "functional impairment and coping",
+  "question": "Have you ever been evaluated or treated before for attention or hyperactivity problems—like being diagnosed with ADHD or taking medication for it—or is this the first time you’re seeking help for these symptoms?"
+}
+=====================================
+
+--- turn 07 ---
+
+[call 26] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.
+  - Blurting_Answers: Often blurts out an answer before a question has been completed.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 7 months
+  - Additional: Onset prior to age 12 years
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 7
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Have you ever been evaluated or treated before for attention or hyperactivity problems—like being diagnosed with ADHD or taking medication for it—or is this the first time you’re seeking help for these symptoms?
+
+========== OUTPUT [patient] ==========
+{"matched": false, "matched_sections": [], "answer_strategy": "This isn’t covered in the profile, so answer from your own experience. Briefly say whether you’ve ever been evaluated, diagnosed, or treated (therapy, school assessment, or medication) for attention or hyperactivity problems before, or if this is your first time seeking help. If you remember any past diagnoses or medications, name them; if you’re unsure or don’t remember, say so plainly."}
+=====================================
+
+[call 27] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation).
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.
+  - Blurting_Answers: Often blurts out an answer before a question has been completed.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 7 months
+  - Additional: Onset prior to age 12 years
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Quiet_Activity_Difficulty
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(No match in profile or inference only)
+Answer strategy: This isn’t covered in the profile, so answer from your own experience. Briefly say whether you’ve ever been evaluated, diagnosed, or treated (therapy, school assessment, or medication) for attention or hyperactivity problems before, or if this is your first time seeking help. If you remember any past diagnoses or medications, name them; if you’re unsure or don’t remember, say so plainly.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+Doctor: Have you had this kind of restlessness and trouble staying on one task since you were a child (for example in school), or is it something that only started in the last few months or years?
+
+Patient: It’s been there since I was a kid—I remember getting in trouble in elementary school for not staying in my seat and rushing through work. It’s just kind of always been how I am, and it’s continued right up to now.
+
+Doctor: Besides feeling restless, do you also often lose things, forget appointments or tasks, or make careless mistakes because you miss details, even when you’re really trying to pay attention?
+
+Patient: Yeah, that happens to me a lot. I’ll forget appointments unless I set multiple reminders, and I misplace things like my keys or work badge all the time even when I’m trying to be careful.
+
+Doctor: Do you also find yourself acting or speaking on impulse—like interrupting others, blurting things out, or making decisions quickly without thinking them through—and then regretting it afterward?
+
+Patient: Yeah, I do that a lot—I interrupt people or blurt out what I’m thinking before they’re finished talking. I usually realize it right after and feel bad or embarrassed, especially if I’ve cut someone off in a meeting or said something too blunt.
+
+Doctor: Do these attention and restlessness problems cause significant difficulties for you in more than one area of life—for example at work or school, at home, and in relationships—not just in one specific situation?
+
+Patient: Yeah, it affects me pretty much everywhere. At work I have trouble sitting through meetings and staying on one task, and at home I can’t seem to just relax—I’m always pacing or fidgeting, which annoys my partner. It also causes issues in conversations because I jump in or change topics and people get frustrated.
+
+Doctor: Have you ever been evaluated or treated before for attention or hyperactivity problems—like being diagnosed with ADHD or taking medication for it—or is this the first time you’re seeking help for these symptoms?
+
+========== OUTPUT [patient] ==========
+I’ve never had a formal evaluation for attention or hyperactivity before—this is the first time I’m really seeking help for it. No one’s ever officially diagnosed me with ADHD or put me on medication for it, though teachers and family have commented on me being “hyper” or unable to sit still since I was a kid.
+=====================================
+
+[call 28] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F90.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+Doctor: Have you had this kind of restlessness and trouble staying on one task since you were a child (for example in school), or is it something that only started in the last few months or years?
+
+Patient: It’s been there since I was a kid—I remember getting in trouble in elementary school for not staying in my seat and rushing through work. It’s just kind of always been how I am, and it’s continued right up to now.
+
+Doctor: Besides feeling restless, do you also often lose things, forget appointments or tasks, or make careless mistakes because you miss details, even when you’re really trying to pay attention?
+
+Patient: Yeah, that happens to me a lot. I’ll forget appointments unless I set multiple reminders, and I misplace things like my keys or work badge all the time even when I’m trying to be careful.
+
+Doctor: Do you also find yourself acting or speaking on impulse—like interrupting others, blurting things out, or making decisions quickly without thinking them through—and then regretting it afterward?
+
+Patient: Yeah, I do that a lot—I interrupt people or blurt out what I’m thinking before they’re finished talking. I usually realize it right after and feel bad or embarrassed, especially if I’ve cut someone off in a meeting or said something too blunt.
+
+Doctor: Do these attention and restlessness problems cause significant difficulties for you in more than one area of life—for example at work or school, at home, and in relationships—not just in one specific situation?
+
+Patient: Yeah, it affects me pretty much everywhere. At work I have trouble sitting through meetings and staying on one task, and at home I can’t seem to just relax—I’m always pacing or fidgeting, which annoys my partner. It also causes issues in conversations because I jump in or change topics and people get frustrated.
+
+Doctor: Have you ever been evaluated or treated before for attention or hyperactivity problems—like being diagnosed with ADHD or taking medication for it—or is this the first time you’re seeking help for these symptoms?
+
+Patient: I’ve never had a formal evaluation for attention or hyperactivity before—this is the first time I’m really seeking help for it. No one’s ever officially diagnosed me with ADHD or put me on medication for it, though teachers and family have commented on me being “hyper” or unable to sit still since I was a kid.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F90.0"], "note": "Previously the only candidate was F90.0. The current interview adds further support for a long-standing pattern beginning in childhood, with pervasive symptoms of inattention, hyperactivity, and impulsivity across multiple settings and causing functional impairment. There is no new information suggesting prominent anxiety, mood, psychotic, or substance-related symptoms that would warrant adding other differential diagnoses at this stage. Thus the candidate list remains the same with F90.0 as the working hypothesis.", "is_final": false}
+=====================================
+
+[call 29] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F90.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F90.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+Doctor: Have you had this kind of restlessness and trouble staying on one task since you were a child (for example in school), or is it something that only started in the last few months or years?
+
+Patient: It’s been there since I was a kid—I remember getting in trouble in elementary school for not staying in my seat and rushing through work. It’s just kind of always been how I am, and it’s continued right up to now.
+
+Doctor: Besides feeling restless, do you also often lose things, forget appointments or tasks, or make careless mistakes because you miss details, even when you’re really trying to pay attention?
+
+Patient: Yeah, that happens to me a lot. I’ll forget appointments unless I set multiple reminders, and I misplace things like my keys or work badge all the time even when I’m trying to be careful.
+
+Doctor: Do you also find yourself acting or speaking on impulse—like interrupting others, blurting things out, or making decisions quickly without thinking them through—and then regretting it afterward?
+
+Patient: Yeah, I do that a lot—I interrupt people or blurt out what I’m thinking before they’re finished talking. I usually realize it right after and feel bad or embarrassed, especially if I’ve cut someone off in a meeting or said something too blunt.
+
+Doctor: Do these attention and restlessness problems cause significant difficulties for you in more than one area of life—for example at work or school, at home, and in relationships—not just in one specific situation?
+
+Patient: Yeah, it affects me pretty much everywhere. At work I have trouble sitting through meetings and staying on one task, and at home I can’t seem to just relax—I’m always pacing or fidgeting, which annoys my partner. It also causes issues in conversations because I jump in or change topics and people get frustrated.
+
+Doctor: Have you ever been evaluated or treated before for attention or hyperactivity problems—like being diagnosed with ADHD or taking medication for it—or is this the first time you’re seeking help for these symptoms?
+
+Patient: I’ve never had a formal evaluation for attention or hyperactivity before—this is the first time I’m really seeking help for it. No one’s ever officially diagnosed me with ADHD or put me on medication for it, though teachers and family have commented on me being “hyper” or unable to sit still since I was a kid.
+
+Patient: I’ve never had a formal evaluation for attention or hyperactivity before—this is the first time I’m really seeking help for it. No one’s ever officially diagnosed me with ADHD or put me on medication for it, though teachers and family have commented on me being “hyper” or unable to sit still since I was a kid.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "functional impairment and coping",
+  "question": "When you’re really interested in something—like a hobby or a favorite show or game—are you able to focus on it for long periods, or do you still find your attention jumping around and needing to move or switch activities a lot?"
+}
+=====================================
+
+--- turn 08 ---
+
+[call 30] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.
+  - Blurting_Answers: Often blurts out an answer before a question has been completed.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 7 months
+  - Additional: Onset prior to age 12 years
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 8
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+When you’re really interested in something—like a hobby or a favorite show or game—are you able to focus on it for long periods, or do you still find your attention jumping around and needing to move or switch activities a lot?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["hyperactivity_impulsivity.Constant_Activity", "hyperactivity_impulsivity.Quiet_Activity_Difficulty"], "answer_strategy": "Answer in a straightforward, reflective way about how your focus and activity level are when you’re doing something you really like. Mention whether you can sit still and stay with that one thing for a long time, or if you still feel restless, need to move around, or switch between activities a lot, even when you’re very interested. Keep the tone honest and specific, using concrete examples if you can (e.g., gaming, watching shows, hobbies)."}
+=====================================
+
+[call 31] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation).
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.
+  - Blurting_Answers: Often blurts out an answer before a question has been completed.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 7 months
+  - Additional: Onset prior to age 12 years
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Quiet_Activity_Difficulty
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: hyperactivity_impulsivity.Constant_Activity, hyperactivity_impulsivity.Quiet_Activity_Difficulty
+Answer strategy: Answer in a straightforward, reflective way about how your focus and activity level are when you’re doing something you really like. Mention whether you can sit still and stay with that one thing for a long time, or if you still feel restless, need to move around, or switch between activities a lot, even when you’re very interested. Keep the tone honest and specific, using concrete examples if you can (e.g., gaming, watching shows, hobbies).
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+Doctor: Have you had this kind of restlessness and trouble staying on one task since you were a child (for example in school), or is it something that only started in the last few months or years?
+
+Patient: It’s been there since I was a kid—I remember getting in trouble in elementary school for not staying in my seat and rushing through work. It’s just kind of always been how I am, and it’s continued right up to now.
+
+Doctor: Besides feeling restless, do you also often lose things, forget appointments or tasks, or make careless mistakes because you miss details, even when you’re really trying to pay attention?
+
+Patient: Yeah, that happens to me a lot. I’ll forget appointments unless I set multiple reminders, and I misplace things like my keys or work badge all the time even when I’m trying to be careful.
+
+Doctor: Do you also find yourself acting or speaking on impulse—like interrupting others, blurting things out, or making decisions quickly without thinking them through—and then regretting it afterward?
+
+Patient: Yeah, I do that a lot—I interrupt people or blurt out what I’m thinking before they’re finished talking. I usually realize it right after and feel bad or embarrassed, especially if I’ve cut someone off in a meeting or said something too blunt.
+
+Doctor: Do these attention and restlessness problems cause significant difficulties for you in more than one area of life—for example at work or school, at home, and in relationships—not just in one specific situation?
+
+Patient: Yeah, it affects me pretty much everywhere. At work I have trouble sitting through meetings and staying on one task, and at home I can’t seem to just relax—I’m always pacing or fidgeting, which annoys my partner. It also causes issues in conversations because I jump in or change topics and people get frustrated.
+
+Doctor: Have you ever been evaluated or treated before for attention or hyperactivity problems—like being diagnosed with ADHD or taking medication for it—or is this the first time you’re seeking help for these symptoms?
+
+Patient: I’ve never had a formal evaluation for attention or hyperactivity before—this is the first time I’m really seeking help for it. No one’s ever officially diagnosed me with ADHD or put me on medication for it, though teachers and family have commented on me being “hyper” or unable to sit still since I was a kid.
+
+Doctor: When you’re really interested in something—like a hobby or a favorite show or game—are you able to focus on it for long periods, or do you still find your attention jumping around and needing to move or switch activities a lot?
+
+========== OUTPUT [patient] ==========
+If it’s something I really like, I can sometimes get into it for a bit, but I still end up fidgeting, getting up, or checking my phone and bouncing between things. Even with a favorite show or game, I’ll pause it, wander around, or switch to something else instead of just staying with it calmly.
+=====================================
+
+[call 32] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F90.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+Doctor: Have you had this kind of restlessness and trouble staying on one task since you were a child (for example in school), or is it something that only started in the last few months or years?
+
+Patient: It’s been there since I was a kid—I remember getting in trouble in elementary school for not staying in my seat and rushing through work. It’s just kind of always been how I am, and it’s continued right up to now.
+
+Doctor: Besides feeling restless, do you also often lose things, forget appointments or tasks, or make careless mistakes because you miss details, even when you’re really trying to pay attention?
+
+Patient: Yeah, that happens to me a lot. I’ll forget appointments unless I set multiple reminders, and I misplace things like my keys or work badge all the time even when I’m trying to be careful.
+
+Doctor: Do you also find yourself acting or speaking on impulse—like interrupting others, blurting things out, or making decisions quickly without thinking them through—and then regretting it afterward?
+
+Patient: Yeah, I do that a lot—I interrupt people or blurt out what I’m thinking before they’re finished talking. I usually realize it right after and feel bad or embarrassed, especially if I’ve cut someone off in a meeting or said something too blunt.
+
+Doctor: Do these attention and restlessness problems cause significant difficulties for you in more than one area of life—for example at work or school, at home, and in relationships—not just in one specific situation?
+
+Patient: Yeah, it affects me pretty much everywhere. At work I have trouble sitting through meetings and staying on one task, and at home I can’t seem to just relax—I’m always pacing or fidgeting, which annoys my partner. It also causes issues in conversations because I jump in or change topics and people get frustrated.
+
+Doctor: Have you ever been evaluated or treated before for attention or hyperactivity problems—like being diagnosed with ADHD or taking medication for it—or is this the first time you’re seeking help for these symptoms?
+
+Patient: I’ve never had a formal evaluation for attention or hyperactivity before—this is the first time I’m really seeking help for it. No one’s ever officially diagnosed me with ADHD or put me on medication for it, though teachers and family have commented on me being “hyper” or unable to sit still since I was a kid.
+
+Doctor: When you’re really interested in something—like a hobby or a favorite show or game—are you able to focus on it for long periods, or do you still find your attention jumping around and needing to move or switch activities a lot?
+
+Patient: If it’s something I really like, I can sometimes get into it for a bit, but I still end up fidgeting, getting up, or checking my phone and bouncing between things. Even with a favorite show or game, I’ll pause it, wander around, or switch to something else instead of just staying with it calmly.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F90.0"], "note": "Previously the only candidate was F90.0, based on lifelong patterns of inattention, hyperactivity, and impulsivity causing impairment across settings. The new information continues to support this: symptoms clearly began in childhood, persist into adulthood, involve both inattention (losing things, forgetting appointments, difficulty sustaining attention) and hyperactivity/impulsivity (restlessness, inability to relax, interrupting, blurting out), and cause functional problems at work, home, and in relationships. The ability to engage in preferred activities only partially and still with restlessness is also consistent. No new information suggests an alternative condition (such as a primary anxiety or mood disorder, substance-related issue, or medical cause), nor does it weaken the current hypothesis. Therefore the candidate list remains F90.0 alone. However, I do not yet have enough information about mood, anxiety, sleep, substance use, medical history, or other psychiatric symptoms to confidently finalize the diagnosis, so further questioning is still needed.", "is_final": false}
+=====================================
+
+[call 33] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F90.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F90.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+Doctor: Have you had this kind of restlessness and trouble staying on one task since you were a child (for example in school), or is it something that only started in the last few months or years?
+
+Patient: It’s been there since I was a kid—I remember getting in trouble in elementary school for not staying in my seat and rushing through work. It’s just kind of always been how I am, and it’s continued right up to now.
+
+Doctor: Besides feeling restless, do you also often lose things, forget appointments or tasks, or make careless mistakes because you miss details, even when you’re really trying to pay attention?
+
+Patient: Yeah, that happens to me a lot. I’ll forget appointments unless I set multiple reminders, and I misplace things like my keys or work badge all the time even when I’m trying to be careful.
+
+Doctor: Do you also find yourself acting or speaking on impulse—like interrupting others, blurting things out, or making decisions quickly without thinking them through—and then regretting it afterward?
+
+Patient: Yeah, I do that a lot—I interrupt people or blurt out what I’m thinking before they’re finished talking. I usually realize it right after and feel bad or embarrassed, especially if I’ve cut someone off in a meeting or said something too blunt.
+
+Doctor: Do these attention and restlessness problems cause significant difficulties for you in more than one area of life—for example at work or school, at home, and in relationships—not just in one specific situation?
+
+Patient: Yeah, it affects me pretty much everywhere. At work I have trouble sitting through meetings and staying on one task, and at home I can’t seem to just relax—I’m always pacing or fidgeting, which annoys my partner. It also causes issues in conversations because I jump in or change topics and people get frustrated.
+
+Doctor: Have you ever been evaluated or treated before for attention or hyperactivity problems—like being diagnosed with ADHD or taking medication for it—or is this the first time you’re seeking help for these symptoms?
+
+Patient: I’ve never had a formal evaluation for attention or hyperactivity before—this is the first time I’m really seeking help for it. No one’s ever officially diagnosed me with ADHD or put me on medication for it, though teachers and family have commented on me being “hyper” or unable to sit still since I was a kid.
+
+Doctor: When you’re really interested in something—like a hobby or a favorite show or game—are you able to focus on it for long periods, or do you still find your attention jumping around and needing to move or switch activities a lot?
+
+Patient: If it’s something I really like, I can sometimes get into it for a bit, but I still end up fidgeting, getting up, or checking my phone and bouncing between things. Even with a favorite show or game, I’ll pause it, wander around, or switch to something else instead of just staying with it calmly.
+
+Patient: If it’s something I really like, I can sometimes get into it for a bit, but I still end up fidgeting, getting up, or checking my phone and bouncing between things. Even with a favorite show or game, I’ll pause it, wander around, or switch to something else instead of just staying with it calmly.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "mood and anxiety screening",
+  "question": "Along with the restlessness and attention problems, do you also have long periods—at least two weeks—of feeling very down, hopeless, or extremely anxious most days, or are your mood and anxiety generally okay between the attention issues?"
+}
+=====================================
+
+--- turn 09 ---
+
+[call 34] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.
+  - Blurting_Answers: Often blurts out an answer before a question has been completed.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 7 months
+  - Additional: Onset prior to age 12 years
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 9
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Along with the restlessness and attention problems, do you also have long periods—at least two weeks—of feeling very down, hopeless, or extremely anxious most days, or are your mood and anxiety generally okay between the attention issues?
+
+========== OUTPUT [patient] ==========
+{"matched": false, "matched_sections": [], "answer_strategy": "This question is asking about your mood and anxiety over at least two-week periods, which is not covered in the profile. Answer briefly and honestly from your own experience, for example: whether you’ve had stretches of at least two weeks where you felt very down, hopeless, or very anxious most days, or if your mood and anxiety are generally okay aside from the attention and restlessness issues. If you’re unsure, it’s fine to say you haven’t really thought about it or aren’t sure."}
+=====================================
+
+[call 35] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation).
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.
+  - Blurting_Answers: Often blurts out an answer before a question has been completed.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 7 months
+  - Additional: Onset prior to age 12 years
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Quiet_Activity_Difficulty
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(No match in profile or inference only)
+Answer strategy: This question is asking about your mood and anxiety over at least two-week periods, which is not covered in the profile. Answer briefly and honestly from your own experience, for example: whether you’ve had stretches of at least two weeks where you felt very down, hopeless, or very anxious most days, or if your mood and anxiety are generally okay aside from the attention and restlessness issues. If you’re unsure, it’s fine to say you haven’t really thought about it or aren’t sure.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+Doctor: Have you had this kind of restlessness and trouble staying on one task since you were a child (for example in school), or is it something that only started in the last few months or years?
+
+Patient: It’s been there since I was a kid—I remember getting in trouble in elementary school for not staying in my seat and rushing through work. It’s just kind of always been how I am, and it’s continued right up to now.
+
+Doctor: Besides feeling restless, do you also often lose things, forget appointments or tasks, or make careless mistakes because you miss details, even when you’re really trying to pay attention?
+
+Patient: Yeah, that happens to me a lot. I’ll forget appointments unless I set multiple reminders, and I misplace things like my keys or work badge all the time even when I’m trying to be careful.
+
+Doctor: Do you also find yourself acting or speaking on impulse—like interrupting others, blurting things out, or making decisions quickly without thinking them through—and then regretting it afterward?
+
+Patient: Yeah, I do that a lot—I interrupt people or blurt out what I’m thinking before they’re finished talking. I usually realize it right after and feel bad or embarrassed, especially if I’ve cut someone off in a meeting or said something too blunt.
+
+Doctor: Do these attention and restlessness problems cause significant difficulties for you in more than one area of life—for example at work or school, at home, and in relationships—not just in one specific situation?
+
+Patient: Yeah, it affects me pretty much everywhere. At work I have trouble sitting through meetings and staying on one task, and at home I can’t seem to just relax—I’m always pacing or fidgeting, which annoys my partner. It also causes issues in conversations because I jump in or change topics and people get frustrated.
+
+Doctor: Have you ever been evaluated or treated before for attention or hyperactivity problems—like being diagnosed with ADHD or taking medication for it—or is this the first time you’re seeking help for these symptoms?
+
+Patient: I’ve never had a formal evaluation for attention or hyperactivity before—this is the first time I’m really seeking help for it. No one’s ever officially diagnosed me with ADHD or put me on medication for it, though teachers and family have commented on me being “hyper” or unable to sit still since I was a kid.
+
+Doctor: When you’re really interested in something—like a hobby or a favorite show or game—are you able to focus on it for long periods, or do you still find your attention jumping around and needing to move or switch activities a lot?
+
+Patient: If it’s something I really like, I can sometimes get into it for a bit, but I still end up fidgeting, getting up, or checking my phone and bouncing between things. Even with a favorite show or game, I’ll pause it, wander around, or switch to something else instead of just staying with it calmly.
+
+Doctor: Along with the restlessness and attention problems, do you also have long periods—at least two weeks—of feeling very down, hopeless, or extremely anxious most days, or are your mood and anxiety generally okay between the attention issues?
+
+========== OUTPUT [patient] ==========
+I don’t think I’ve had long stretches like two weeks straight of feeling really hopeless or severely anxious most days. I have ups and downs and get stressed, but overall my mood and anxiety feel mostly okay aside from being frustrated with how restless and scattered I am.
+=====================================
+
+[call 36] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F90.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+Doctor: Have you had this kind of restlessness and trouble staying on one task since you were a child (for example in school), or is it something that only started in the last few months or years?
+
+Patient: It’s been there since I was a kid—I remember getting in trouble in elementary school for not staying in my seat and rushing through work. It’s just kind of always been how I am, and it’s continued right up to now.
+
+Doctor: Besides feeling restless, do you also often lose things, forget appointments or tasks, or make careless mistakes because you miss details, even when you’re really trying to pay attention?
+
+Patient: Yeah, that happens to me a lot. I’ll forget appointments unless I set multiple reminders, and I misplace things like my keys or work badge all the time even when I’m trying to be careful.
+
+Doctor: Do you also find yourself acting or speaking on impulse—like interrupting others, blurting things out, or making decisions quickly without thinking them through—and then regretting it afterward?
+
+Patient: Yeah, I do that a lot—I interrupt people or blurt out what I’m thinking before they’re finished talking. I usually realize it right after and feel bad or embarrassed, especially if I’ve cut someone off in a meeting or said something too blunt.
+
+Doctor: Do these attention and restlessness problems cause significant difficulties for you in more than one area of life—for example at work or school, at home, and in relationships—not just in one specific situation?
+
+Patient: Yeah, it affects me pretty much everywhere. At work I have trouble sitting through meetings and staying on one task, and at home I can’t seem to just relax—I’m always pacing or fidgeting, which annoys my partner. It also causes issues in conversations because I jump in or change topics and people get frustrated.
+
+Doctor: Have you ever been evaluated or treated before for attention or hyperactivity problems—like being diagnosed with ADHD or taking medication for it—or is this the first time you’re seeking help for these symptoms?
+
+Patient: I’ve never had a formal evaluation for attention or hyperactivity before—this is the first time I’m really seeking help for it. No one’s ever officially diagnosed me with ADHD or put me on medication for it, though teachers and family have commented on me being “hyper” or unable to sit still since I was a kid.
+
+Doctor: When you’re really interested in something—like a hobby or a favorite show or game—are you able to focus on it for long periods, or do you still find your attention jumping around and needing to move or switch activities a lot?
+
+Patient: If it’s something I really like, I can sometimes get into it for a bit, but I still end up fidgeting, getting up, or checking my phone and bouncing between things. Even with a favorite show or game, I’ll pause it, wander around, or switch to something else instead of just staying with it calmly.
+
+Doctor: Along with the restlessness and attention problems, do you also have long periods—at least two weeks—of feeling very down, hopeless, or extremely anxious most days, or are your mood and anxiety generally okay between the attention issues?
+
+Patient: I don’t think I’ve had long stretches like two weeks straight of feeling really hopeless or severely anxious most days. I have ups and downs and get stressed, but overall my mood and anxiety feel mostly okay aside from being frustrated with how restless and scattered I am.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F90.0"], "note": "Previously the only candidate was F90.0, reflecting a working hypothesis of an attention and activity regulation disorder beginning in childhood. In this segment, the patient describes lifelong patterns of restlessness, difficulty sustaining attention across settings, impulsive speech/behavior, and functional impairment at work, home, and in relationships, without prominent persistent mood or anxiety episodes. These features are consistent with the same diagnostic cluster as before and there is no new evidence suggesting other conditions (such as primary mood or anxiety disorders, or acute onset medical/neurological causes). Therefore the candidate list remains unchanged with F90.0 as the sole current candidate.", "is_final": false}
+=====================================
+
+[call 37] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F90.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F90.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+Doctor: Have you had this kind of restlessness and trouble staying on one task since you were a child (for example in school), or is it something that only started in the last few months or years?
+
+Patient: It’s been there since I was a kid—I remember getting in trouble in elementary school for not staying in my seat and rushing through work. It’s just kind of always been how I am, and it’s continued right up to now.
+
+Doctor: Besides feeling restless, do you also often lose things, forget appointments or tasks, or make careless mistakes because you miss details, even when you’re really trying to pay attention?
+
+Patient: Yeah, that happens to me a lot. I’ll forget appointments unless I set multiple reminders, and I misplace things like my keys or work badge all the time even when I’m trying to be careful.
+
+Doctor: Do you also find yourself acting or speaking on impulse—like interrupting others, blurting things out, or making decisions quickly without thinking them through—and then regretting it afterward?
+
+Patient: Yeah, I do that a lot—I interrupt people or blurt out what I’m thinking before they’re finished talking. I usually realize it right after and feel bad or embarrassed, especially if I’ve cut someone off in a meeting or said something too blunt.
+
+Doctor: Do these attention and restlessness problems cause significant difficulties for you in more than one area of life—for example at work or school, at home, and in relationships—not just in one specific situation?
+
+Patient: Yeah, it affects me pretty much everywhere. At work I have trouble sitting through meetings and staying on one task, and at home I can’t seem to just relax—I’m always pacing or fidgeting, which annoys my partner. It also causes issues in conversations because I jump in or change topics and people get frustrated.
+
+Doctor: Have you ever been evaluated or treated before for attention or hyperactivity problems—like being diagnosed with ADHD or taking medication for it—or is this the first time you’re seeking help for these symptoms?
+
+Patient: I’ve never had a formal evaluation for attention or hyperactivity before—this is the first time I’m really seeking help for it. No one’s ever officially diagnosed me with ADHD or put me on medication for it, though teachers and family have commented on me being “hyper” or unable to sit still since I was a kid.
+
+Doctor: When you’re really interested in something—like a hobby or a favorite show or game—are you able to focus on it for long periods, or do you still find your attention jumping around and needing to move or switch activities a lot?
+
+Patient: If it’s something I really like, I can sometimes get into it for a bit, but I still end up fidgeting, getting up, or checking my phone and bouncing between things. Even with a favorite show or game, I’ll pause it, wander around, or switch to something else instead of just staying with it calmly.
+
+Doctor: Along with the restlessness and attention problems, do you also have long periods—at least two weeks—of feeling very down, hopeless, or extremely anxious most days, or are your mood and anxiety generally okay between the attention issues?
+
+Patient: I don’t think I’ve had long stretches like two weeks straight of feeling really hopeless or severely anxious most days. I have ups and downs and get stressed, but overall my mood and anxiety feel mostly okay aside from being frustrated with how restless and scattered I am.
+
+Patient: I don’t think I’ve had long stretches like two weeks straight of feeling really hopeless or severely anxious most days. I have ups and downs and get stressed, but overall my mood and anxiety feel mostly okay aside from being frustrated with how restless and scattered I am.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "functional impairment and safety",
+  "question": "Because of your distractibility or acting on impulse, have you had any serious problems like car accidents, getting fired or written up at work, or major conflicts in relationships that you feel wouldn’t have happened otherwise?"
+}
+=====================================
+
+--- turn 10 ---
+
+[call 38] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.
+  - Blurting_Answers: Often blurts out an answer before a question has been completed.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 7 months
+  - Additional: Onset prior to age 12 years
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 10
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Because of your distractibility or acting on impulse, have you had any serious problems like car accidents, getting fired or written up at work, or major conflicts in relationships that you feel wouldn’t have happened otherwise?
+
+========== OUTPUT [patient] ==========
+{"matched": false, "matched_sections": [], "answer_strategy": "This isn’t covered in the information above, so answer from your real-life experience. Briefly say whether your distractibility or impulsive behavior has led to serious consequences like car accidents, job loss or warnings at work, or major fights/breakups in relationships. If yes, give one or two concrete examples and roughly when they happened; if no, say something like, “No, nothing that serious has happened because of it.”"}
+=====================================
+
+[call 39] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation).
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Constant_Activity: Is often 'on the go', acting as if 'driven by a motor'.
+  - Blurting_Answers: Often blurts out an answer before a question has been completed.
+▸ Critical Diagnostic Criteria
+  - Duration: 1 year and 7 months
+  - Additional: Onset prior to age 12 years
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Quiet_Activity_Difficulty
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(No match in profile or inference only)
+Answer strategy: This isn’t covered in the information above, so answer from your real-life experience. Briefly say whether your distractibility or impulsive behavior has led to serious consequences like car accidents, job loss or warnings at work, or major fights/breakups in relationships. If yes, give one or two concrete examples and roughly when they happened; if no, say something like, “No, nothing that serious has happened because of it.”
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+Doctor: Have you had this kind of restlessness and trouble staying on one task since you were a child (for example in school), or is it something that only started in the last few months or years?
+
+Patient: It’s been there since I was a kid—I remember getting in trouble in elementary school for not staying in my seat and rushing through work. It’s just kind of always been how I am, and it’s continued right up to now.
+
+Doctor: Besides feeling restless, do you also often lose things, forget appointments or tasks, or make careless mistakes because you miss details, even when you’re really trying to pay attention?
+
+Patient: Yeah, that happens to me a lot. I’ll forget appointments unless I set multiple reminders, and I misplace things like my keys or work badge all the time even when I’m trying to be careful.
+
+Doctor: Do you also find yourself acting or speaking on impulse—like interrupting others, blurting things out, or making decisions quickly without thinking them through—and then regretting it afterward?
+
+Patient: Yeah, I do that a lot—I interrupt people or blurt out what I’m thinking before they’re finished talking. I usually realize it right after and feel bad or embarrassed, especially if I’ve cut someone off in a meeting or said something too blunt.
+
+Doctor: Do these attention and restlessness problems cause significant difficulties for you in more than one area of life—for example at work or school, at home, and in relationships—not just in one specific situation?
+
+Patient: Yeah, it affects me pretty much everywhere. At work I have trouble sitting through meetings and staying on one task, and at home I can’t seem to just relax—I’m always pacing or fidgeting, which annoys my partner. It also causes issues in conversations because I jump in or change topics and people get frustrated.
+
+Doctor: Have you ever been evaluated or treated before for attention or hyperactivity problems—like being diagnosed with ADHD or taking medication for it—or is this the first time you’re seeking help for these symptoms?
+
+Patient: I’ve never had a formal evaluation for attention or hyperactivity before—this is the first time I’m really seeking help for it. No one’s ever officially diagnosed me with ADHD or put me on medication for it, though teachers and family have commented on me being “hyper” or unable to sit still since I was a kid.
+
+Doctor: When you’re really interested in something—like a hobby or a favorite show or game—are you able to focus on it for long periods, or do you still find your attention jumping around and needing to move or switch activities a lot?
+
+Patient: If it’s something I really like, I can sometimes get into it for a bit, but I still end up fidgeting, getting up, or checking my phone and bouncing between things. Even with a favorite show or game, I’ll pause it, wander around, or switch to something else instead of just staying with it calmly.
+
+Doctor: Along with the restlessness and attention problems, do you also have long periods—at least two weeks—of feeling very down, hopeless, or extremely anxious most days, or are your mood and anxiety generally okay between the attention issues?
+
+Patient: I don’t think I’ve had long stretches like two weeks straight of feeling really hopeless or severely anxious most days. I have ups and downs and get stressed, but overall my mood and anxiety feel mostly okay aside from being frustrated with how restless and scattered I am.
+
+Doctor: Because of your distractibility or acting on impulse, have you had any serious problems like car accidents, getting fired or written up at work, or major conflicts in relationships that you feel wouldn’t have happened otherwise?
+
+========== OUTPUT [patient] ==========
+Nothing really extreme like a serious car accident or getting fired. I’ve had a couple of close calls while driving because I got distracted by my phone or something outside, and I’ve gotten a warning at work for speaking out of turn in meetings, but nothing beyond that.
+=====================================
+
+[call 40] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F90.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+Doctor: Have you had this kind of restlessness and trouble staying on one task since you were a child (for example in school), or is it something that only started in the last few months or years?
+
+Patient: It’s been there since I was a kid—I remember getting in trouble in elementary school for not staying in my seat and rushing through work. It’s just kind of always been how I am, and it’s continued right up to now.
+
+Doctor: Besides feeling restless, do you also often lose things, forget appointments or tasks, or make careless mistakes because you miss details, even when you’re really trying to pay attention?
+
+Patient: Yeah, that happens to me a lot. I’ll forget appointments unless I set multiple reminders, and I misplace things like my keys or work badge all the time even when I’m trying to be careful.
+
+Doctor: Do you also find yourself acting or speaking on impulse—like interrupting others, blurting things out, or making decisions quickly without thinking them through—and then regretting it afterward?
+
+Patient: Yeah, I do that a lot—I interrupt people or blurt out what I’m thinking before they’re finished talking. I usually realize it right after and feel bad or embarrassed, especially if I’ve cut someone off in a meeting or said something too blunt.
+
+Doctor: Do these attention and restlessness problems cause significant difficulties for you in more than one area of life—for example at work or school, at home, and in relationships—not just in one specific situation?
+
+Patient: Yeah, it affects me pretty much everywhere. At work I have trouble sitting through meetings and staying on one task, and at home I can’t seem to just relax—I’m always pacing or fidgeting, which annoys my partner. It also causes issues in conversations because I jump in or change topics and people get frustrated.
+
+Doctor: Have you ever been evaluated or treated before for attention or hyperactivity problems—like being diagnosed with ADHD or taking medication for it—or is this the first time you’re seeking help for these symptoms?
+
+Patient: I’ve never had a formal evaluation for attention or hyperactivity before—this is the first time I’m really seeking help for it. No one’s ever officially diagnosed me with ADHD or put me on medication for it, though teachers and family have commented on me being “hyper” or unable to sit still since I was a kid.
+
+Doctor: When you’re really interested in something—like a hobby or a favorite show or game—are you able to focus on it for long periods, or do you still find your attention jumping around and needing to move or switch activities a lot?
+
+Patient: If it’s something I really like, I can sometimes get into it for a bit, but I still end up fidgeting, getting up, or checking my phone and bouncing between things. Even with a favorite show or game, I’ll pause it, wander around, or switch to something else instead of just staying with it calmly.
+
+Doctor: Along with the restlessness and attention problems, do you also have long periods—at least two weeks—of feeling very down, hopeless, or extremely anxious most days, or are your mood and anxiety generally okay between the attention issues?
+
+Patient: I don’t think I’ve had long stretches like two weeks straight of feeling really hopeless or severely anxious most days. I have ups and downs and get stressed, but overall my mood and anxiety feel mostly okay aside from being frustrated with how restless and scattered I am.
+
+Doctor: Because of your distractibility or acting on impulse, have you had any serious problems like car accidents, getting fired or written up at work, or major conflicts in relationships that you feel wouldn’t have happened otherwise?
+
+Patient: Nothing really extreme like a serious car accident or getting fired. I’ve had a couple of close calls while driving because I got distracted by my phone or something outside, and I’ve gotten a warning at work for speaking out of turn in meetings, but nothing beyond that.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F90.0"], "note": "Previously the only candidate was F90.0. The current interview continues to support a long-standing pattern, beginning in childhood, of pervasive inattention, hyperactivity, and impulsivity across multiple settings (school, work, home, relationships) with clear functional impairment and without evidence of a primary mood or anxiety disorder driving the symptoms. There is no indication of episodic mood changes, psychosis, substance use, or medical causes emerging from this segment. The ability to focus somewhat on preferred activities but still being restless and distractible is consistent with the same candidate rather than suggesting a different condition. Because no new features have appeared that would point toward other differential diagnoses (such as primary anxiety, depressive, bipolar, or personality disorders), the candidate list remains unchanged with F90.0 as the sole working diagnosis. Further questioning about comorbidities and functional impact is still warranted, so this is not yet final.", "is_final": false}
+=====================================
+
+[call 41] doctor-final-diagnosis
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the full interview transcript and the differential diagnosis candidates, write the final diagnosis report.
+
+Both the "diagnosis" and "candidates" MUST be ICD-10 codes.
+
+[Field Instructions]
+- diagnosis: The single diagnosis code of ICD-10.
+- candidates: Top 2–3 differential candidates of ICD-10 codes considered until the end.
+- reason: Brief diagnostic rationale.
+- diagnostic_checklist: Structured evidence summary organized by diagnostic criterion type.
+  List only symptom groups that are relevant to your diagnosis, with the symptoms the patient actually confirmed.
+
+Output Format (JSON only, no other text):
+{
+  "diagnosis": "Final Diagnosis ICD-10 code",
+  "candidates": ["Disease Code1", "Disease Code2"],
+  "reason": "Brief diagnostic rationale.",
+  "diagnostic_checklist": {
+    "symptom_groups": [
+      {
+        "group": "clinical group name (e.g., inattention, manic_episode, psychotic_symptoms)",
+        "confirmed_symptoms": ["natural language description of each confirmed symptom in this group"],
+        "count": <integer>
+      }
+    ],
+    "duration_verified": "Description of how the duration criterion was established (e.g., 'symptoms present for over 6 months since childhood'), or null if not assessed.",
+    "functional_impairment": <true if functional impairment was confirmed, false if denied, null if not assessed>,
+    "traumatic_stressor": <true if a qualifying traumatic stressor was confirmed, null if not applicable or not assessed>,
+    "psychosocial_stressor": <true if a qualifying psychosocial stressor was confirmed, null if not applicable or not assessed>,
+    "additional_requirements": ["Each additional criterion that was explicitly verified during the interview (e.g., 'Onset prior to age 12 confirmed')"]
+  }
+}
+
+[2. USER]
+Candidate Diseases: 
+["F90.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—please come in and have a seat. What brings you in today, and what would you like help with right now?
+
+Patient: I’m having a really hard time doing anything quietly or calmly, even when I’m supposed to be relaxing. I always feel like I have to be moving or talking, and it’s starting to cause problems at work and at home, so I’d like help figuring out how to get this under control.
+
+Doctor: When you’re trying to focus on something like reading or work, do you mainly find your mind constantly drifting to worries and ‘what if’ thoughts, or is it more that your attention jumps around and you can’t stay on one task even if you’re not especially worried or sad?
+
+Patient: It’s more that my attention jumps around and I can’t stay on one thing, even if I’m not particularly worried or upset. I’ll start reading or working, and then my mind just skips to something else and I feel like I need to get up or do something different.
+
+Doctor: Have you had this kind of restlessness and trouble staying on one task since you were a child (for example in school), or is it something that only started in the last few months or years?
+
+Patient: It’s been there since I was a kid—I remember getting in trouble in elementary school for not staying in my seat and rushing through work. It’s just kind of always been how I am, and it’s continued right up to now.
+
+Doctor: Besides feeling restless, do you also often lose things, forget appointments or tasks, or make careless mistakes because you miss details, even when you’re really trying to pay attention?
+
+Patient: Yeah, that happens to me a lot. I’ll forget appointments unless I set multiple reminders, and I misplace things like my keys or work badge all the time even when I’m trying to be careful.
+
+Doctor: Do you also find yourself acting or speaking on impulse—like interrupting others, blurting things out, or making decisions quickly without thinking them through—and then regretting it afterward?
+
+Patient: Yeah, I do that a lot—I interrupt people or blurt out what I’m thinking before they’re finished talking. I usually realize it right after and feel bad or embarrassed, especially if I’ve cut someone off in a meeting or said something too blunt.
+
+Doctor: Do these attention and restlessness problems cause significant difficulties for you in more than one area of life—for example at work or school, at home, and in relationships—not just in one specific situation?
+
+Patient: Yeah, it affects me pretty much everywhere. At work I have trouble sitting through meetings and staying on one task, and at home I can’t seem to just relax—I’m always pacing or fidgeting, which annoys my partner. It also causes issues in conversations because I jump in or change topics and people get frustrated.
+
+Doctor: Have you ever been evaluated or treated before for attention or hyperactivity problems—like being diagnosed with ADHD or taking medication for it—or is this the first time you’re seeking help for these symptoms?
+
+Patient: I’ve never had a formal evaluation for attention or hyperactivity before—this is the first time I’m really seeking help for it. No one’s ever officially diagnosed me with ADHD or put me on medication for it, though teachers and family have commented on me being “hyper” or unable to sit still since I was a kid.
+
+Doctor: When you’re really interested in something—like a hobby or a favorite show or game—are you able to focus on it for long periods, or do you still find your attention jumping around and needing to move or switch activities a lot?
+
+Patient: If it’s something I really like, I can sometimes get into it for a bit, but I still end up fidgeting, getting up, or checking my phone and bouncing between things. Even with a favorite show or game, I’ll pause it, wander around, or switch to something else instead of just staying with it calmly.
+
+Doctor: Along with the restlessness and attention problems, do you also have long periods—at least two weeks—of feeling very down, hopeless, or extremely anxious most days, or are your mood and anxiety generally okay between the attention issues?
+
+Patient: I don’t think I’ve had long stretches like two weeks straight of feeling really hopeless or severely anxious most days. I have ups and downs and get stressed, but overall my mood and anxiety feel mostly okay aside from being frustrated with how restless and scattered I am.
+
+Doctor: Because of your distractibility or acting on impulse, have you had any serious problems like car accidents, getting fired or written up at work, or major conflicts in relationships that you feel wouldn’t have happened otherwise?
+
+Patient: Nothing really extreme like a serious car accident or getting fired. I’ve had a couple of close calls while driving because I got distracted by my phone or something outside, and I’ve gotten a warning at work for speaking out of turn in meetings, but nothing beyond that.
+
+========== OUTPUT [doctor] ==========
+{
+  "diagnosis": "F90.0",
+  "candidates": ["F90.1", "F41.1"],
+  "reason": "The patient describes a lifelong pattern, beginning in childhood, of marked hyperactivity, restlessness, impulsivity, and difficulty sustaining attention across multiple settings (school, work, home, relationships). Symptoms include inability to sit still, talking and moving excessively, interrupting others, and difficulty remaining on task even when not anxious or depressed. These symptoms cause clear functional impairment at work and at home, and there is no evidence of a primary mood or anxiety disorder driving the presentation. This is most consistent with Attention-Deficit Hyperactivity Disorder, predominantly hyperactive-impulsive type (F90.0) under ICD-10.",
+  "diagnostic_checklist": {
+    "symptom_groups": [
+      {
+        "group": "hyperactivity_impulsivity",
+        "confirmed_symptoms": [
+          "Persistent feeling of needing to move or talk, inability to do activities quietly or calmly, even when supposed to be relaxing",
+          "History since elementary school of difficulty staying seated and being described as 'hyper'",
+          "Often fidgets, paces, or needs to get up during activities such as meetings or watching shows",
+          "Frequently interrupts others or blurts out comments before others are finished speaking",
+          "Acts or speaks on impulse and later feels embarrassed or regrets it",
+          "Trouble sitting through meetings at work due to restlessness"
+        ],
+        "count": 6
+      },
+      {
+        "group": "inattention",
+        "confirmed_symptoms": [
+          "Attention jumps around and difficulty staying on one task, even when not worried or sad",
+          "Often forgets appointments unless multiple reminders are set",
+          "Frequently misplaces important items such as keys or work badge despite trying to be careful",
+          "Difficulty sustaining attention on reading or work tasks",
+          "Even with preferred activities (shows, games), tends to pause, wander, check phone, and switch tasks instead of maintaining focus"
+        ],
+        "count": 5
+      },
+      {
+        "group": "cross_situational_impairment",
+        "confirmed_symptoms": [
+          "Symptoms present and impairing at work (trouble in meetings, staying on tasks, warning for speaking out of turn)",
+          "Symptoms present and impairing at home (constant pacing and fidgeting, inability to relax, causing annoyance to partner)",
+          "Symptoms present in social interactions (interrupting, changing topics, frustrating others in conversations)",
+          "History of school difficulties related to restlessness and rushing through work"
+        ],
+        "count": 4
+      }
+    ],
+    "duration_verified": "Symptoms have been present since childhood (elementary school) and have persisted into adulthood without remission.",
+    "functional_impairment": true,
+    "traumatic_stressor": null,
+    "psychosocial_stressor": true,
+    "additional_requirements": [
+      "Onset in childhood confirmed",
+      "Symptoms present in multiple settings (school, work, home, relationships)",
+      "No sustained episodes of major depression or severe generalized anxiety to better account for symptoms",
+      "No prior ADHD diagnosis or treatment; current presentation consistent with lifelong course"
+    ]
+  }
+}
+=====================================
+

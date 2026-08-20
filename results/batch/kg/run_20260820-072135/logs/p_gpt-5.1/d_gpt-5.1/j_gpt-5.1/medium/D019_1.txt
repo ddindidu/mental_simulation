@@ -1,0 +1,2378 @@
+--- turn 00 ---
+
+[call 01] doctor-opening-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "open-ended",
+  "subcategory": null,
+  "question": "Hello, it’s good to meet you. What brings you in today, and what would you like help with?"
+}
+=====================================
+
+--- turn 01 ---
+
+[call 02] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ acute_stress_symptoms
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  - Reduced Concentration: Unable to pay attention or maintain focus on specific activities like conversation, reading, or watching TV.
+  - Indecisiveness: Extreme difficulty making even minor daily choices (e.g., menu, clothes) and hesitating to make decisions.
+  - Subjective Memory Complaints: Complaining of memory decline, such as forgetting where things were placed, due to reduced focus.
+  - Clouded Thinking: Thinking feels foggy, dazed, or not clear.
+▸ Critical Diagnostic Criteria
+  - Duration: 2 weeks
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 1
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["acute_stress_symptoms"], "answer_strategy": "Briefly describe that the main problem is with sleep and stress over the last 2 weeks, focusing on difficulty falling asleep, waking up during the night, or waking too early, and how unrefreshing or disrupted sleep is affecting daily life. Use a straightforward, honest tone and keep it centered on the main sleep complaint without listing every associated symptom in detail yet."}
+=====================================
+
+[call 03] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Acute Stress Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ acute_stress_symptoms
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  - Reduced Concentration: Unable to pay attention or maintain focus on specific activities like conversation, reading, or watching TV.
+  - Indecisiveness: Extreme difficulty making even minor daily choices (e.g., menu, clothes) and hesitating to make decisions.
+  - Subjective Memory Complaints: Complaining of memory decline, such as forgetting where things were placed, due to reduced focus.
+  - Clouded Thinking: Thinking feels foggy, dazed, or not clear.
+▸ Critical Diagnostic Criteria
+  - Duration: 2 weeks
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Sleep_Disturbance
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: acute_stress_symptoms
+Answer strategy: Briefly describe that the main problem is with sleep and stress over the last 2 weeks, focusing on difficulty falling asleep, waking up during the night, or waking too early, and how unrefreshing or disrupted sleep is affecting daily life. Use a straightforward, honest tone and keep it centered on the main sleep complaint without listing every associated symptom in detail yet.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+========== OUTPUT [patient] ==========
+Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+=====================================
+
+[call 04] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F51.0", "F41.1", "F32.0"], "note": "Initial candidate list based solely on the patient’s opening complaint. The primary issue is disturbed sleep for about two weeks with daytime fatigue, without yet knowing about mood, anxiety, substances, medical issues, or sleep schedule. The leading consideration is a primary insomnia syndrome (F51.0). However, anxiety-related sleep disturbance (e.g., generalized anxiety–type picture, F41.1) and a mild depressive episode with prominent insomnia (F32.0) are also plausible at this stage. No previous candidate list was provided, so this is the first set; it may expand or narrow as more history is obtained.", "is_final": false}
+=====================================
+
+[call 05] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F51.0
+- F41.1
+- F32.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F51.0", "F41.1", "F32.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "anxiety vs depression symptoms",
+  "question": "Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?"
+}
+=====================================
+
+--- turn 02 ---
+
+[call 06] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ acute_stress_symptoms
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  - Reduced Concentration: Unable to pay attention or maintain focus on specific activities like conversation, reading, or watching TV.
+  - Indecisiveness: Extreme difficulty making even minor daily choices (e.g., menu, clothes) and hesitating to make decisions.
+  - Subjective Memory Complaints: Complaining of memory decline, such as forgetting where things were placed, due to reduced focus.
+  - Clouded Thinking: Thinking feels foggy, dazed, or not clear.
+▸ Critical Diagnostic Criteria
+  - Duration: 2 weeks
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 2
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+========== OUTPUT [patient] ==========
+{"matched": false, "matched_sections": [], "answer_strategy": "This isn’t covered in the profile, so answer based on how you genuinely feel. Briefly say whether you’ve mainly felt sad or down, lost interest or pleasure in usual activities, or if instead (or also) you feel a lot of ongoing worry, tension, or nervousness during the day. If you’re unsure, you can say you haven’t really thought about it or that it’s hard to describe."}
+=====================================
+
+[call 07] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Acute Stress Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ acute_stress_symptoms
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  - Reduced Concentration: Unable to pay attention or maintain focus on specific activities like conversation, reading, or watching TV.
+  - Indecisiveness: Extreme difficulty making even minor daily choices (e.g., menu, clothes) and hesitating to make decisions.
+  - Subjective Memory Complaints: Complaining of memory decline, such as forgetting where things were placed, due to reduced focus.
+  - Clouded Thinking: Thinking feels foggy, dazed, or not clear.
+▸ Critical Diagnostic Criteria
+  - Duration: 2 weeks
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Sleep_Disturbance
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(No match in profile or inference only)
+Answer strategy: This isn’t covered in the profile, so answer based on how you genuinely feel. Briefly say whether you’ve mainly felt sad or down, lost interest or pleasure in usual activities, or if instead (or also) you feel a lot of ongoing worry, tension, or nervousness during the day. If you’re unsure, you can say you haven’t really thought about it or that it’s hard to describe.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+========== OUTPUT [patient] ==========
+I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+=====================================
+
+[call 08] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F51.0", "F41.1", "F32.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F51.0", "F41.1", "F32.0"], "note": "Previously the candidates were [F51.0, F41.1, F32.0]. The new information confirms: (1) a relatively acute onset (about two weeks) of prominent sleep disturbance, which is consistent with an insomnia syndrome; (2) daytime symptoms characterized more by ongoing worry and tension than by clear loss of interest or pervasive low mood, which keeps generalized anxiety–type presentations in consideration; (3) mood is described as feeling \"off\" but without definite anhedonia or clear depressive syndrome, so a mild depressive episode remains possible but not yet well supported. At this stage, there is not enough detail to rule in or rule out any of the three, so the candidate list remains unchanged. Further questioning is needed to clarify the primary problem (sleep vs anxiety vs mood), duration beyond 2 weeks, functional impairment, and associated symptoms (somatic anxiety, cognitive symptoms of depression, etc.).", "is_final": false}
+=====================================
+
+[call 09] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F51.0
+- F41.1
+- F32.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F51.0", "F41.1", "F32.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "worry characteristics",
+  "question": "Are your worries mainly about specific current stressors (like work, finances, health, or relationships), or do you find yourself worrying about many different things most days even when nothing particular is wrong?"
+}
+=====================================
+
+--- turn 03 ---
+
+[call 10] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ acute_stress_symptoms
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  - Reduced Concentration: Unable to pay attention or maintain focus on specific activities like conversation, reading, or watching TV.
+  - Indecisiveness: Extreme difficulty making even minor daily choices (e.g., menu, clothes) and hesitating to make decisions.
+  - Subjective Memory Complaints: Complaining of memory decline, such as forgetting where things were placed, due to reduced focus.
+  - Clouded Thinking: Thinking feels foggy, dazed, or not clear.
+▸ Critical Diagnostic Criteria
+  - Duration: 2 weeks
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 3
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Are your worries mainly about specific current stressors (like work, finances, health, or relationships), or do you find yourself worrying about many different things most days even when nothing particular is wrong?
+
+========== OUTPUT [patient] ==========
+{"matched": false, "matched_sections": [], "answer_strategy": "This isn’t covered in the symptom list, so answer from your own experience. Briefly describe whether your worries are tied to a few clear current stressors (e.g., work, money, health, relationships) or if you tend to worry about many different topics most days, even when nothing specific is happening. If it’s a mix, say which is more typical for you and give one short example."}
+=====================================
+
+[call 11] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Acute Stress Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ acute_stress_symptoms
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  - Reduced Concentration: Unable to pay attention or maintain focus on specific activities like conversation, reading, or watching TV.
+  - Indecisiveness: Extreme difficulty making even minor daily choices (e.g., menu, clothes) and hesitating to make decisions.
+  - Subjective Memory Complaints: Complaining of memory decline, such as forgetting where things were placed, due to reduced focus.
+  - Clouded Thinking: Thinking feels foggy, dazed, or not clear.
+▸ Critical Diagnostic Criteria
+  - Duration: 2 weeks
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Sleep_Disturbance
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(No match in profile or inference only)
+Answer strategy: This isn’t covered in the symptom list, so answer from your own experience. Briefly describe whether your worries are tied to a few clear current stressors (e.g., work, money, health, relationships) or if you tend to worry about many different topics most days, even when nothing specific is happening. If it’s a mix, say which is more typical for you and give one short example.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+Doctor: Are your worries mainly about specific current stressors (like work, finances, health, or relationships), or do you find yourself worrying about many different things most days even when nothing particular is wrong?
+
+========== OUTPUT [patient] ==========
+It’s more tied to a few specific things going on right now, mainly work and some family stuff. I do sometimes spiral into worrying about other random things, but it usually starts from those main stressors.
+=====================================
+
+[call 12] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F51.0", "F41.1", "F32.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+Doctor: Are your worries mainly about specific current stressors (like work, finances, health, or relationships), or do you find yourself worrying about many different things most days even when nothing particular is wrong?
+
+Patient: It’s more tied to a few specific things going on right now, mainly work and some family stuff. I do sometimes spiral into worrying about other random things, but it usually starts from those main stressors.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F51.0", "F41.1", "F32.0"], "note": "Previously the candidates were [F51.0, F41.1, F32.0]. The new information clarifies that the patient has had about two weeks of significant sleep disturbance with daytime fatigue, plus background worry and tension that are more tied to specific current stressors (work and family) than to a broad, free‑floating pattern. This keeps insomnia as a central issue, so F51.0 remains. The presence of increased worry and tension supports keeping an anxiety-related condition (F41.1) on the list, though the worry being more situational than generalized slightly weakens the fit but does not rule it out this early. The patient does not clearly endorse loss of interest or a distinctly low mood, only feeling \"off,\" so a depressive episode (F32.0) is currently less supported but still possible, especially if further questioning reveals more depressive symptoms; therefore it remains on the list for now. Overall, the candidate set is unchanged, but the relative likelihoods have subtly shifted toward primary insomnia vs stress-/anxiety-related sleep disturbance, with depression somewhat less prominent pending more data.", "is_final": false}
+=====================================
+
+[call 13] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F51.0
+- F41.1
+- F32.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F51.0", "F41.1", "F32.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+Doctor: Are your worries mainly about specific current stressors (like work, finances, health, or relationships), or do you find yourself worrying about many different things most days even when nothing particular is wrong?
+
+Patient: It’s more tied to a few specific things going on right now, mainly work and some family stuff. I do sometimes spiral into worrying about other random things, but it usually starts from those main stressors.
+
+Patient: It’s more tied to a few specific things going on right now, mainly work and some family stuff. I do sometimes spiral into worrying about other random things, but it usually starts from those main stressors.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "daytime functional impact and mood",
+  "question": "During the day over these two weeks, how much have your low mood or feeling ‘off’ and on edge interfered with your ability to function at work or enjoy time with family or hobbies—would you say it’s mild and you can mostly push through, or is it clearly affecting your performance and enjoyment most days?"
+}
+=====================================
+
+--- turn 04 ---
+
+[call 14] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ acute_stress_symptoms
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  - Reduced Concentration: Unable to pay attention or maintain focus on specific activities like conversation, reading, or watching TV.
+  - Indecisiveness: Extreme difficulty making even minor daily choices (e.g., menu, clothes) and hesitating to make decisions.
+  - Subjective Memory Complaints: Complaining of memory decline, such as forgetting where things were placed, due to reduced focus.
+  - Clouded Thinking: Thinking feels foggy, dazed, or not clear.
+▸ Critical Diagnostic Criteria
+  - Duration: 2 weeks
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 4
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+During the day over these two weeks, how much have your low mood or feeling ‘off’ and on edge interfered with your ability to function at work or enjoy time with family or hobbies—would you say it’s mild and you can mostly push through, or is it clearly affecting your performance and enjoyment most days?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["acute_stress_symptoms - Reduced Concentration", "acute_stress_symptoms - Indecisiveness", "acute_stress_symptoms - Subjective Memory Complaints", "acute_stress_symptoms - Clouded Thinking", "Critical Diagnostic Criteria - Duration: 2 weeks"], "answer_strategy": "Answer clearly how much these past 2 weeks have affected your day-to-day functioning. Briefly describe whether problems like poor concentration, foggy thinking, indecisiveness, or memory lapses are interfering with work tasks, family interactions, or hobbies. Then pick a level: either it feels mild and you can mostly push through without big impact, or it is clearly affecting your performance and ability to enjoy things on most days. Keep the tone straightforward and concrete, with 1–2 short examples if helpful."}
+=====================================
+
+[call 15] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Acute Stress Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ acute_stress_symptoms
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  - Reduced Concentration: Unable to pay attention or maintain focus on specific activities like conversation, reading, or watching TV.
+  - Indecisiveness: Extreme difficulty making even minor daily choices (e.g., menu, clothes) and hesitating to make decisions.
+  - Subjective Memory Complaints: Complaining of memory decline, such as forgetting where things were placed, due to reduced focus.
+  - Clouded Thinking: Thinking feels foggy, dazed, or not clear.
+▸ Critical Diagnostic Criteria
+  - Duration: 2 weeks
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Sleep_Disturbance
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: acute_stress_symptoms - Reduced Concentration, acute_stress_symptoms - Indecisiveness, acute_stress_symptoms - Subjective Memory Complaints, acute_stress_symptoms - Clouded Thinking, Critical Diagnostic Criteria - Duration: 2 weeks
+Answer strategy: Answer clearly how much these past 2 weeks have affected your day-to-day functioning. Briefly describe whether problems like poor concentration, foggy thinking, indecisiveness, or memory lapses are interfering with work tasks, family interactions, or hobbies. Then pick a level: either it feels mild and you can mostly push through without big impact, or it is clearly affecting your performance and ability to enjoy things on most days. Keep the tone straightforward and concrete, with 1–2 short examples if helpful.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+Doctor: Are your worries mainly about specific current stressors (like work, finances, health, or relationships), or do you find yourself worrying about many different things most days even when nothing particular is wrong?
+
+Patient: It’s more tied to a few specific things going on right now, mainly work and some family stuff. I do sometimes spiral into worrying about other random things, but it usually starts from those main stressors.
+
+Doctor: During the day over these two weeks, how much have your low mood or feeling ‘off’ and on edge interfered with your ability to function at work or enjoy time with family or hobbies—would you say it’s mild and you can mostly push through, or is it clearly affecting your performance and enjoyment most days?
+
+========== OUTPUT [patient] ==========
+It’s clearly affecting me most days. I’m more distracted and slower at work, and at home I find it harder to be present with my family or enjoy things I normally like because my mind feels foggy and I’m second‑guessing myself a lot.
+=====================================
+
+[call 16] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F51.0", "F41.1", "F32.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+Doctor: Are your worries mainly about specific current stressors (like work, finances, health, or relationships), or do you find yourself worrying about many different things most days even when nothing particular is wrong?
+
+Patient: It’s more tied to a few specific things going on right now, mainly work and some family stuff. I do sometimes spiral into worrying about other random things, but it usually starts from those main stressors.
+
+Doctor: During the day over these two weeks, how much have your low mood or feeling ‘off’ and on edge interfered with your ability to function at work or enjoy time with family or hobbies—would you say it’s mild and you can mostly push through, or is it clearly affecting your performance and enjoyment most days?
+
+Patient: It’s clearly affecting me most days. I’m more distracted and slower at work, and at home I find it harder to be present with my family or enjoy things I normally like because my mind feels foggy and I’m second‑guessing myself a lot.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F51.0", "F41.1", "F32.0"], "note": "Previously the candidates were [F51.0, F41.1, F32.0]. The new information shows: (1) prominent insomnia for about two weeks with significant daytime fatigue and cognitive effects, keeping F51.0 strongly in consideration; (2) clearly increased worry and tension linked to identifiable stressors (work and family), with some spillover into other worries, and functional impairment at work and home, which remains consistent with an anxiety-spectrum condition such as F41.1, though the duration and degree of generalized, free‑floating worry are still not fully clarified; (3) the patient feels \"off\" and impaired but does not endorse clear loss of interest or a distinctly low mood, which makes a depressive episode (F32.0) less strongly supported but still possible, given the short duration and the fact that mood and anhedonia have not yet been explored in detail (e.g., guilt, hopelessness, appetite, psychomotor changes). Because the new information does not definitively rule out any of the three and does not clearly favor one over the others, the candidate list remains [F51.0, F41.1, F32.0]. Further questioning is needed on full depressive and anxiety symptom clusters, temporal sequence (whether sleep or mood/anxiety came first), and any prior episodes.", "is_final": false}
+=====================================
+
+[call 17] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F51.0
+- F41.1
+- F32.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F51.0", "F41.1", "F32.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+Doctor: Are your worries mainly about specific current stressors (like work, finances, health, or relationships), or do you find yourself worrying about many different things most days even when nothing particular is wrong?
+
+Patient: It’s more tied to a few specific things going on right now, mainly work and some family stuff. I do sometimes spiral into worrying about other random things, but it usually starts from those main stressors.
+
+Doctor: During the day over these two weeks, how much have your low mood or feeling ‘off’ and on edge interfered with your ability to function at work or enjoy time with family or hobbies—would you say it’s mild and you can mostly push through, or is it clearly affecting your performance and enjoyment most days?
+
+Patient: It’s clearly affecting me most days. I’m more distracted and slower at work, and at home I find it harder to be present with my family or enjoy things I normally like because my mind feels foggy and I’m second‑guessing myself a lot.
+
+Patient: It’s clearly affecting me most days. I’m more distracted and slower at work, and at home I find it harder to be present with my family or enjoy things I normally like because my mind feels foggy and I’m second‑guessing myself a lot.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "core depressive symptoms",
+  "question": "Over these past two weeks, have you had most days where you feel clearly sad or depressed and enjoy things noticeably less than usual, or is it more that you feel mainly anxious, tense, and preoccupied without a strong depressed mood?"
+}
+=====================================
+
+--- turn 05 ---
+
+[call 18] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ acute_stress_symptoms
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  - Reduced Concentration: Unable to pay attention or maintain focus on specific activities like conversation, reading, or watching TV.
+  - Indecisiveness: Extreme difficulty making even minor daily choices (e.g., menu, clothes) and hesitating to make decisions.
+  - Subjective Memory Complaints: Complaining of memory decline, such as forgetting where things were placed, due to reduced focus.
+  - Clouded Thinking: Thinking feels foggy, dazed, or not clear.
+▸ Critical Diagnostic Criteria
+  - Duration: 2 weeks
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 5
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Over these past two weeks, have you had most days where you feel clearly sad or depressed and enjoy things noticeably less than usual, or is it more that you feel mainly anxious, tense, and preoccupied without a strong depressed mood?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["acute_stress_symptoms", "Critical Diagnostic Criteria - Duration: 2 weeks"], "answer_strategy": "Clearly distinguish whether your main experience over these 2 weeks has been more of a low mood/loss of enjoyment, or more anxiety, tension, and being preoccupied. Refer to the fact that your symptoms have lasted about 2 weeks, and briefly describe which emotional state fits you better, in simple, straightforward language. You don’t need to list every symptom, just focus on whether you feel mainly depressed or mainly anxious/tense most days in this period."}
+=====================================
+
+[call 19] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Acute Stress Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ acute_stress_symptoms
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  - Reduced Concentration: Unable to pay attention or maintain focus on specific activities like conversation, reading, or watching TV.
+  - Indecisiveness: Extreme difficulty making even minor daily choices (e.g., menu, clothes) and hesitating to make decisions.
+  - Subjective Memory Complaints: Complaining of memory decline, such as forgetting where things were placed, due to reduced focus.
+  - Clouded Thinking: Thinking feels foggy, dazed, or not clear.
+▸ Critical Diagnostic Criteria
+  - Duration: 2 weeks
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Sleep_Disturbance
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: acute_stress_symptoms, Critical Diagnostic Criteria - Duration: 2 weeks
+Answer strategy: Clearly distinguish whether your main experience over these 2 weeks has been more of a low mood/loss of enjoyment, or more anxiety, tension, and being preoccupied. Refer to the fact that your symptoms have lasted about 2 weeks, and briefly describe which emotional state fits you better, in simple, straightforward language. You don’t need to list every symptom, just focus on whether you feel mainly depressed or mainly anxious/tense most days in this period.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+Doctor: Are your worries mainly about specific current stressors (like work, finances, health, or relationships), or do you find yourself worrying about many different things most days even when nothing particular is wrong?
+
+Patient: It’s more tied to a few specific things going on right now, mainly work and some family stuff. I do sometimes spiral into worrying about other random things, but it usually starts from those main stressors.
+
+Doctor: During the day over these two weeks, how much have your low mood or feeling ‘off’ and on edge interfered with your ability to function at work or enjoy time with family or hobbies—would you say it’s mild and you can mostly push through, or is it clearly affecting your performance and enjoyment most days?
+
+Patient: It’s clearly affecting me most days. I’m more distracted and slower at work, and at home I find it harder to be present with my family or enjoy things I normally like because my mind feels foggy and I’m second‑guessing myself a lot.
+
+Doctor: Over these past two weeks, have you had most days where you feel clearly sad or depressed and enjoy things noticeably less than usual, or is it more that you feel mainly anxious, tense, and preoccupied without a strong depressed mood?
+
+========== OUTPUT [patient] ==========
+Over these two weeks it’s been more that I feel anxious, tense, and preoccupied than clearly sad or depressed. I don’t feel completely numb to enjoyment, but the constant worry and on‑edge feeling are what stand out most days.
+=====================================
+
+[call 20] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F51.0", "F41.1", "F32.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+Doctor: Are your worries mainly about specific current stressors (like work, finances, health, or relationships), or do you find yourself worrying about many different things most days even when nothing particular is wrong?
+
+Patient: It’s more tied to a few specific things going on right now, mainly work and some family stuff. I do sometimes spiral into worrying about other random things, but it usually starts from those main stressors.
+
+Doctor: During the day over these two weeks, how much have your low mood or feeling ‘off’ and on edge interfered with your ability to function at work or enjoy time with family or hobbies—would you say it’s mild and you can mostly push through, or is it clearly affecting your performance and enjoyment most days?
+
+Patient: It’s clearly affecting me most days. I’m more distracted and slower at work, and at home I find it harder to be present with my family or enjoy things I normally like because my mind feels foggy and I’m second‑guessing myself a lot.
+
+Doctor: Over these past two weeks, have you had most days where you feel clearly sad or depressed and enjoy things noticeably less than usual, or is it more that you feel mainly anxious, tense, and preoccupied without a strong depressed mood?
+
+Patient: Over these two weeks it’s been more that I feel anxious, tense, and preoccupied than clearly sad or depressed. I don’t feel completely numb to enjoyment, but the constant worry and on‑edge feeling are what stand out most days.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F51.0", "F41.1"], "note": "Previously the candidates were [F51.0, F41.1, F32.0]. The patient reports two weeks of prominent insomnia plus daytime anxiety, tension, and preoccupation related to specific current stressors, with clear functional impact. They explicitly deny a clearly depressed mood or marked loss of interest; enjoyment is reduced mainly because of worry and feeling on edge, not because of a pervasive low mood. This makes a current depressive episode less likely, so F32.0 becomes less supported and is removed from the list. Insomnia remains a key, distressing symptom, so F51.0 stays. The anxiety picture is significant, but focused on identifiable stressors rather than generalized to many domains for a long duration; however, given limited duration history and partial generalization (spiraling to other worries), an anxiety-related diagnosis remains in consideration, so F41.1 is retained. Further questioning is needed to clarify duration and breadth of anxiety and to rule in/out other anxiety or adjustment-related conditions, so the list remains [F51.0, F41.1] and is_final is false.", "is_final": false}
+=====================================
+
+[call 21] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F51.0
+- F41.1
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F51.0", "F41.1"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+Doctor: Are your worries mainly about specific current stressors (like work, finances, health, or relationships), or do you find yourself worrying about many different things most days even when nothing particular is wrong?
+
+Patient: It’s more tied to a few specific things going on right now, mainly work and some family stuff. I do sometimes spiral into worrying about other random things, but it usually starts from those main stressors.
+
+Doctor: During the day over these two weeks, how much have your low mood or feeling ‘off’ and on edge interfered with your ability to function at work or enjoy time with family or hobbies—would you say it’s mild and you can mostly push through, or is it clearly affecting your performance and enjoyment most days?
+
+Patient: It’s clearly affecting me most days. I’m more distracted and slower at work, and at home I find it harder to be present with my family or enjoy things I normally like because my mind feels foggy and I’m second‑guessing myself a lot.
+
+Doctor: Over these past two weeks, have you had most days where you feel clearly sad or depressed and enjoy things noticeably less than usual, or is it more that you feel mainly anxious, tense, and preoccupied without a strong depressed mood?
+
+Patient: Over these two weeks it’s been more that I feel anxious, tense, and preoccupied than clearly sad or depressed. I don’t feel completely numb to enjoyment, but the constant worry and on‑edge feeling are what stand out most days.
+
+Patient: Over these two weeks it’s been more that I feel anxious, tense, and preoccupied than clearly sad or depressed. I don’t feel completely numb to enjoyment, but the constant worry and on‑edge feeling are what stand out most days.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "temporal relationship between anxiety and insomnia",
+  "question": "When you’re lying in bed trying to sleep, do you mainly feel wide awake because your mind is racing with worries, or do you feel exhausted and ready to sleep but still can’t, without much active worrying at that moment?"
+}
+=====================================
+
+--- turn 06 ---
+
+[call 22] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ acute_stress_symptoms
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  - Reduced Concentration: Unable to pay attention or maintain focus on specific activities like conversation, reading, or watching TV.
+  - Indecisiveness: Extreme difficulty making even minor daily choices (e.g., menu, clothes) and hesitating to make decisions.
+  - Subjective Memory Complaints: Complaining of memory decline, such as forgetting where things were placed, due to reduced focus.
+  - Clouded Thinking: Thinking feels foggy, dazed, or not clear.
+▸ Critical Diagnostic Criteria
+  - Duration: 2 weeks
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 6
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+When you’re lying in bed trying to sleep, do you mainly feel wide awake because your mind is racing with worries, or do you feel exhausted and ready to sleep but still can’t, without much active worrying at that moment?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["acute_stress_symptoms - Initial Insomnia", "acute_stress_symptoms - Clouded Thinking", "acute_stress_symptoms - Reduced Concentration"], "answer_strategy": "Answer by describing as concretely as you can what it feels like in your mind when you first try to fall asleep. Say whether your mind is full of worries, replaying events, planning, or overthinking (\"racing thoughts\"), or whether you feel mentally and physically tired and ready to sleep but your brain just won’t switch off even though you’re not actively worrying. It’s okay if it’s a mix—try to estimate which is more frequent or more intense, and you can give a brief example of a typical night. Keep the tone straightforward and descriptive, focusing on your actual experience rather than what you think the doctor wants to hear."}
+=====================================
+
+[call 23] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Acute Stress Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ acute_stress_symptoms
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  - Reduced Concentration: Unable to pay attention or maintain focus on specific activities like conversation, reading, or watching TV.
+  - Indecisiveness: Extreme difficulty making even minor daily choices (e.g., menu, clothes) and hesitating to make decisions.
+  - Subjective Memory Complaints: Complaining of memory decline, such as forgetting where things were placed, due to reduced focus.
+  - Clouded Thinking: Thinking feels foggy, dazed, or not clear.
+▸ Critical Diagnostic Criteria
+  - Duration: 2 weeks
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Sleep_Disturbance
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: acute_stress_symptoms - Initial Insomnia, acute_stress_symptoms - Clouded Thinking, acute_stress_symptoms - Reduced Concentration
+Answer strategy: Answer by describing as concretely as you can what it feels like in your mind when you first try to fall asleep. Say whether your mind is full of worries, replaying events, planning, or overthinking ("racing thoughts"), or whether you feel mentally and physically tired and ready to sleep but your brain just won’t switch off even though you’re not actively worrying. It’s okay if it’s a mix—try to estimate which is more frequent or more intense, and you can give a brief example of a typical night. Keep the tone straightforward and descriptive, focusing on your actual experience rather than what you think the doctor wants to hear.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+Doctor: Are your worries mainly about specific current stressors (like work, finances, health, or relationships), or do you find yourself worrying about many different things most days even when nothing particular is wrong?
+
+Patient: It’s more tied to a few specific things going on right now, mainly work and some family stuff. I do sometimes spiral into worrying about other random things, but it usually starts from those main stressors.
+
+Doctor: During the day over these two weeks, how much have your low mood or feeling ‘off’ and on edge interfered with your ability to function at work or enjoy time with family or hobbies—would you say it’s mild and you can mostly push through, or is it clearly affecting your performance and enjoyment most days?
+
+Patient: It’s clearly affecting me most days. I’m more distracted and slower at work, and at home I find it harder to be present with my family or enjoy things I normally like because my mind feels foggy and I’m second‑guessing myself a lot.
+
+Doctor: Over these past two weeks, have you had most days where you feel clearly sad or depressed and enjoy things noticeably less than usual, or is it more that you feel mainly anxious, tense, and preoccupied without a strong depressed mood?
+
+Patient: Over these two weeks it’s been more that I feel anxious, tense, and preoccupied than clearly sad or depressed. I don’t feel completely numb to enjoyment, but the constant worry and on‑edge feeling are what stand out most days.
+
+Doctor: When you’re lying in bed trying to sleep, do you mainly feel wide awake because your mind is racing with worries, or do you feel exhausted and ready to sleep but still can’t, without much active worrying at that moment?
+
+========== OUTPUT [patient] ==========
+It’s mostly that my mind is racing with worries when I first lie down, especially about work stuff and a couple of family issues, and I end up replaying conversations or imagining worst‑case scenarios. I do feel physically tired, but my brain just keeps going, and on some nights it takes me a long time to switch it off enough to even start drifting off.
+=====================================
+
+[call 24] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F51.0", "F41.1"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+Doctor: Are your worries mainly about specific current stressors (like work, finances, health, or relationships), or do you find yourself worrying about many different things most days even when nothing particular is wrong?
+
+Patient: It’s more tied to a few specific things going on right now, mainly work and some family stuff. I do sometimes spiral into worrying about other random things, but it usually starts from those main stressors.
+
+Doctor: During the day over these two weeks, how much have your low mood or feeling ‘off’ and on edge interfered with your ability to function at work or enjoy time with family or hobbies—would you say it’s mild and you can mostly push through, or is it clearly affecting your performance and enjoyment most days?
+
+Patient: It’s clearly affecting me most days. I’m more distracted and slower at work, and at home I find it harder to be present with my family or enjoy things I normally like because my mind feels foggy and I’m second‑guessing myself a lot.
+
+Doctor: Over these past two weeks, have you had most days where you feel clearly sad or depressed and enjoy things noticeably less than usual, or is it more that you feel mainly anxious, tense, and preoccupied without a strong depressed mood?
+
+Patient: Over these two weeks it’s been more that I feel anxious, tense, and preoccupied than clearly sad or depressed. I don’t feel completely numb to enjoyment, but the constant worry and on‑edge feeling are what stand out most days.
+
+Doctor: When you’re lying in bed trying to sleep, do you mainly feel wide awake because your mind is racing with worries, or do you feel exhausted and ready to sleep but still can’t, without much active worrying at that moment?
+
+Patient: It’s mostly that my mind is racing with worries when I first lie down, especially about work stuff and a couple of family issues, and I end up replaying conversations or imagining worst‑case scenarios. I do feel physically tired, but my brain just keeps going, and on some nights it takes me a long time to switch it off enough to even start drifting off.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F51.0", "F41.1"], "note": "Previously the candidates were [F51.0, F41.1]. The new information shows prominent insomnia with difficulty initiating sleep due to ruminative worry, plus daytime fatigue and functional impairment over about two weeks. The patient reports being more anxious, tense, and preoccupied than clearly sad or anhedonic, with worries linked to current work and family stressors but sometimes generalizing. This pattern supports both an insomnia syndrome and a clinically significant anxiety syndrome, but the time frame is still short and the worry appears more stressor‑related than pervasive and free‑floating. There is not yet clear evidence of a primary mood syndrome or another medical/psychiatric cause. Therefore the same two candidates remain. Further questioning is needed about duration beyond two weeks, the breadth and uncontrollability of worry, physical anxiety symptoms, and whether the sleep disturbance is primary versus secondary to anxiety, so the list is unchanged and the interview should continue.", "is_final": false}
+=====================================
+
+[call 25] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F51.0
+- F41.1
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F51.0", "F41.1"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+Doctor: Are your worries mainly about specific current stressors (like work, finances, health, or relationships), or do you find yourself worrying about many different things most days even when nothing particular is wrong?
+
+Patient: It’s more tied to a few specific things going on right now, mainly work and some family stuff. I do sometimes spiral into worrying about other random things, but it usually starts from those main stressors.
+
+Doctor: During the day over these two weeks, how much have your low mood or feeling ‘off’ and on edge interfered with your ability to function at work or enjoy time with family or hobbies—would you say it’s mild and you can mostly push through, or is it clearly affecting your performance and enjoyment most days?
+
+Patient: It’s clearly affecting me most days. I’m more distracted and slower at work, and at home I find it harder to be present with my family or enjoy things I normally like because my mind feels foggy and I’m second‑guessing myself a lot.
+
+Doctor: Over these past two weeks, have you had most days where you feel clearly sad or depressed and enjoy things noticeably less than usual, or is it more that you feel mainly anxious, tense, and preoccupied without a strong depressed mood?
+
+Patient: Over these two weeks it’s been more that I feel anxious, tense, and preoccupied than clearly sad or depressed. I don’t feel completely numb to enjoyment, but the constant worry and on‑edge feeling are what stand out most days.
+
+Doctor: When you’re lying in bed trying to sleep, do you mainly feel wide awake because your mind is racing with worries, or do you feel exhausted and ready to sleep but still can’t, without much active worrying at that moment?
+
+Patient: It’s mostly that my mind is racing with worries when I first lie down, especially about work stuff and a couple of family issues, and I end up replaying conversations or imagining worst‑case scenarios. I do feel physically tired, but my brain just keeps going, and on some nights it takes me a long time to switch it off enough to even start drifting off.
+
+Patient: It’s mostly that my mind is racing with worries when I first lie down, especially about work stuff and a couple of family issues, and I end up replaying conversations or imagining worst‑case scenarios. I do feel physically tired, but my brain just keeps going, and on some nights it takes me a long time to switch it off enough to even start drifting off.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "daytime anxiety pattern",
+  "question": "During the daytime, even when you’re busy or not actively dealing with work or family issues, do you still feel generally tense and worried about various things most of the time, or does the anxiety mainly flare up only when you’re directly thinking about those specific stressors?"
+}
+=====================================
+
+--- turn 07 ---
+
+[call 26] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ acute_stress_symptoms
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  - Reduced Concentration: Unable to pay attention or maintain focus on specific activities like conversation, reading, or watching TV.
+  - Indecisiveness: Extreme difficulty making even minor daily choices (e.g., menu, clothes) and hesitating to make decisions.
+  - Subjective Memory Complaints: Complaining of memory decline, such as forgetting where things were placed, due to reduced focus.
+  - Clouded Thinking: Thinking feels foggy, dazed, or not clear.
+▸ Critical Diagnostic Criteria
+  - Duration: 2 weeks
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 7
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+During the daytime, even when you’re busy or not actively dealing with work or family issues, do you still feel generally tense and worried about various things most of the time, or does the anxiety mainly flare up only when you’re directly thinking about those specific stressors?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["acute_stress_symptoms -> Reduced Concentration", "acute_stress_symptoms -> Clouded Thinking", "acute_stress_symptoms -> Indecisiveness"], "answer_strategy": "Explain clearly whether the tension and worry are present most of the day in the background, or whether they mainly spike when you are actively thinking about or facing specific stressors (like work or family issues). Briefly describe how your mind feels during the day: for example, if you feel generally on edge, preoccupied, or mentally foggy even when nothing specific is happening, or if you feel relatively okay until something reminds you of those stressors. Keep it concrete and focused on your usual daytime pattern rather than giving long stories."}
+=====================================
+
+[call 27] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Acute Stress Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ acute_stress_symptoms
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  - Reduced Concentration: Unable to pay attention or maintain focus on specific activities like conversation, reading, or watching TV.
+  - Indecisiveness: Extreme difficulty making even minor daily choices (e.g., menu, clothes) and hesitating to make decisions.
+  - Subjective Memory Complaints: Complaining of memory decline, such as forgetting where things were placed, due to reduced focus.
+  - Clouded Thinking: Thinking feels foggy, dazed, or not clear.
+▸ Critical Diagnostic Criteria
+  - Duration: 2 weeks
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Sleep_Disturbance
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: acute_stress_symptoms -> Reduced Concentration, acute_stress_symptoms -> Clouded Thinking, acute_stress_symptoms -> Indecisiveness
+Answer strategy: Explain clearly whether the tension and worry are present most of the day in the background, or whether they mainly spike when you are actively thinking about or facing specific stressors (like work or family issues). Briefly describe how your mind feels during the day: for example, if you feel generally on edge, preoccupied, or mentally foggy even when nothing specific is happening, or if you feel relatively okay until something reminds you of those stressors. Keep it concrete and focused on your usual daytime pattern rather than giving long stories.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+Doctor: Are your worries mainly about specific current stressors (like work, finances, health, or relationships), or do you find yourself worrying about many different things most days even when nothing particular is wrong?
+
+Patient: It’s more tied to a few specific things going on right now, mainly work and some family stuff. I do sometimes spiral into worrying about other random things, but it usually starts from those main stressors.
+
+Doctor: During the day over these two weeks, how much have your low mood or feeling ‘off’ and on edge interfered with your ability to function at work or enjoy time with family or hobbies—would you say it’s mild and you can mostly push through, or is it clearly affecting your performance and enjoyment most days?
+
+Patient: It’s clearly affecting me most days. I’m more distracted and slower at work, and at home I find it harder to be present with my family or enjoy things I normally like because my mind feels foggy and I’m second‑guessing myself a lot.
+
+Doctor: Over these past two weeks, have you had most days where you feel clearly sad or depressed and enjoy things noticeably less than usual, or is it more that you feel mainly anxious, tense, and preoccupied without a strong depressed mood?
+
+Patient: Over these two weeks it’s been more that I feel anxious, tense, and preoccupied than clearly sad or depressed. I don’t feel completely numb to enjoyment, but the constant worry and on‑edge feeling are what stand out most days.
+
+Doctor: When you’re lying in bed trying to sleep, do you mainly feel wide awake because your mind is racing with worries, or do you feel exhausted and ready to sleep but still can’t, without much active worrying at that moment?
+
+Patient: It’s mostly that my mind is racing with worries when I first lie down, especially about work stuff and a couple of family issues, and I end up replaying conversations or imagining worst‑case scenarios. I do feel physically tired, but my brain just keeps going, and on some nights it takes me a long time to switch it off enough to even start drifting off.
+
+Doctor: During the daytime, even when you’re busy or not actively dealing with work or family issues, do you still feel generally tense and worried about various things most of the time, or does the anxiety mainly flare up only when you’re directly thinking about those specific stressors?
+
+========== OUTPUT [patient] ==========
+Most of the time it’s kind of there in the background, like a constant tension or fog, even if I’m not actively thinking about anything specific. It definitely spikes more when I’m dealing with or reminded of the work and family stuff, but I don’t really get long stretches where I feel completely relaxed.
+=====================================
+
+[call 28] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F51.0", "F41.1"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+Doctor: Are your worries mainly about specific current stressors (like work, finances, health, or relationships), or do you find yourself worrying about many different things most days even when nothing particular is wrong?
+
+Patient: It’s more tied to a few specific things going on right now, mainly work and some family stuff. I do sometimes spiral into worrying about other random things, but it usually starts from those main stressors.
+
+Doctor: During the day over these two weeks, how much have your low mood or feeling ‘off’ and on edge interfered with your ability to function at work or enjoy time with family or hobbies—would you say it’s mild and you can mostly push through, or is it clearly affecting your performance and enjoyment most days?
+
+Patient: It’s clearly affecting me most days. I’m more distracted and slower at work, and at home I find it harder to be present with my family or enjoy things I normally like because my mind feels foggy and I’m second‑guessing myself a lot.
+
+Doctor: Over these past two weeks, have you had most days where you feel clearly sad or depressed and enjoy things noticeably less than usual, or is it more that you feel mainly anxious, tense, and preoccupied without a strong depressed mood?
+
+Patient: Over these two weeks it’s been more that I feel anxious, tense, and preoccupied than clearly sad or depressed. I don’t feel completely numb to enjoyment, but the constant worry and on‑edge feeling are what stand out most days.
+
+Doctor: When you’re lying in bed trying to sleep, do you mainly feel wide awake because your mind is racing with worries, or do you feel exhausted and ready to sleep but still can’t, without much active worrying at that moment?
+
+Patient: It’s mostly that my mind is racing with worries when I first lie down, especially about work stuff and a couple of family issues, and I end up replaying conversations or imagining worst‑case scenarios. I do feel physically tired, but my brain just keeps going, and on some nights it takes me a long time to switch it off enough to even start drifting off.
+
+Doctor: During the daytime, even when you’re busy or not actively dealing with work or family issues, do you still feel generally tense and worried about various things most of the time, or does the anxiety mainly flare up only when you’re directly thinking about those specific stressors?
+
+Patient: Most of the time it’s kind of there in the background, like a constant tension or fog, even if I’m not actively thinking about anything specific. It definitely spikes more when I’m dealing with or reminded of the work and family stuff, but I don’t really get long stretches where I feel completely relaxed.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F51.0", "F41.1"], "note": "Previously the candidates were [F51.0, F41.1]. The patient continues to report prominent insomnia with difficulty initiating and maintaining sleep, along with nonrestorative sleep and daytime fatigue, consistent with an insomnia syndrome. At the same time, they describe pervasive daytime tension and worry that is present most of the time, not only when directly facing specific stressors, which supports an anxiety disorder framework. However, the duration of symptoms is only about two weeks, which is shorter than the typical time criterion for the generalized anxiety diagnosis, so it remains unclear whether this represents a transient stress‑related anxiety state versus a more enduring condition. There is no clear evidence of a primary depressive syndrome or another disorder that would better account for the symptoms, so no new candidates are added and none are removed at this stage. The current candidates therefore remain [F51.0, F41.1]. Further questioning is needed about duration beyond two weeks, prior history of similar symptoms, and functional impact, so is_final remains false.", "is_final": false}
+=====================================
+
+[call 29] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F51.0
+- F41.1
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F51.0", "F41.1"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+Doctor: Are your worries mainly about specific current stressors (like work, finances, health, or relationships), or do you find yourself worrying about many different things most days even when nothing particular is wrong?
+
+Patient: It’s more tied to a few specific things going on right now, mainly work and some family stuff. I do sometimes spiral into worrying about other random things, but it usually starts from those main stressors.
+
+Doctor: During the day over these two weeks, how much have your low mood or feeling ‘off’ and on edge interfered with your ability to function at work or enjoy time with family or hobbies—would you say it’s mild and you can mostly push through, or is it clearly affecting your performance and enjoyment most days?
+
+Patient: It’s clearly affecting me most days. I’m more distracted and slower at work, and at home I find it harder to be present with my family or enjoy things I normally like because my mind feels foggy and I’m second‑guessing myself a lot.
+
+Doctor: Over these past two weeks, have you had most days where you feel clearly sad or depressed and enjoy things noticeably less than usual, or is it more that you feel mainly anxious, tense, and preoccupied without a strong depressed mood?
+
+Patient: Over these two weeks it’s been more that I feel anxious, tense, and preoccupied than clearly sad or depressed. I don’t feel completely numb to enjoyment, but the constant worry and on‑edge feeling are what stand out most days.
+
+Doctor: When you’re lying in bed trying to sleep, do you mainly feel wide awake because your mind is racing with worries, or do you feel exhausted and ready to sleep but still can’t, without much active worrying at that moment?
+
+Patient: It’s mostly that my mind is racing with worries when I first lie down, especially about work stuff and a couple of family issues, and I end up replaying conversations or imagining worst‑case scenarios. I do feel physically tired, but my brain just keeps going, and on some nights it takes me a long time to switch it off enough to even start drifting off.
+
+Doctor: During the daytime, even when you’re busy or not actively dealing with work or family issues, do you still feel generally tense and worried about various things most of the time, or does the anxiety mainly flare up only when you’re directly thinking about those specific stressors?
+
+Patient: Most of the time it’s kind of there in the background, like a constant tension or fog, even if I’m not actively thinking about anything specific. It definitely spikes more when I’m dealing with or reminded of the work and family stuff, but I don’t really get long stretches where I feel completely relaxed.
+
+Patient: Most of the time it’s kind of there in the background, like a constant tension or fog, even if I’m not actively thinking about anything specific. It definitely spikes more when I’m dealing with or reminded of the work and family stuff, but I don’t really get long stretches where I feel completely relaxed.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "duration",
+  "subcategory": "anxiety and worry",
+  "question": "Before these last two weeks of really bad sleep, had you already been feeling this kind of frequent worry and background tension on most days for several months, or is this level of anxiety new and mainly started around the same time as the sleep problems?"
+}
+=====================================
+
+--- turn 08 ---
+
+[call 30] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ acute_stress_symptoms
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  - Reduced Concentration: Unable to pay attention or maintain focus on specific activities like conversation, reading, or watching TV.
+  - Indecisiveness: Extreme difficulty making even minor daily choices (e.g., menu, clothes) and hesitating to make decisions.
+  - Subjective Memory Complaints: Complaining of memory decline, such as forgetting where things were placed, due to reduced focus.
+  - Clouded Thinking: Thinking feels foggy, dazed, or not clear.
+▸ Critical Diagnostic Criteria
+  - Duration: 2 weeks
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 8
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Before these last two weeks of really bad sleep, had you already been feeling this kind of frequent worry and background tension on most days for several months, or is this level of anxiety new and mainly started around the same time as the sleep problems?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["Critical Diagnostic Criteria - Duration: 2 weeks"], "answer_strategy": "Explain clearly when this level of anxiety and tension started in relation to the past two weeks of severe sleep problems. Specify whether you had similar frequent worry and background tension on most days for several months before the last two weeks, or if this intensity of anxiety only began around the same time the sleep got much worse. Answer in a straightforward, time-focused way, giving approximate durations (e.g., 'only these past two weeks' or 'for several months, even before my sleep got this bad')."}
+=====================================
+
+[call 31] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Acute Stress Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ acute_stress_symptoms
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  - Reduced Concentration: Unable to pay attention or maintain focus on specific activities like conversation, reading, or watching TV.
+  - Indecisiveness: Extreme difficulty making even minor daily choices (e.g., menu, clothes) and hesitating to make decisions.
+  - Subjective Memory Complaints: Complaining of memory decline, such as forgetting where things were placed, due to reduced focus.
+  - Clouded Thinking: Thinking feels foggy, dazed, or not clear.
+▸ Critical Diagnostic Criteria
+  - Duration: 2 weeks
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Sleep_Disturbance
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: Critical Diagnostic Criteria - Duration: 2 weeks
+Answer strategy: Explain clearly when this level of anxiety and tension started in relation to the past two weeks of severe sleep problems. Specify whether you had similar frequent worry and background tension on most days for several months before the last two weeks, or if this intensity of anxiety only began around the same time the sleep got much worse. Answer in a straightforward, time-focused way, giving approximate durations (e.g., 'only these past two weeks' or 'for several months, even before my sleep got this bad').
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+Doctor: Are your worries mainly about specific current stressors (like work, finances, health, or relationships), or do you find yourself worrying about many different things most days even when nothing particular is wrong?
+
+Patient: It’s more tied to a few specific things going on right now, mainly work and some family stuff. I do sometimes spiral into worrying about other random things, but it usually starts from those main stressors.
+
+Doctor: During the day over these two weeks, how much have your low mood or feeling ‘off’ and on edge interfered with your ability to function at work or enjoy time with family or hobbies—would you say it’s mild and you can mostly push through, or is it clearly affecting your performance and enjoyment most days?
+
+Patient: It’s clearly affecting me most days. I’m more distracted and slower at work, and at home I find it harder to be present with my family or enjoy things I normally like because my mind feels foggy and I’m second‑guessing myself a lot.
+
+Doctor: Over these past two weeks, have you had most days where you feel clearly sad or depressed and enjoy things noticeably less than usual, or is it more that you feel mainly anxious, tense, and preoccupied without a strong depressed mood?
+
+Patient: Over these two weeks it’s been more that I feel anxious, tense, and preoccupied than clearly sad or depressed. I don’t feel completely numb to enjoyment, but the constant worry and on‑edge feeling are what stand out most days.
+
+Doctor: When you’re lying in bed trying to sleep, do you mainly feel wide awake because your mind is racing with worries, or do you feel exhausted and ready to sleep but still can’t, without much active worrying at that moment?
+
+Patient: It’s mostly that my mind is racing with worries when I first lie down, especially about work stuff and a couple of family issues, and I end up replaying conversations or imagining worst‑case scenarios. I do feel physically tired, but my brain just keeps going, and on some nights it takes me a long time to switch it off enough to even start drifting off.
+
+Doctor: During the daytime, even when you’re busy or not actively dealing with work or family issues, do you still feel generally tense and worried about various things most of the time, or does the anxiety mainly flare up only when you’re directly thinking about those specific stressors?
+
+Patient: Most of the time it’s kind of there in the background, like a constant tension or fog, even if I’m not actively thinking about anything specific. It definitely spikes more when I’m dealing with or reminded of the work and family stuff, but I don’t really get long stretches where I feel completely relaxed.
+
+Doctor: Before these last two weeks of really bad sleep, had you already been feeling this kind of frequent worry and background tension on most days for several months, or is this level of anxiety new and mainly started around the same time as the sleep problems?
+
+========== OUTPUT [patient] ==========
+This level of anxiety really started around the same time as the sleep problems, about two weeks ago. Before that I had normal ups and downs and occasional stress, but not this kind of constant background tension most days.
+=====================================
+
+[call 32] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F51.0", "F41.1"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+Doctor: Are your worries mainly about specific current stressors (like work, finances, health, or relationships), or do you find yourself worrying about many different things most days even when nothing particular is wrong?
+
+Patient: It’s more tied to a few specific things going on right now, mainly work and some family stuff. I do sometimes spiral into worrying about other random things, but it usually starts from those main stressors.
+
+Doctor: During the day over these two weeks, how much have your low mood or feeling ‘off’ and on edge interfered with your ability to function at work or enjoy time with family or hobbies—would you say it’s mild and you can mostly push through, or is it clearly affecting your performance and enjoyment most days?
+
+Patient: It’s clearly affecting me most days. I’m more distracted and slower at work, and at home I find it harder to be present with my family or enjoy things I normally like because my mind feels foggy and I’m second‑guessing myself a lot.
+
+Doctor: Over these past two weeks, have you had most days where you feel clearly sad or depressed and enjoy things noticeably less than usual, or is it more that you feel mainly anxious, tense, and preoccupied without a strong depressed mood?
+
+Patient: Over these two weeks it’s been more that I feel anxious, tense, and preoccupied than clearly sad or depressed. I don’t feel completely numb to enjoyment, but the constant worry and on‑edge feeling are what stand out most days.
+
+Doctor: When you’re lying in bed trying to sleep, do you mainly feel wide awake because your mind is racing with worries, or do you feel exhausted and ready to sleep but still can’t, without much active worrying at that moment?
+
+Patient: It’s mostly that my mind is racing with worries when I first lie down, especially about work stuff and a couple of family issues, and I end up replaying conversations or imagining worst‑case scenarios. I do feel physically tired, but my brain just keeps going, and on some nights it takes me a long time to switch it off enough to even start drifting off.
+
+Doctor: During the daytime, even when you’re busy or not actively dealing with work or family issues, do you still feel generally tense and worried about various things most of the time, or does the anxiety mainly flare up only when you’re directly thinking about those specific stressors?
+
+Patient: Most of the time it’s kind of there in the background, like a constant tension or fog, even if I’m not actively thinking about anything specific. It definitely spikes more when I’m dealing with or reminded of the work and family stuff, but I don’t really get long stretches where I feel completely relaxed.
+
+Doctor: Before these last two weeks of really bad sleep, had you already been feeling this kind of frequent worry and background tension on most days for several months, or is this level of anxiety new and mainly started around the same time as the sleep problems?
+
+Patient: This level of anxiety really started around the same time as the sleep problems, about two weeks ago. Before that I had normal ups and downs and occasional stress, but not this kind of constant background tension most days.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F51.0"], "note": "Previously the candidates were [F51.0, F41.1]. The current information shows: (1) prominent insomnia with difficulty initiating sleep due to ruminative thoughts, early awakenings, and daytime fatigue, present for about two weeks; (2) anxiety and tension that began at the same time as the sleep disturbance, tied to current stressors and not present for months beforehand; (3) no history of at least several months of excessive, generalized anxiety preceding the insomnia, which is required for the generalized anxiety diagnosis under consideration. The anxiety appears temporally and phenomenologically secondary to the acute insomnia and situational stress, rather than a long‑standing pervasive anxiety state. Therefore the primary focus remains an insomnia disorder, and the generalized anxiety diagnosis becomes unlikely at this stage. The current candidate list is thus narrowed to [F51.0]. However, the duration is still short (two weeks), and I would want to clarify further about other possible contributing conditions (e.g., mood, substance use, medical issues) and the evolution of symptoms before making a final diagnosis, so is_final remains false.", "is_final": false}
+=====================================
+
+[call 33] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F51.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F51.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+Doctor: Are your worries mainly about specific current stressors (like work, finances, health, or relationships), or do you find yourself worrying about many different things most days even when nothing particular is wrong?
+
+Patient: It’s more tied to a few specific things going on right now, mainly work and some family stuff. I do sometimes spiral into worrying about other random things, but it usually starts from those main stressors.
+
+Doctor: During the day over these two weeks, how much have your low mood or feeling ‘off’ and on edge interfered with your ability to function at work or enjoy time with family or hobbies—would you say it’s mild and you can mostly push through, or is it clearly affecting your performance and enjoyment most days?
+
+Patient: It’s clearly affecting me most days. I’m more distracted and slower at work, and at home I find it harder to be present with my family or enjoy things I normally like because my mind feels foggy and I’m second‑guessing myself a lot.
+
+Doctor: Over these past two weeks, have you had most days where you feel clearly sad or depressed and enjoy things noticeably less than usual, or is it more that you feel mainly anxious, tense, and preoccupied without a strong depressed mood?
+
+Patient: Over these two weeks it’s been more that I feel anxious, tense, and preoccupied than clearly sad or depressed. I don’t feel completely numb to enjoyment, but the constant worry and on‑edge feeling are what stand out most days.
+
+Doctor: When you’re lying in bed trying to sleep, do you mainly feel wide awake because your mind is racing with worries, or do you feel exhausted and ready to sleep but still can’t, without much active worrying at that moment?
+
+Patient: It’s mostly that my mind is racing with worries when I first lie down, especially about work stuff and a couple of family issues, and I end up replaying conversations or imagining worst‑case scenarios. I do feel physically tired, but my brain just keeps going, and on some nights it takes me a long time to switch it off enough to even start drifting off.
+
+Doctor: During the daytime, even when you’re busy or not actively dealing with work or family issues, do you still feel generally tense and worried about various things most of the time, or does the anxiety mainly flare up only when you’re directly thinking about those specific stressors?
+
+Patient: Most of the time it’s kind of there in the background, like a constant tension or fog, even if I’m not actively thinking about anything specific. It definitely spikes more when I’m dealing with or reminded of the work and family stuff, but I don’t really get long stretches where I feel completely relaxed.
+
+Doctor: Before these last two weeks of really bad sleep, had you already been feeling this kind of frequent worry and background tension on most days for several months, or is this level of anxiety new and mainly started around the same time as the sleep problems?
+
+Patient: This level of anxiety really started around the same time as the sleep problems, about two weeks ago. Before that I had normal ups and downs and occasional stress, but not this kind of constant background tension most days.
+
+Patient: This level of anxiety really started around the same time as the sleep problems, about two weeks ago. Before that I had normal ups and downs and occasional stress, but not this kind of constant background tension most days.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "symptom presence",
+  "subcategory": "sleep",
+  "question": "On nights when your sleep is better, do you still feel this same level of daytime anxiety and tension, or do those feelings noticeably ease up when you’ve slept more soundly?"
+}
+=====================================
+
+--- turn 09 ---
+
+[call 34] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ acute_stress_symptoms
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  - Reduced Concentration: Unable to pay attention or maintain focus on specific activities like conversation, reading, or watching TV.
+  - Indecisiveness: Extreme difficulty making even minor daily choices (e.g., menu, clothes) and hesitating to make decisions.
+  - Subjective Memory Complaints: Complaining of memory decline, such as forgetting where things were placed, due to reduced focus.
+  - Clouded Thinking: Thinking feels foggy, dazed, or not clear.
+▸ Critical Diagnostic Criteria
+  - Duration: 2 weeks
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 9
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+On nights when your sleep is better, do you still feel this same level of daytime anxiety and tension, or do those feelings noticeably ease up when you’ve slept more soundly?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["acute_stress_symptoms -> Non-Restorative Sleep", "acute_stress_symptoms -> Hypersomnia", "acute_stress_symptoms -> Initial Insomnia", "acute_stress_symptoms -> Middle Insomnia", "acute_stress_symptoms -> Early Morning Awakening"], "answer_strategy": "Answer by comparing days after relatively good sleep versus days after poor sleep. Briefly describe whether your daytime anxiety, tension, and stress symptoms clearly improve when you sleep more soundly, or if they stay about the same regardless of sleep quality. Be concrete: you can say something like, 'On nights I sleep better, I feel X the next day; on bad nights, I feel Y,' and note if the difference is mild, moderate, or none."}
+=====================================
+
+[call 35] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Acute Stress Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ acute_stress_symptoms
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  - Reduced Concentration: Unable to pay attention or maintain focus on specific activities like conversation, reading, or watching TV.
+  - Indecisiveness: Extreme difficulty making even minor daily choices (e.g., menu, clothes) and hesitating to make decisions.
+  - Subjective Memory Complaints: Complaining of memory decline, such as forgetting where things were placed, due to reduced focus.
+  - Clouded Thinking: Thinking feels foggy, dazed, or not clear.
+▸ Critical Diagnostic Criteria
+  - Duration: 2 weeks
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Sleep_Disturbance
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: acute_stress_symptoms -> Non-Restorative Sleep, acute_stress_symptoms -> Hypersomnia, acute_stress_symptoms -> Initial Insomnia, acute_stress_symptoms -> Middle Insomnia, acute_stress_symptoms -> Early Morning Awakening
+Answer strategy: Answer by comparing days after relatively good sleep versus days after poor sleep. Briefly describe whether your daytime anxiety, tension, and stress symptoms clearly improve when you sleep more soundly, or if they stay about the same regardless of sleep quality. Be concrete: you can say something like, 'On nights I sleep better, I feel X the next day; on bad nights, I feel Y,' and note if the difference is mild, moderate, or none.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+Doctor: Are your worries mainly about specific current stressors (like work, finances, health, or relationships), or do you find yourself worrying about many different things most days even when nothing particular is wrong?
+
+Patient: It’s more tied to a few specific things going on right now, mainly work and some family stuff. I do sometimes spiral into worrying about other random things, but it usually starts from those main stressors.
+
+Doctor: During the day over these two weeks, how much have your low mood or feeling ‘off’ and on edge interfered with your ability to function at work or enjoy time with family or hobbies—would you say it’s mild and you can mostly push through, or is it clearly affecting your performance and enjoyment most days?
+
+Patient: It’s clearly affecting me most days. I’m more distracted and slower at work, and at home I find it harder to be present with my family or enjoy things I normally like because my mind feels foggy and I’m second‑guessing myself a lot.
+
+Doctor: Over these past two weeks, have you had most days where you feel clearly sad or depressed and enjoy things noticeably less than usual, or is it more that you feel mainly anxious, tense, and preoccupied without a strong depressed mood?
+
+Patient: Over these two weeks it’s been more that I feel anxious, tense, and preoccupied than clearly sad or depressed. I don’t feel completely numb to enjoyment, but the constant worry and on‑edge feeling are what stand out most days.
+
+Doctor: When you’re lying in bed trying to sleep, do you mainly feel wide awake because your mind is racing with worries, or do you feel exhausted and ready to sleep but still can’t, without much active worrying at that moment?
+
+Patient: It’s mostly that my mind is racing with worries when I first lie down, especially about work stuff and a couple of family issues, and I end up replaying conversations or imagining worst‑case scenarios. I do feel physically tired, but my brain just keeps going, and on some nights it takes me a long time to switch it off enough to even start drifting off.
+
+Doctor: During the daytime, even when you’re busy or not actively dealing with work or family issues, do you still feel generally tense and worried about various things most of the time, or does the anxiety mainly flare up only when you’re directly thinking about those specific stressors?
+
+Patient: Most of the time it’s kind of there in the background, like a constant tension or fog, even if I’m not actively thinking about anything specific. It definitely spikes more when I’m dealing with or reminded of the work and family stuff, but I don’t really get long stretches where I feel completely relaxed.
+
+Doctor: Before these last two weeks of really bad sleep, had you already been feeling this kind of frequent worry and background tension on most days for several months, or is this level of anxiety new and mainly started around the same time as the sleep problems?
+
+Patient: This level of anxiety really started around the same time as the sleep problems, about two weeks ago. Before that I had normal ups and downs and occasional stress, but not this kind of constant background tension most days.
+
+Doctor: On nights when your sleep is better, do you still feel this same level of daytime anxiety and tension, or do those feelings noticeably ease up when you’ve slept more soundly?
+
+========== OUTPUT [patient] ==========
+On nights I sleep a bit better, I do feel a little less on edge and can function a bit more normally the next day, but the worry and tension are still there in the background. After really bad nights, the anxiety and fogginess feel noticeably worse and I’m much more tense and irritable, so the difference is pretty clear.
+=====================================
+
+[call 36] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F51.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+Doctor: Are your worries mainly about specific current stressors (like work, finances, health, or relationships), or do you find yourself worrying about many different things most days even when nothing particular is wrong?
+
+Patient: It’s more tied to a few specific things going on right now, mainly work and some family stuff. I do sometimes spiral into worrying about other random things, but it usually starts from those main stressors.
+
+Doctor: During the day over these two weeks, how much have your low mood or feeling ‘off’ and on edge interfered with your ability to function at work or enjoy time with family or hobbies—would you say it’s mild and you can mostly push through, or is it clearly affecting your performance and enjoyment most days?
+
+Patient: It’s clearly affecting me most days. I’m more distracted and slower at work, and at home I find it harder to be present with my family or enjoy things I normally like because my mind feels foggy and I’m second‑guessing myself a lot.
+
+Doctor: Over these past two weeks, have you had most days where you feel clearly sad or depressed and enjoy things noticeably less than usual, or is it more that you feel mainly anxious, tense, and preoccupied without a strong depressed mood?
+
+Patient: Over these two weeks it’s been more that I feel anxious, tense, and preoccupied than clearly sad or depressed. I don’t feel completely numb to enjoyment, but the constant worry and on‑edge feeling are what stand out most days.
+
+Doctor: When you’re lying in bed trying to sleep, do you mainly feel wide awake because your mind is racing with worries, or do you feel exhausted and ready to sleep but still can’t, without much active worrying at that moment?
+
+Patient: It’s mostly that my mind is racing with worries when I first lie down, especially about work stuff and a couple of family issues, and I end up replaying conversations or imagining worst‑case scenarios. I do feel physically tired, but my brain just keeps going, and on some nights it takes me a long time to switch it off enough to even start drifting off.
+
+Doctor: During the daytime, even when you’re busy or not actively dealing with work or family issues, do you still feel generally tense and worried about various things most of the time, or does the anxiety mainly flare up only when you’re directly thinking about those specific stressors?
+
+Patient: Most of the time it’s kind of there in the background, like a constant tension or fog, even if I’m not actively thinking about anything specific. It definitely spikes more when I’m dealing with or reminded of the work and family stuff, but I don’t really get long stretches where I feel completely relaxed.
+
+Doctor: Before these last two weeks of really bad sleep, had you already been feeling this kind of frequent worry and background tension on most days for several months, or is this level of anxiety new and mainly started around the same time as the sleep problems?
+
+Patient: This level of anxiety really started around the same time as the sleep problems, about two weeks ago. Before that I had normal ups and downs and occasional stress, but not this kind of constant background tension most days.
+
+Doctor: On nights when your sleep is better, do you still feel this same level of daytime anxiety and tension, or do those feelings noticeably ease up when you’ve slept more soundly?
+
+Patient: On nights I sleep a bit better, I do feel a little less on edge and can function a bit more normally the next day, but the worry and tension are still there in the background. After really bad nights, the anxiety and fogginess feel noticeably worse and I’m much more tense and irritable, so the difference is pretty clear.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F51.0", "F41.9"], "note": "Previously the only candidate was F51.0, based on prominent insomnia. In this segment, the patient describes two weeks of significant sleep disturbance plus daytime anxiety and tension clearly linked to current stressors, with functional impairment at work and home. The anxiety began at the same time as the insomnia, has not been present for months beforehand, and is more prominent than low mood, which makes a chronic primary anxiety syndrome (like generalized anxiety of at least 6 months) less likely. However, the anxiety is present most of the day, not just in brief spikes, and persists even on better‑sleep nights, suggesting more than purely situational worry from insomnia alone. Because of this, an anxiety‑related diagnosis becomes relevant, but the duration and pattern do not yet fit a specific anxiety category cleanly, so I add a nonspecific anxiety code (F41.9) to the differential. F51.0 remains because insomnia is still a central complaint and could be primary or co‑occurring. No other mood or anxiety diagnoses are added at this stage because there is no clear, sustained depressed mood or anhedonia, and the time course is brief. Further questioning is needed to clarify whether insomnia is primary versus secondary to an evolving anxiety disorder, so the list now includes F51.0 and F41.9 and is_final remains false.", "is_final": false}
+=====================================
+
+[call 37] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F51.0
+- F41.9
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F51.0", "F41.9"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+Doctor: Are your worries mainly about specific current stressors (like work, finances, health, or relationships), or do you find yourself worrying about many different things most days even when nothing particular is wrong?
+
+Patient: It’s more tied to a few specific things going on right now, mainly work and some family stuff. I do sometimes spiral into worrying about other random things, but it usually starts from those main stressors.
+
+Doctor: During the day over these two weeks, how much have your low mood or feeling ‘off’ and on edge interfered with your ability to function at work or enjoy time with family or hobbies—would you say it’s mild and you can mostly push through, or is it clearly affecting your performance and enjoyment most days?
+
+Patient: It’s clearly affecting me most days. I’m more distracted and slower at work, and at home I find it harder to be present with my family or enjoy things I normally like because my mind feels foggy and I’m second‑guessing myself a lot.
+
+Doctor: Over these past two weeks, have you had most days where you feel clearly sad or depressed and enjoy things noticeably less than usual, or is it more that you feel mainly anxious, tense, and preoccupied without a strong depressed mood?
+
+Patient: Over these two weeks it’s been more that I feel anxious, tense, and preoccupied than clearly sad or depressed. I don’t feel completely numb to enjoyment, but the constant worry and on‑edge feeling are what stand out most days.
+
+Doctor: When you’re lying in bed trying to sleep, do you mainly feel wide awake because your mind is racing with worries, or do you feel exhausted and ready to sleep but still can’t, without much active worrying at that moment?
+
+Patient: It’s mostly that my mind is racing with worries when I first lie down, especially about work stuff and a couple of family issues, and I end up replaying conversations or imagining worst‑case scenarios. I do feel physically tired, but my brain just keeps going, and on some nights it takes me a long time to switch it off enough to even start drifting off.
+
+Doctor: During the daytime, even when you’re busy or not actively dealing with work or family issues, do you still feel generally tense and worried about various things most of the time, or does the anxiety mainly flare up only when you’re directly thinking about those specific stressors?
+
+Patient: Most of the time it’s kind of there in the background, like a constant tension or fog, even if I’m not actively thinking about anything specific. It definitely spikes more when I’m dealing with or reminded of the work and family stuff, but I don’t really get long stretches where I feel completely relaxed.
+
+Doctor: Before these last two weeks of really bad sleep, had you already been feeling this kind of frequent worry and background tension on most days for several months, or is this level of anxiety new and mainly started around the same time as the sleep problems?
+
+Patient: This level of anxiety really started around the same time as the sleep problems, about two weeks ago. Before that I had normal ups and downs and occasional stress, but not this kind of constant background tension most days.
+
+Doctor: On nights when your sleep is better, do you still feel this same level of daytime anxiety and tension, or do those feelings noticeably ease up when you’ve slept more soundly?
+
+Patient: On nights I sleep a bit better, I do feel a little less on edge and can function a bit more normally the next day, but the worry and tension are still there in the background. After really bad nights, the anxiety and fogginess feel noticeably worse and I’m much more tense and irritable, so the difference is pretty clear.
+
+Patient: On nights I sleep a bit better, I do feel a little less on edge and can function a bit more normally the next day, but the worry and tension are still there in the background. After really bad nights, the anxiety and fogginess feel noticeably worse and I’m much more tense and irritable, so the difference is pretty clear.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "sleep vs. daytime anxiety primacy",
+  "question": "If your sleep suddenly went back to normal and you were getting restful nights again, do you think you’d still be significantly bothered by this level of daytime worry and tension, or would most of it likely fade away once the sleep is fixed?"
+}
+=====================================
+
+--- turn 10 ---
+
+[call 38] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ acute_stress_symptoms
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  - Reduced Concentration: Unable to pay attention or maintain focus on specific activities like conversation, reading, or watching TV.
+  - Indecisiveness: Extreme difficulty making even minor daily choices (e.g., menu, clothes) and hesitating to make decisions.
+  - Subjective Memory Complaints: Complaining of memory decline, such as forgetting where things were placed, due to reduced focus.
+  - Clouded Thinking: Thinking feels foggy, dazed, or not clear.
+▸ Critical Diagnostic Criteria
+  - Duration: 2 weeks
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 10
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+If your sleep suddenly went back to normal and you were getting restful nights again, do you think you’d still be significantly bothered by this level of daytime worry and tension, or would most of it likely fade away once the sleep is fixed?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["acute_stress_symptoms - Initial Insomnia", "acute_stress_symptoms - Middle Insomnia", "acute_stress_symptoms - Early Morning Awakening", "acute_stress_symptoms - Hypersomnia", "acute_stress_symptoms - Nightmare Disorder", "acute_stress_symptoms - Non-Restorative Sleep", "acute_stress_symptoms - Reduced Concentration", "acute_stress_symptoms - Clouded Thinking"], "answer_strategy": "Answer by clearly linking how much your daytime worry and tension feel caused by your poor sleep versus how much they feel like they have a life of their own. For example, you can say whether on days you sleep a bit better your worry/tension noticeably decrease, or if they stay about the same regardless of sleep. Be concrete and honest: would fixing sleep alone probably make you feel mostly okay in the daytime, or do you sense that the anxiety and tension would still be a big problem even with good, restful sleep? Keep the tone straightforward and reflective, describing your own experience rather than guessing what the doctor wants to hear."}
+=====================================
+
+[call 39] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Acute Stress Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ acute_stress_symptoms
+  - Initial Insomnia: Difficulty falling asleep and taking a long time to do so.
+  - Middle Insomnia: Waking up frequently during sleep or having difficulty falling back asleep.
+  - Early Morning Awakening: Waking up too early and being unable to fall back asleep.
+  - Hypersomnia: Sleeping for long periods at night or excessive sleep during the day.
+  - Nightmare Disorder: Sleep disturbance caused by repeated and distressing dreams.
+  - Non-Restorative Sleep: Feeling unrefreshed despite having slept enough.
+  - Reduced Concentration: Unable to pay attention or maintain focus on specific activities like conversation, reading, or watching TV.
+  - Indecisiveness: Extreme difficulty making even minor daily choices (e.g., menu, clothes) and hesitating to make decisions.
+  - Subjective Memory Complaints: Complaining of memory decline, such as forgetting where things were placed, due to reduced focus.
+  - Clouded Thinking: Thinking feels foggy, dazed, or not clear.
+▸ Critical Diagnostic Criteria
+  - Duration: 2 weeks
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Sleep_Disturbance
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: acute_stress_symptoms - Initial Insomnia, acute_stress_symptoms - Middle Insomnia, acute_stress_symptoms - Early Morning Awakening, acute_stress_symptoms - Hypersomnia, acute_stress_symptoms - Nightmare Disorder, acute_stress_symptoms - Non-Restorative Sleep, acute_stress_symptoms - Reduced Concentration, acute_stress_symptoms - Clouded Thinking
+Answer strategy: Answer by clearly linking how much your daytime worry and tension feel caused by your poor sleep versus how much they feel like they have a life of their own. For example, you can say whether on days you sleep a bit better your worry/tension noticeably decrease, or if they stay about the same regardless of sleep. Be concrete and honest: would fixing sleep alone probably make you feel mostly okay in the daytime, or do you sense that the anxiety and tension would still be a big problem even with good, restful sleep? Keep the tone straightforward and reflective, describing your own experience rather than guessing what the doctor wants to hear.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+Doctor: Are your worries mainly about specific current stressors (like work, finances, health, or relationships), or do you find yourself worrying about many different things most days even when nothing particular is wrong?
+
+Patient: It’s more tied to a few specific things going on right now, mainly work and some family stuff. I do sometimes spiral into worrying about other random things, but it usually starts from those main stressors.
+
+Doctor: During the day over these two weeks, how much have your low mood or feeling ‘off’ and on edge interfered with your ability to function at work or enjoy time with family or hobbies—would you say it’s mild and you can mostly push through, or is it clearly affecting your performance and enjoyment most days?
+
+Patient: It’s clearly affecting me most days. I’m more distracted and slower at work, and at home I find it harder to be present with my family or enjoy things I normally like because my mind feels foggy and I’m second‑guessing myself a lot.
+
+Doctor: Over these past two weeks, have you had most days where you feel clearly sad or depressed and enjoy things noticeably less than usual, or is it more that you feel mainly anxious, tense, and preoccupied without a strong depressed mood?
+
+Patient: Over these two weeks it’s been more that I feel anxious, tense, and preoccupied than clearly sad or depressed. I don’t feel completely numb to enjoyment, but the constant worry and on‑edge feeling are what stand out most days.
+
+Doctor: When you’re lying in bed trying to sleep, do you mainly feel wide awake because your mind is racing with worries, or do you feel exhausted and ready to sleep but still can’t, without much active worrying at that moment?
+
+Patient: It’s mostly that my mind is racing with worries when I first lie down, especially about work stuff and a couple of family issues, and I end up replaying conversations or imagining worst‑case scenarios. I do feel physically tired, but my brain just keeps going, and on some nights it takes me a long time to switch it off enough to even start drifting off.
+
+Doctor: During the daytime, even when you’re busy or not actively dealing with work or family issues, do you still feel generally tense and worried about various things most of the time, or does the anxiety mainly flare up only when you’re directly thinking about those specific stressors?
+
+Patient: Most of the time it’s kind of there in the background, like a constant tension or fog, even if I’m not actively thinking about anything specific. It definitely spikes more when I’m dealing with or reminded of the work and family stuff, but I don’t really get long stretches where I feel completely relaxed.
+
+Doctor: Before these last two weeks of really bad sleep, had you already been feeling this kind of frequent worry and background tension on most days for several months, or is this level of anxiety new and mainly started around the same time as the sleep problems?
+
+Patient: This level of anxiety really started around the same time as the sleep problems, about two weeks ago. Before that I had normal ups and downs and occasional stress, but not this kind of constant background tension most days.
+
+Doctor: On nights when your sleep is better, do you still feel this same level of daytime anxiety and tension, or do those feelings noticeably ease up when you’ve slept more soundly?
+
+Patient: On nights I sleep a bit better, I do feel a little less on edge and can function a bit more normally the next day, but the worry and tension are still there in the background. After really bad nights, the anxiety and fogginess feel noticeably worse and I’m much more tense and irritable, so the difference is pretty clear.
+
+Doctor: If your sleep suddenly went back to normal and you were getting restful nights again, do you think you’d still be significantly bothered by this level of daytime worry and tension, or would most of it likely fade away once the sleep is fixed?
+
+========== OUTPUT [patient] ==========
+I think fixing my sleep would probably take the edge off a lot and I’d feel more like myself, but I don’t think it would make everything disappear. The worry and tension feel like they have a life of their own now, so even with good sleep I’d probably still be dealing with them, just maybe less intensely.
+=====================================
+
+[call 40] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F51.0", "F41.9"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+Doctor: Are your worries mainly about specific current stressors (like work, finances, health, or relationships), or do you find yourself worrying about many different things most days even when nothing particular is wrong?
+
+Patient: It’s more tied to a few specific things going on right now, mainly work and some family stuff. I do sometimes spiral into worrying about other random things, but it usually starts from those main stressors.
+
+Doctor: During the day over these two weeks, how much have your low mood or feeling ‘off’ and on edge interfered with your ability to function at work or enjoy time with family or hobbies—would you say it’s mild and you can mostly push through, or is it clearly affecting your performance and enjoyment most days?
+
+Patient: It’s clearly affecting me most days. I’m more distracted and slower at work, and at home I find it harder to be present with my family or enjoy things I normally like because my mind feels foggy and I’m second‑guessing myself a lot.
+
+Doctor: Over these past two weeks, have you had most days where you feel clearly sad or depressed and enjoy things noticeably less than usual, or is it more that you feel mainly anxious, tense, and preoccupied without a strong depressed mood?
+
+Patient: Over these two weeks it’s been more that I feel anxious, tense, and preoccupied than clearly sad or depressed. I don’t feel completely numb to enjoyment, but the constant worry and on‑edge feeling are what stand out most days.
+
+Doctor: When you’re lying in bed trying to sleep, do you mainly feel wide awake because your mind is racing with worries, or do you feel exhausted and ready to sleep but still can’t, without much active worrying at that moment?
+
+Patient: It’s mostly that my mind is racing with worries when I first lie down, especially about work stuff and a couple of family issues, and I end up replaying conversations or imagining worst‑case scenarios. I do feel physically tired, but my brain just keeps going, and on some nights it takes me a long time to switch it off enough to even start drifting off.
+
+Doctor: During the daytime, even when you’re busy or not actively dealing with work or family issues, do you still feel generally tense and worried about various things most of the time, or does the anxiety mainly flare up only when you’re directly thinking about those specific stressors?
+
+Patient: Most of the time it’s kind of there in the background, like a constant tension or fog, even if I’m not actively thinking about anything specific. It definitely spikes more when I’m dealing with or reminded of the work and family stuff, but I don’t really get long stretches where I feel completely relaxed.
+
+Doctor: Before these last two weeks of really bad sleep, had you already been feeling this kind of frequent worry and background tension on most days for several months, or is this level of anxiety new and mainly started around the same time as the sleep problems?
+
+Patient: This level of anxiety really started around the same time as the sleep problems, about two weeks ago. Before that I had normal ups and downs and occasional stress, but not this kind of constant background tension most days.
+
+Doctor: On nights when your sleep is better, do you still feel this same level of daytime anxiety and tension, or do those feelings noticeably ease up when you’ve slept more soundly?
+
+Patient: On nights I sleep a bit better, I do feel a little less on edge and can function a bit more normally the next day, but the worry and tension are still there in the background. After really bad nights, the anxiety and fogginess feel noticeably worse and I’m much more tense and irritable, so the difference is pretty clear.
+
+Doctor: If your sleep suddenly went back to normal and you were getting restful nights again, do you think you’d still be significantly bothered by this level of daytime worry and tension, or would most of it likely fade away once the sleep is fixed?
+
+Patient: I think fixing my sleep would probably take the edge off a lot and I’d feel more like myself, but I don’t think it would make everything disappear. The worry and tension feel like they have a life of their own now, so even with good sleep I’d probably still be dealing with them, just maybe less intensely.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F51.0", "F41.9"], "note": "Previously the candidates were [F51.0, F41.9]. The new information clarifies that the anxiety and background tension began at the same time as the insomnia (about two weeks ago), and that while poor sleep clearly exacerbates the daytime anxiety, the worry and tension persist even on better‑sleep days and would likely not fully resolve with sleep normalization. This pattern supports the possibility of a primary insomnia disorder with a comorbid anxiety condition, but the duration and breadth of worry are still too short and somewhat situational to confidently characterize a specific anxiety syndrome. There is no clear shift toward a primary mood disorder or another diagnostic category, and no evidence has emerged that would rule out either an insomnia disorder or an anxiety disorder NOS. Thus the current differential remains [F51.0, F41.9] and more information (e.g., about other anxiety symptoms, functional impact, and any physical causes) is still needed before making a final diagnostic call.", "is_final": false}
+=====================================
+
+[call 41] doctor-final-diagnosis
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the full interview transcript and the differential diagnosis candidates, write the final diagnosis report.
+
+Both the "diagnosis" and "candidates" MUST be ICD-10 codes.
+
+[Field Instructions]
+- diagnosis: The single diagnosis code of ICD-10.
+- candidates: Top 2–3 differential candidates of ICD-10 codes considered until the end.
+- reason: Brief diagnostic rationale.
+- diagnostic_checklist: Structured evidence summary organized by diagnostic criterion type.
+  List only symptom groups that are relevant to your diagnosis, with the symptoms the patient actually confirmed.
+
+Output Format (JSON only, no other text):
+{
+  "diagnosis": "Final Diagnosis ICD-10 code",
+  "candidates": ["Disease Code1", "Disease Code2"],
+  "reason": "Brief diagnostic rationale.",
+  "diagnostic_checklist": {
+    "symptom_groups": [
+      {
+        "group": "clinical group name (e.g., inattention, manic_episode, psychotic_symptoms)",
+        "confirmed_symptoms": ["natural language description of each confirmed symptom in this group"],
+        "count": <integer>
+      }
+    ],
+    "duration_verified": "Description of how the duration criterion was established (e.g., 'symptoms present for over 6 months since childhood'), or null if not assessed.",
+    "functional_impairment": <true if functional impairment was confirmed, false if denied, null if not assessed>,
+    "traumatic_stressor": <true if a qualifying traumatic stressor was confirmed, null if not applicable or not assessed>,
+    "psychosocial_stressor": <true if a qualifying psychosocial stressor was confirmed, null if not applicable or not assessed>,
+    "additional_requirements": ["Each additional criterion that was explicitly verified during the interview (e.g., 'Onset prior to age 12 confirmed')"]
+  }
+}
+
+[2. USER]
+Candidate Diseases: 
+["F51.0", "F41.9"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you. What brings you in today, and what would you like help with?
+
+Patient: Hi, thanks for seeing me. For about the last two weeks my sleep has been really messed up—I either can’t fall asleep, keep waking up, or wake up way too early and then feel exhausted all day. I’d like help figuring out what’s going on and how to sleep properly again.
+
+Doctor: Aside from the sleep problems, have you been feeling persistently down or losing interest in things you usually enjoy, or are you more bothered by ongoing worry and tension about different things during the day?
+
+Patient: I’m not sure how to describe it exactly—I wouldn’t say I’ve completely lost interest in things, but I do feel kind of off and a bit on edge. There’s definitely more worry and tension than usual, and it sort of hangs around in the background most of the day.
+
+Doctor: Are your worries mainly about specific current stressors (like work, finances, health, or relationships), or do you find yourself worrying about many different things most days even when nothing particular is wrong?
+
+Patient: It’s more tied to a few specific things going on right now, mainly work and some family stuff. I do sometimes spiral into worrying about other random things, but it usually starts from those main stressors.
+
+Doctor: During the day over these two weeks, how much have your low mood or feeling ‘off’ and on edge interfered with your ability to function at work or enjoy time with family or hobbies—would you say it’s mild and you can mostly push through, or is it clearly affecting your performance and enjoyment most days?
+
+Patient: It’s clearly affecting me most days. I’m more distracted and slower at work, and at home I find it harder to be present with my family or enjoy things I normally like because my mind feels foggy and I’m second‑guessing myself a lot.
+
+Doctor: Over these past two weeks, have you had most days where you feel clearly sad or depressed and enjoy things noticeably less than usual, or is it more that you feel mainly anxious, tense, and preoccupied without a strong depressed mood?
+
+Patient: Over these two weeks it’s been more that I feel anxious, tense, and preoccupied than clearly sad or depressed. I don’t feel completely numb to enjoyment, but the constant worry and on‑edge feeling are what stand out most days.
+
+Doctor: When you’re lying in bed trying to sleep, do you mainly feel wide awake because your mind is racing with worries, or do you feel exhausted and ready to sleep but still can’t, without much active worrying at that moment?
+
+Patient: It’s mostly that my mind is racing with worries when I first lie down, especially about work stuff and a couple of family issues, and I end up replaying conversations or imagining worst‑case scenarios. I do feel physically tired, but my brain just keeps going, and on some nights it takes me a long time to switch it off enough to even start drifting off.
+
+Doctor: During the daytime, even when you’re busy or not actively dealing with work or family issues, do you still feel generally tense and worried about various things most of the time, or does the anxiety mainly flare up only when you’re directly thinking about those specific stressors?
+
+Patient: Most of the time it’s kind of there in the background, like a constant tension or fog, even if I’m not actively thinking about anything specific. It definitely spikes more when I’m dealing with or reminded of the work and family stuff, but I don’t really get long stretches where I feel completely relaxed.
+
+Doctor: Before these last two weeks of really bad sleep, had you already been feeling this kind of frequent worry and background tension on most days for several months, or is this level of anxiety new and mainly started around the same time as the sleep problems?
+
+Patient: This level of anxiety really started around the same time as the sleep problems, about two weeks ago. Before that I had normal ups and downs and occasional stress, but not this kind of constant background tension most days.
+
+Doctor: On nights when your sleep is better, do you still feel this same level of daytime anxiety and tension, or do those feelings noticeably ease up when you’ve slept more soundly?
+
+Patient: On nights I sleep a bit better, I do feel a little less on edge and can function a bit more normally the next day, but the worry and tension are still there in the background. After really bad nights, the anxiety and fogginess feel noticeably worse and I’m much more tense and irritable, so the difference is pretty clear.
+
+Doctor: If your sleep suddenly went back to normal and you were getting restful nights again, do you think you’d still be significantly bothered by this level of daytime worry and tension, or would most of it likely fade away once the sleep is fixed?
+
+Patient: I think fixing my sleep would probably take the edge off a lot and I’d feel more like myself, but I don’t think it would make everything disappear. The worry and tension feel like they have a life of their own now, so even with good sleep I’d probably still be dealing with them, just maybe less intensely.
+
+========== OUTPUT [doctor] ==========
+{
+  "diagnosis": "F51.0",
+  "candidates": ["F41.9"],
+  "reason": "The primary, acute complaint is a 2‑week history of significant insomnia with difficulty initiating sleep, frequent awakenings, and early morning awakening, causing clear daytime fatigue, cognitive fog, and impaired functioning at work and home. The insomnia is closely intertwined with situational worries (work and family), but the anxiety symptoms began concurrently with the sleep disturbance and have been present for only about two weeks, which is too brief and too clearly temporally linked to the insomnia and current stressors to diagnose a separate anxiety disorder. The clinical picture fits non‑organic insomnia (F51.0) with associated situational anxiety, rather than an established primary anxiety disorder (F41.9).",
+  "diagnostic_checklist": {
+    "symptom_groups": [
+      {
+        "group": "insomnia",
+        "confirmed_symptoms": [
+          "Difficulty initiating sleep due to racing, worry-filled thoughts at bedtime",
+          "Frequent awakenings during the night",
+          "Early morning awakening earlier than desired",
+          "Non-restorative sleep leading to feeling exhausted and foggy during the day",
+          "Sleep disturbance occurring most nights over the last two weeks"
+        ],
+        "count": 5
+      },
+      {
+        "group": "daytime_consequences_of_insomnia",
+        "confirmed_symptoms": [
+          "Daytime fatigue and mental fogginess",
+          "Impaired concentration and being more distracted at work",
+          "Slower performance at work compared with usual",
+          "Reduced ability to be present and enjoy time with family and usual activities",
+          "Increased daytime tension, irritability, and feeling on edge after poor nights"
+        ],
+        "count": 5
+      },
+      {
+        "group": "anxiety_symptoms_associated_with_insomnia",
+        "confirmed_symptoms": [
+          "Persistent background tension and feeling on edge most days during the two-week period",
+          "Excessive worry focused on current work and family stressors, sometimes generalizing to other topics",
+          "Racing thoughts and replaying conversations or imagining worst-case scenarios at bedtime",
+          "Anxiety intensity fluctuates with sleep quality, worsening after poor nights"
+        ],
+        "count": 4
+      }
+    ],
+    "duration_verified": "Insomnia and associated anxiety symptoms have been present for about two weeks, with no history of similar chronic anxiety or sleep disturbance prior to this episode.",
+    "functional_impairment": true,
+    "traumatic_stressor": null,
+    "psychosocial_stressor": true,
+    "additional_requirements": [
+      "Insomnia not better explained by a chronic preexisting anxiety disorder, as this level of anxiety began with the onset of sleep disturbance",
+      "Daytime consequences (fatigue, cognitive impairment, reduced enjoyment) clearly linked to sleep disturbance"
+    ]
+  }
+}
+=====================================
+

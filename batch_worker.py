@@ -32,6 +32,9 @@ def run_disorder(
     logs_dir: str,
     results_dir: str,
     progress_queue: Any = None,
+    use_knowledge_graph: bool = True,
+    profile_paths: list[str] | None = None,
+    runs_per_profile: int = 1,
 ) -> dict[str, Any]:
     """단일 disorder에 대해 runs_per_disorder회 시뮬레이션을 순차 실행하고
     app.py의 _batch_state["results"][code]와 동일한 형태의 dict를 반환한다."""
@@ -42,6 +45,21 @@ def run_disorder(
     logs_path = Path(logs_dir)
     results_path = Path(results_dir)
 
+    jobs: list[tuple[str, Path | None, int | None]] = []
+    if use_knowledge_graph:
+        jobs = [
+            (f"{code}_{run_idx}", None, run_idx)
+            for run_idx in range(1, runs_per_disorder + 1)
+        ]
+    else:
+        repeat_count = max(1, int(runs_per_profile))
+        for raw_path in sorted(profile_paths or []):
+            profile_path = Path(raw_path)
+            for repeat_idx in range(1, repeat_count + 1):
+                artifact_stem = f"{profile_path.stem}_R{repeat_idx:03d}"
+                jobs.append((artifact_stem, profile_path, repeat_idx))
+
+    total_runs = len(jobs)
     sd_cache: list = []
 
     def _ensure_sd() -> tuple:
@@ -70,17 +88,18 @@ def run_disorder(
         if progress_queue is None:
             return
         try:
-            progress_queue.put({"code": code, "run": run_idx, "total_runs": runs_per_disorder})
+            progress_queue.put({"code": code, "run": run_idx, "total_runs": total_runs})
         except Exception:
             pass
 
     correct = 0
     runs_log: list[dict] = []
 
-    for run_idx in range(1, runs_per_disorder + 1):
-        json_log_path = logs_path / f"{code}_{run_idx}.json"
-        txt_log_path = logs_path / f"{code}_{run_idx}.txt"
-        result_json_path = results_path / f"{code}_{run_idx}_result.json"
+    for job_idx, (artifact_stem, profile_path, repeat_idx) in enumerate(jobs, start=1):
+        run_idx = job_idx
+        json_log_path = logs_path / f"{artifact_stem}.json"
+        txt_log_path = logs_path / f"{artifact_stem}.txt"
+        result_json_path = results_path / f"{artifact_stem}_result.json"
 
         has_json_log = json_log_path.exists()
         has_result = result_json_path.exists()
@@ -109,6 +128,9 @@ def run_disorder(
             print(f"[batch:{code}] run {run_idx}: skip ({status})", flush=True)
             runs_log.append({
                 "run": run_idx,
+                "artifact_id": artifact_stem,
+                "profile_path": str(profile_path) if profile_path else None,
+                "profile_repeat": repeat_idx if profile_path else None,
                 "final_diagnosis": final_diag_skip,
                 "correct": is_correct_skip,
                 "skipped": True,
@@ -120,11 +142,16 @@ def run_disorder(
         set_log_path(txt_log_path)
 
         try:
-            patient.reinitialize(
-                disease_code=code,
-                difficulty_level=difficulty,
-                use_knowledge_graph=True,
-            )
+            if use_knowledge_graph:
+                patient.reinitialize(
+                    disease_code=code,
+                    difficulty_level=difficulty,
+                    use_knowledge_graph=True,
+                )
+            elif profile_path is not None:
+                patient.set_symptom_profile_path(profile_path)
+            else:
+                raise ValueError(f"No profile path provided for {artifact_stem}")
             patient_system = patient.SYSTEM_PROMPT
         except Exception as e:
             print(f"[batch:{code}] patient reinit failed run {run_idx}: {e}", flush=True)
@@ -145,6 +172,9 @@ def run_disorder(
                 correct += 1
             runs_log.append({
                 "run": run_idx,
+                "artifact_id": artifact_stem,
+                "profile_path": str(profile_path) if profile_path else None,
+                "profile_repeat": repeat_idx if profile_path else None,
                 "final_diagnosis": final_diag,
                 "correct": is_correct,
                 "closed_at_turn": mem.get("closed_at_patient_turn"),
@@ -153,8 +183,13 @@ def run_disorder(
             })
 
             json_log_data = {
+                "source_mode": "knowledge_graph" if use_knowledge_graph else "profile",
                 "disease_code": code,
                 "run": run_idx,
+                "artifact_id": artifact_stem,
+                "difficulty": difficulty if use_knowledge_graph else None,
+                "profile_path": str(profile_path) if profile_path else None,
+                "profile_repeat": repeat_idx if profile_path else None,
                 "closed_at_patient_turn": result.get("closed_at_patient_turn"),
                 "final_diagnosis": final_diag,
                 "is_correct": is_correct,
@@ -179,15 +214,23 @@ def run_disorder(
 
         except Exception as e:
             print(f"[batch:{code}] simulation error run {run_idx}: {e}", flush=True)
-            runs_log.append({"run": run_idx, "error": str(e), "correct": False})
+            runs_log.append({
+                "run": run_idx,
+                "artifact_id": artifact_stem,
+                "profile_path": str(profile_path) if profile_path else None,
+                "profile_repeat": repeat_idx if profile_path else None,
+                "error": str(e),
+                "correct": False,
+            })
 
         _report(run_idx)
 
-    acc = correct / runs_per_disorder if runs_per_disorder else 0.0
+    acc = correct / total_runs if total_runs else 0.0
     return {
         "disease_name": true_name,
+        "source_mode": "knowledge_graph" if use_knowledge_graph else "profile",
         "correct": correct,
-        "total": runs_per_disorder,
+        "total": total_runs,
         "accuracy": round(acc, 4),
         "runs": runs_log,
     }

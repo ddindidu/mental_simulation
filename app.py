@@ -1,6 +1,8 @@
 import json
 import os
+import re
 import threading
+from datetime import datetime
 from pathlib import Path
 
 from flask import Flask, Response, jsonify, render_template, request
@@ -18,13 +20,19 @@ from utils.llm import get_patient_alignment_max_tokens
 from utils.llm import get_patient_model_name
 from utils.llm import get_run_dir
 from utils.llm import get_status
-from utils.llm import rotate_log_file
 from utils.llm import set_log_path
+from utils.llm import set_run_dir_prefix
+from utils.llm import set_run_dir_variant
+from utils.paths import PROJECT_ROOT, RESULTS_DIR, batch_artifact_dirs
 from utils.prompt_display import system_prompt_to_html
 
 app = Flask(__name__)
 
 MAX_TURNS = CONFIG["simulation"]["max_turns"]
+SIMULATION_PROFILE_ROOTS = {
+    "add_requirements": PROJECT_ROOT / "data" / "profiles" / "add_requirements",
+}
+
 _SERVER = CONFIG["server"]
 
 # ── Batch evaluation state ────────────────────────────────────────────────────
@@ -123,6 +131,77 @@ def patient_system_html():
     return jsonify({"html": system_prompt_to_html(patient.SYSTEM_PROMPT)})
 
 
+@app.route("/api/simulation_profiles")
+def simulation_profiles():
+    """Return the server-approved profile roots, folders, and JSON files."""
+    roots = []
+    current_profile = Path(patient.current_config()["symptom_profile_path"]).resolve()
+    current = None
+
+    for root_id, configured_root in SIMULATION_PROFILE_ROOTS.items():
+        root = configured_root.resolve()
+        folders: dict[str, list[dict]] = {}
+        if root.is_dir():
+            for profile_path in sorted(root.rglob("*.json")):
+                relative_path = profile_path.relative_to(root)
+                folder = relative_path.parent.as_posix()
+                folders.setdefault(folder, []).append({
+                    "name": profile_path.name,
+                    "relative_path": relative_path.as_posix(),
+                })
+
+                if profile_path.resolve() == current_profile:
+                    current = {
+                        "root_id": root_id,
+                        "folder": folder,
+                        "relative_path": relative_path.as_posix(),
+                    }
+
+        roots.append({
+            "id": root_id,
+            "label": f"data/profiles/{root.name}",
+            "path": str(root),
+            "folders": [
+                {"path": folder, "files": files}
+                for folder, files in sorted(folders.items())
+            ],
+        })
+
+    return jsonify({"roots": roots, "current": current})
+
+
+@app.route("/api/simulation_profile", methods=["POST"])
+def select_simulation_profile():
+    """Select one JSON from an approved root and rebuild the patient prompt."""
+    body = request.get_json(force=True) or {}
+    root_id = str(body.get("root_id") or "").strip()
+    relative_path = str(body.get("relative_path") or "").strip()
+    configured_root = SIMULATION_PROFILE_ROOTS.get(root_id)
+    if configured_root is None:
+        return jsonify({"ok": False, "error": "Unknown profile path"}), 400
+    if not relative_path:
+        return jsonify({"ok": False, "error": "A JSON profile is required"}), 400
+
+    root = configured_root.resolve()
+    selected = (root / relative_path).resolve()
+    if not selected.is_relative_to(root) or selected.suffix.lower() != ".json":
+        return jsonify({"ok": False, "error": "Invalid profile path"}), 400
+    if not selected.is_file():
+        return jsonify({"ok": False, "error": "Profile JSON not found"}), 404
+
+    try:
+        patient.set_symptom_profile_path(selected)
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+    return jsonify({
+        "ok": True,
+        "profile_path": str(selected),
+        "profile_file": selected.name,
+        "patient_system_html": system_prompt_to_html(patient.SYSTEM_PROMPT),
+    })
+
+
 # ── Batch Evaluation ──────────────────────────────────────────────────────────
 
 def _load_disorder_map() -> dict[str, str]:
@@ -146,15 +225,15 @@ def _run_eval_pipeline() -> None:
       4. evaluate_turns_strict → turn_eval_strict.json + PNG (LLM 호출)
     """
     import traceback as _tb
-    from utils.paths import PROJECT_ROOT
 
-    # 파이프라인 LLM 호출(symptom_diagnosis judge 호출 등)이
-    # 마지막 시뮬레이션 로그 파일에 섞이지 않도록 별도 로그로 분리
-    set_log_path(PROJECT_ROOT / "results" / get_run_dir() / "_pipeline_llm.log")
+    # 후처리 LLM 호출은 최종 평가 JSON/TXT에 반영되므로 별도 원본 로그는 남기지 않는다.
+    set_log_path(None)
+    batch_results_dir, batch_logs_dir, _ = batch_artifact_dirs(get_run_dir())
+
 
     print("[pipeline] Starting post-batch evaluation pipeline...", flush=True)
-    print(f"[pipeline] logs dir  : {PROJECT_ROOT / 'logs' / get_run_dir()}", flush=True)
-    print(f"[pipeline] results dir: {PROJECT_ROOT / 'results' / get_run_dir()}", flush=True)
+    print(f"[pipeline] logs dir  : {batch_logs_dir}", flush=True)
+    print(f"[pipeline] results dir: {batch_results_dir}", flush=True)
 
     import importlib
 
@@ -252,9 +331,13 @@ def _run_batch_evaluation(
     disorder_map: dict[str, str],
     runs_per_disorder: int,
     difficulty: str,
+    max_turns: int,
     logs_dir: Path,
     acc_path: Path,
     parallel_disorders: int = 4,
+    use_knowledge_graph: bool = True,
+    profiles_by_code: dict[str, list[str]] | None = None,
+    runs_per_profile: int = 1,
 ) -> None:
     """백그라운드 스레드에서 전체 disorder × N회 시뮬레이션 실행.
 
@@ -272,7 +355,16 @@ def _run_batch_evaluation(
     from batch_worker import run_disorder
 
     codes = sorted(disorder_map.keys())
-    total = len(codes) * runs_per_disorder
+    profiles_by_code = profiles_by_code or {}
+    expected_per_code = {
+        code: (
+            runs_per_disorder
+            if use_knowledge_graph
+            else len(profiles_by_code.get(code, [])) * runs_per_profile
+        )
+        for code in codes
+    }
+    total = sum(expected_per_code.values())
 
     with _batch_lock:
         _batch_state["running"] = True
@@ -313,10 +405,13 @@ def _run_batch_evaluation(
                     disorder_map[code],
                     runs_per_disorder,
                     difficulty,
-                    MAX_TURNS,
+                    max_turns,
                     str(logs_dir),
                     str(acc_path.parent),
                     progress_queue,
+                    use_knowledge_graph,
+                    profiles_by_code.get(code, []),
+                    runs_per_profile,
                 ): code
                 for code in codes
             }
@@ -333,17 +428,18 @@ def _run_batch_evaluation(
                         print(f"[batch] disorder {code} failed: {e}", flush=True)
                         result = {
                             "disease_name": disorder_map[code],
+                            "source_mode": "knowledge_graph" if use_knowledge_graph else "profile",
                             "correct": 0,
-                            "total": runs_per_disorder,
+                            "total": expected_per_code[code],
                             "accuracy": 0.0,
                             "runs": [],
                         }
                         # 프로세스가 통째로 죽어 progress 메시지가 덜 도착한 만큼 done을 보정
-                        missing = runs_per_disorder - received_per_code.get(code, 0)
+                        missing = expected_per_code[code] - received_per_code.get(code, 0)
                         if missing > 0:
                             with _batch_lock:
                                 _batch_state["done"] += missing
-                            received_per_code[code] = runs_per_disorder
+                            received_per_code[code] = expected_per_code[code]
                     with _batch_lock:
                         _batch_state["results"][code] = result
             _drain_progress()
@@ -363,9 +459,15 @@ def _run_batch_evaluation(
             if total_simulations > 0 else 1.0
         )
 
+        source_mode = "knowledge_graph" if use_knowledge_graph else "profile"
+        run_description = (
+            f"difficulty={difficulty}, runs_per_disorder={runs_per_disorder}, max_turns={max_turns}"
+            if use_knowledge_graph
+            else f"profiles={sum(len(v) for v in profiles_by_code.values())}, runs_per_profile={runs_per_profile}, max_turns={max_turns}"
+        )
         lines: list[str] = [
             "=" * 60,
-            f"Batch Evaluation Results  (difficulty={difficulty}, runs={runs_per_disorder})",
+            f"Batch Evaluation Results  (source={source_mode}, {run_description})",
             f"Format compliance rate: {fmt_compliance:.2%}  "
             f"({batch_format_failures} format failures / {total_simulations} simulations)",
             "=" * 60,
@@ -418,10 +520,36 @@ def batch_eval():
             return jsonify({"ok": False, "error": "Batch already running"}), 409
 
     body = request.get_json(force=True) or {}
-    runs = int(body.get("runs_per_disorder", 10))
+    use_knowledge_graph = body.get("use_knowledge_graph", True)
+    if not isinstance(use_knowledge_graph, bool):
+        return jsonify({
+            "ok": False,
+            "error": "use_knowledge_graph must be true or false",
+        }), 400
+
+    try:
+        runs = int(body.get("runs_per_disorder", 1))
+        max_turns = int(body.get("max_turns", MAX_TURNS))
+        runs_per_profile = int(body.get("runs_per_profile", 1))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Run counts and max_turns must be integers"}), 400
+    if not 1 <= runs <= 100 or not 1 <= runs_per_profile <= 100:
+        return jsonify({
+            "ok": False,
+            "error": "Run counts must be between 1 and 100",
+        }), 400
+    if not 1 <= max_turns <= 100:
+        return jsonify({
+            "ok": False,
+            "error": "max_turns must be between 1 and 100",
+        }), 400
+
     difficulty = str(body.get("difficulty", "medium")).strip()
     default_parallel = int((CONFIG.get("batch") or {}).get("parallel_disorders", 4))
-    parallel_disorders = int(body.get("parallel_disorders", default_parallel))
+    try:
+        parallel_disorders = max(1, int(body.get("parallel_disorders", default_parallel)))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "parallel_disorders must be an integer"}), 400
 
     try:
         disorder_map = _load_disorder_map()
@@ -441,28 +569,95 @@ def batch_eval():
             }), 400
         print(f"[batch] disease filter → {sorted(disorder_map.keys())}", flush=True)
 
-    from utils.paths import PROJECT_ROOT
+    profiles_by_code: dict[str, list[str]] = {}
+    profile_root: Path | None = None
+    if use_knowledge_graph:
+        if difficulty not in {"low", "medium", "high"}:
+            return jsonify({
+                "ok": False,
+                "error": "difficulty must be low, medium, or high",
+            }), 400
+        source_dir = "kg"
+        mode_variant = difficulty
+    else:
+        raw_profile_root = str(body.get("profile_root") or "").strip()
+        if not raw_profile_root:
+            return jsonify({"ok": False, "error": "profile_root is required"}), 400
+
+        from utils.paths import PROJECT_ROOT
+        allowed_profiles_root = (PROJECT_ROOT / "data" / "profiles").resolve()
+        profile_root = Path(raw_profile_root).expanduser().resolve()
+        if not profile_root.is_relative_to(allowed_profiles_root):
+            return jsonify({
+                "ok": False,
+                "error": f"profile_root must be inside {allowed_profiles_root}",
+            }), 400
+        if not profile_root.is_dir():
+            return jsonify({
+                "ok": False,
+                "error": f"Profile directory not found: {profile_root}",
+            }), 400
+
+        for profile_path in sorted(profile_root.rglob("*.json")):
+            match = re.match(r"^(D\d{3})_", profile_path.stem)
+            if not match:
+                continue
+            code = match.group(1)
+            if code in disorder_map:
+                profiles_by_code.setdefault(code, []).append(str(profile_path))
+
+        disorder_map = {
+            code: name for code, name in disorder_map.items()
+            if profiles_by_code.get(code)
+        }
+        if not disorder_map:
+            return jsonify({"ok": False, "error": "No matching profile JSON files found"}), 400
+        source_dir = "profile"
+        mode_variant = profile_root.name
+
+    run_id = f"run_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    set_run_dir_prefix(f"{source_dir}/{run_id}/results")
+    set_run_dir_variant(mode_variant)
     run_dir = get_run_dir()
-    logs_dir = PROJECT_ROOT / "logs" / run_dir
+    batch_results_dir, logs_dir, _ = batch_artifact_dirs(run_dir)
     logs_dir.mkdir(parents=True, exist_ok=True)
-    acc_path = PROJECT_ROOT / "results" / run_dir / "acc.txt"
+    acc_path = batch_results_dir / "acc.txt"
 
     print(f"[batch] run_dir = {run_dir}", flush=True)
 
     t = threading.Thread(
         target=_run_batch_evaluation,
-        args=(disorder_map, runs, difficulty, logs_dir, acc_path, parallel_disorders),
+        args=(disorder_map, runs, difficulty, max_turns, logs_dir, acc_path, parallel_disorders),
+        kwargs={
+            "use_knowledge_graph": use_knowledge_graph,
+            "profiles_by_code": profiles_by_code,
+            "runs_per_profile": runs_per_profile,
+        },
         daemon=True,
     )
     t.start()
 
+    profile_count = sum(len(paths) for paths in profiles_by_code.values())
+    total_simulations = (
+        len(disorder_map) * runs
+        if use_knowledge_graph
+        else profile_count * runs_per_profile
+    )
     return jsonify({
         "ok": True,
+        "source_mode": "knowledge_graph" if use_knowledge_graph else "profile",
         "disorders": len(disorder_map),
         "runs_per_disorder": runs,
+        "profiles": profile_count,
+        "runs_per_profile": runs_per_profile,
+        "max_turns": max_turns,
+        "total_simulations": total_simulations,
         "difficulty": difficulty,
+        "profile_root": str(profile_root) if profile_root else None,
         "parallel_disorders": parallel_disorders,
         "run_dir": run_dir,
+        "run_id": run_id,
+        "results_dir": str(batch_results_dir),
         "logs_dir": str(logs_dir),
         "acc_path": str(acc_path),
     })
@@ -484,7 +679,23 @@ def batch_status():
             "format_failures": ff,
             "format_compliance_rate": round(1.0 - ff / total_sims, 4) if total_sims else 1.0,
             "results": {
-                code: {k: v for k, v in info.items() if k != "runs"}
+                code: {
+                    **{k: v for k, v in info.items() if k != "runs"},
+                    "runs": [
+                        {
+                            key: run.get(key)
+                            for key in (
+                                "run",
+                                "artifact_id",
+                                "final_diagnosis",
+                                "correct",
+                                "error",
+                            )
+                            if key in run
+                        }
+                        for run in info.get("runs", [])
+                    ],
+                }
                 for code, info in _batch_state["results"].items()
             },
         }
@@ -493,7 +704,9 @@ def batch_status():
 
 @app.route("/simulate") # start simulation
 def simulate(): # prompts loading
-    rotate_log_file()  # 시뮬레이션마다 새 loggingN.txt 생성
+    # doctor_memory.json, transcript.json과 같은 디렉터리에 이번 실행의
+    # 모든 LLM 입력 프롬프트와 출력을 저장한다.
+    set_log_path(RESULTS_DIR / "prompt.txt")
     patient_system = patient.SYSTEM_PROMPT
     doctor_model = get_doctor_model_name()
     inference_system = doctor.get_inference_system_prompt(doctor_model)
@@ -523,7 +736,12 @@ def simulate(): # prompts loading
                 {"role": "user", "content": doctor.opening_user_message()},
             ]
             _log_llm_history("Doctor LLM (questioning)", "opening", opening_messages)
-            doctor_raw = llm_chat(opening_messages, role="doctor")
+            doctor_raw = llm_chat(
+                opening_messages,
+                role="doctor",
+                call_name="opening-question",
+                turn=0,
+            )
             q_open = doctor.parse_questioning_result(doctor_raw)
             question_text = q_open["question"]
             doctor_memory["opening_question"] = {
@@ -569,6 +787,8 @@ def simulate(): # prompts loading
                     align_messages,
                     max_new_tokens=align_tokens,
                     role="patient",
+                    call_name="profile-alignment",
+                    turn=t,
                 )
                 parsed = patient.parse_alignment_result(align_raw)
                 strategy_text = patient.format_alignment_for_response(parsed)
@@ -585,7 +805,12 @@ def simulate(): # prompts loading
                     patient_hist, strategy_text
                 )
                 _log_llm_history("Patient LLM (response)", f"turn {t}", resp_messages)
-                patient_msg = llm_chat(resp_messages, role="patient")
+                patient_msg = llm_chat(
+                    resp_messages,
+                    role="patient",
+                    call_name="response",
+                    turn=t,
+                )
                 patient_hist.append({"role": "assistant", "content": patient_msg})
                 transcript.append(("patient", patient_msg))
 
@@ -604,7 +829,13 @@ def simulate(): # prompts loading
                     {"role": "user", "content": doctor.inference_user_payload(tr_text, previous_candidates=prev_cands)},
                 ]
                 _log_llm_history("Doctor LLM (inference)", f"turn {t}", inf_messages)
-                inf_raw = llm_chat(inf_messages, max_new_tokens=inf_tokens, role="doctor")
+                inf_raw = llm_chat(
+                    inf_messages,
+                    max_new_tokens=inf_tokens,
+                    role="doctor",
+                    call_name="clinical-inference",
+                    turn=t,
+                )
                 candidates, inf_note, is_final = doctor.parse_inference_result(inf_raw)
 
                 doctor.update_doctor_memory_after_inference(
@@ -640,7 +871,13 @@ def simulate(): # prompts loading
                         },
                     ]
                     _log_llm_history("Doctor LLM (final)", f"turn {t}", fin_messages)
-                    diagnosis_raw = llm_chat(fin_messages, max_new_tokens=diag_tokens, role="doctor")
+                    diagnosis_raw = llm_chat(
+                        fin_messages,
+                        max_new_tokens=diag_tokens,
+                        role="doctor",
+                        call_name="final-diagnosis",
+                        turn=t,
+                    )
                     yield emit(
                         {
                             "event": "diagnosis",
@@ -676,7 +913,7 @@ def simulate(): # prompts loading
                     },
                     {
                         "role": "user",
-                        "content": doctor.questioning_followup_user_payload(tr_text, candidates),
+                        "content": doctor.questioning_followup_user_payload(patient_msg, tr_text, candidates),
                     },
                 ]
                 _log_llm_history(
@@ -684,7 +921,12 @@ def simulate(): # prompts loading
                     f"follow-up after turn {t}",
                     questioning_messages,
                 )
-                doctor_raw = llm_chat(questioning_messages, role="doctor")
+                doctor_raw = llm_chat(
+                    questioning_messages,
+                    role="doctor",
+                    call_name="followup-question",
+                    turn=t,
+                )
                 q_follow = doctor.parse_questioning_result(doctor_raw)
                 question_text = q_follow["question"]
 

@@ -30,10 +30,9 @@ import numpy as np
 BASE_DIR    = Path(__file__).resolve().parent.parent
 
 from utils.llm import get_run_dir as _get_run_dir
-_RUN_DIR    = _get_run_dir()
-RESULTS_DIR  = BASE_DIR / "results"  / _RUN_DIR
-LOGS_DIR     = BASE_DIR / "logs"     / _RUN_DIR
-ANALYSIS_DIR = BASE_DIR / "analysis" / _RUN_DIR
+from utils.paths import batch_artifact_dirs
+_RUN_DIR = _get_run_dir()
+RESULTS_DIR, LOGS_DIR, ANALYSIS_DIR = batch_artifact_dirs(_RUN_DIR)
 PLOTS_DIR    = ANALYSIS_DIR / "turn_eval"
 CRITERIA_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "diagnostic_criteria.json"
 DISORDER_ICD10_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "disorder_icd10.json"

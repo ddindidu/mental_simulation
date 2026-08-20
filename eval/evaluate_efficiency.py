@@ -34,6 +34,7 @@ import numpy as np
 import argparse
 
 from utils.llm import get_run_dir as _get_run_dir
+from utils.paths import batch_artifact_dirs
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 KG_DIR   = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN"
@@ -48,8 +49,9 @@ def _parse_args():
 
 _args       = _parse_args()
 _RUN_DIR    = _get_run_dir()
-RESULTS_DIR = _args.results if _args.results else BASE_DIR / "results" / _RUN_DIR
-LOGS_DIR    = _args.logs    if _args.logs    else BASE_DIR / "logs"    / _RUN_DIR
+_DEFAULT_RESULTS_DIR, _DEFAULT_LOGS_DIR, _ = batch_artifact_dirs(_RUN_DIR)
+RESULTS_DIR = _args.results if _args.results else _DEFAULT_RESULTS_DIR
+LOGS_DIR    = _args.logs    if _args.logs    else _DEFAULT_LOGS_DIR
 
 
 def _load_id2name() -> dict[str, str]:

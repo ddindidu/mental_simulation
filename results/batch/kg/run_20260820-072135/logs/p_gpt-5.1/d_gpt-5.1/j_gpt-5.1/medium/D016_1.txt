@@ -1,0 +1,2259 @@
+--- turn 00 ---
+
+[call 01] doctor-opening-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "opening question",
+  "subcategory": null,
+  "question": "Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?"
+}
+=====================================
+
+--- turn 01 ---
+
+[call 02] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ obsessive_compulsive_symptoms
+  - Contamination Obsessions: Recurrent and intrusive worries about contamination, germs, or dirt.
+  - Pathological Doubt: Pathological doubt regarding safety or mistakes, such as whether doors are locked or gas valves are closed.
+  - Symmetry and Exactness Obsessions: A strong urge that items must be lined up exactly or be symmetrical.
+  - Forbidden or Taboo Thoughts: Intrusive thoughts involving aggressive (harming others), sexual, or religious content that are prohibited.
+  - Somatic Obsessions: Persistent and specific fear that one might have a serious disease.
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 1
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["obsessive_compulsive_symptoms"], "answer_strategy": "Answer in a straightforward, brief way focusing on the main thing that pushed you to seek help now: the obsessive, intrusive thoughts and compulsive behaviors. Describe in simple terms that you’ve been having recurring, distressing thoughts (for example about contamination, things not being safe or exact, or other intrusive ideas) and that you feel driven to perform certain repetitive checks or rituals, and that this is starting to interfere with your daily life or cause you significant distress. Keep the tone honest and matter‑of‑fact, without going into a long history or listing every type of obsession yet—just clearly state that obsessive thoughts and compulsive behaviors have been your main concern recently."}
+=====================================
+
+[call 03] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Obsessive-Compulsive Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ obsessive_compulsive_symptoms
+  - Contamination Obsessions: Recurrent and intrusive worries about contamination, germs, or dirt.
+  - Pathological Doubt: Pathological doubt regarding safety or mistakes, such as whether doors are locked or gas valves are closed.
+  - Symmetry and Exactness Obsessions: A strong urge that items must be lined up exactly or be symmetrical.
+  - Forbidden or Taboo Thoughts: Intrusive thoughts involving aggressive (harming others), sexual, or religious content that are prohibited.
+  - Somatic Obsessions: Persistent and specific fear that one might have a serious disease.
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Obsessions
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: obsessive_compulsive_symptoms
+Answer strategy: Answer in a straightforward, brief way focusing on the main thing that pushed you to seek help now: the obsessive, intrusive thoughts and compulsive behaviors. Describe in simple terms that you’ve been having recurring, distressing thoughts (for example about contamination, things not being safe or exact, or other intrusive ideas) and that you feel driven to perform certain repetitive checks or rituals, and that this is starting to interfere with your daily life or cause you significant distress. Keep the tone honest and matter‑of‑fact, without going into a long history or listing every type of obsession yet—just clearly state that obsessive thoughts and compulsive behaviors have been your main concern recently.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+========== OUTPUT [patient] ==========
+I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+=====================================
+
+[call 04] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F42", "F41.1", "F32.1"], "note": "Initial presentation includes intrusive, repetitive thoughts and compulsive behaviors that are time-consuming and distressing, which most strongly suggests a primary obsessive–compulsive condition, so F42 is the leading candidate. However, at this very early stage of the interview we do not yet know the full phenomenology (e.g., whether the thoughts are ego-dystonic obsessions vs generalized worries, presence of panic attacks, or a concurrent depressive syndrome), so I am also including an anxiety disorder (F41.1) and a depressive episode (F32.1) as possible comorbid or alternative explanations. There are no previous candidates to compare with, so this is the initial differential list.", "is_final": false}
+=====================================
+
+[call 05] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F42
+- F41.1
+- F32.1
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F42", "F41.1", "F32.1"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "depressive vs anxiety symptoms",
+  "question": "Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?"
+}
+=====================================
+
+--- turn 02 ---
+
+[call 06] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ obsessive_compulsive_symptoms
+  - Contamination Obsessions: Recurrent and intrusive worries about contamination, germs, or dirt.
+  - Pathological Doubt: Pathological doubt regarding safety or mistakes, such as whether doors are locked or gas valves are closed.
+  - Symmetry and Exactness Obsessions: A strong urge that items must be lined up exactly or be symmetrical.
+  - Forbidden or Taboo Thoughts: Intrusive thoughts involving aggressive (harming others), sexual, or religious content that are prohibited.
+  - Somatic Obsessions: Persistent and specific fear that one might have a serious disease.
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 2
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["obsessive_compulsive_symptoms", "Contamination Obsessions", "Pathological Doubt", "Symmetry and Exactness Obsessions", "Forbidden or Taboo Thoughts", "Somatic Obsessions"], "answer_strategy": "Answer by distinguishing your general mood from your anxiety related to OCD. Briefly say whether, in the last couple of weeks, you’ve mostly felt sad/low and lost interest in things, or whether the main problem is feeling tense, on edge, and worried—especially about your obsessions and compulsions—even when you’re not doing rituals. Keep the tone straightforward and concrete, and, since this is not your first reply, you can mention how your obsessive thoughts or fears (e.g., contamination, doubt, symmetry, taboo or health worries) affect your overall mood and enjoyment of activities."}
+=====================================
+
+[call 07] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Obsessive-Compulsive Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ obsessive_compulsive_symptoms
+  - Contamination Obsessions: Recurrent and intrusive worries about contamination, germs, or dirt.
+  - Pathological Doubt: Pathological doubt regarding safety or mistakes, such as whether doors are locked or gas valves are closed.
+  - Symmetry and Exactness Obsessions: A strong urge that items must be lined up exactly or be symmetrical.
+  - Forbidden or Taboo Thoughts: Intrusive thoughts involving aggressive (harming others), sexual, or religious content that are prohibited.
+  - Somatic Obsessions: Persistent and specific fear that one might have a serious disease.
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Obsessions
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: obsessive_compulsive_symptoms, Contamination Obsessions, Pathological Doubt, Symmetry and Exactness Obsessions, Forbidden or Taboo Thoughts, Somatic Obsessions
+Answer strategy: Answer by distinguishing your general mood from your anxiety related to OCD. Briefly say whether, in the last couple of weeks, you’ve mostly felt sad/low and lost interest in things, or whether the main problem is feeling tense, on edge, and worried—especially about your obsessions and compulsions—even when you’re not doing rituals. Keep the tone straightforward and concrete, and, since this is not your first reply, you can mention how your obsessive thoughts or fears (e.g., contamination, doubt, symmetry, taboo or health worries) affect your overall mood and enjoyment of activities.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+========== OUTPUT [patient] ==========
+It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+=====================================
+
+[call 08] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F42", "F41.1", "F32.1"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F42", "F41.1", "F32.1"], "note": "Previously the candidates were [F42, F41.1, F32.1]. The patient now clearly describes intrusive, obsessive thoughts about contamination, safety, and things feeling \"wrong,\" along with repetitive behaviors (rituals) performed to calm down, and reports significant interference with daily life and exhaustion. This pattern strongly supports F42 as a primary candidate. The patient also reports feeling tense and on edge most of the time, even when not doing rituals, which maintains F41.1 as a possible comorbid or alternative diagnosis, though the anxiety appears closely tied to the obsessions rather than being free-floating. The patient specifically denies being constantly sad and does not emphasize low mood or loss of pleasure as primary, which makes a current moderate depressive episode (F32.1) less likely, but not yet fully excludable without further detail on mood, energy, sleep, appetite, and guilt. Therefore the candidate list remains [F42, F41.1, F32.1], but F42 is now more strongly favored and F32.1 is less likely pending further exploration of depressive symptoms.", "is_final": false}
+=====================================
+
+[call 09] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F42
+- F41.1
+- F32.1
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F42", "F41.1", "F32.1"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "excessive worry vs. obsession-driven anxiety",
+  "question": "Aside from the obsessive thoughts and rituals, do you also find yourself worrying excessively about many different everyday things (like work, health, family, finances) most days, even when there’s no specific trigger, or is the anxiety mainly tied to the obsessions themselves?"
+}
+=====================================
+
+--- turn 03 ---
+
+[call 10] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ obsessive_compulsive_symptoms
+  - Contamination Obsessions: Recurrent and intrusive worries about contamination, germs, or dirt.
+  - Pathological Doubt: Pathological doubt regarding safety or mistakes, such as whether doors are locked or gas valves are closed.
+  - Symmetry and Exactness Obsessions: A strong urge that items must be lined up exactly or be symmetrical.
+  - Forbidden or Taboo Thoughts: Intrusive thoughts involving aggressive (harming others), sexual, or religious content that are prohibited.
+  - Somatic Obsessions: Persistent and specific fear that one might have a serious disease.
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 3
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Aside from the obsessive thoughts and rituals, do you also find yourself worrying excessively about many different everyday things (like work, health, family, finances) most days, even when there’s no specific trigger, or is the anxiety mainly tied to the obsessions themselves?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["obsessive_compulsive_symptoms", "Somatic Obsessions", "Contamination Obsessions", "Pathological Doubt", "Symmetry and Exactness Obsessions", "Forbidden or Taboo Thoughts"], "answer_strategy": "Clarify whether your anxiety is mostly present when you have specific obsessive thoughts (e.g., about contamination, harming others, symmetry, illness, or having made a mistake), or whether you also feel a more constant, free‑floating worry about many everyday topics even when no obsession is triggered. Answer plainly, describing how often you worry, what you worry about (if it’s beyond the obsessions listed), and whether the anxiety eases when the obsessions are not active. Keep the tone straightforward and honest, and if you’re unsure, say that and describe what you do notice about your anxiety pattern."}
+=====================================
+
+[call 11] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Obsessive-Compulsive Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ obsessive_compulsive_symptoms
+  - Contamination Obsessions: Recurrent and intrusive worries about contamination, germs, or dirt.
+  - Pathological Doubt: Pathological doubt regarding safety or mistakes, such as whether doors are locked or gas valves are closed.
+  - Symmetry and Exactness Obsessions: A strong urge that items must be lined up exactly or be symmetrical.
+  - Forbidden or Taboo Thoughts: Intrusive thoughts involving aggressive (harming others), sexual, or religious content that are prohibited.
+  - Somatic Obsessions: Persistent and specific fear that one might have a serious disease.
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Obsessions
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: obsessive_compulsive_symptoms, Somatic Obsessions, Contamination Obsessions, Pathological Doubt, Symmetry and Exactness Obsessions, Forbidden or Taboo Thoughts
+Answer strategy: Clarify whether your anxiety is mostly present when you have specific obsessive thoughts (e.g., about contamination, harming others, symmetry, illness, or having made a mistake), or whether you also feel a more constant, free‑floating worry about many everyday topics even when no obsession is triggered. Answer plainly, describing how often you worry, what you worry about (if it’s beyond the obsessions listed), and whether the anxiety eases when the obsessions are not active. Keep the tone straightforward and honest, and if you’re unsure, say that and describe what you do notice about your anxiety pattern.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+Doctor: Aside from the obsessive thoughts and rituals, do you also find yourself worrying excessively about many different everyday things (like work, health, family, finances) most days, even when there’s no specific trigger, or is the anxiety mainly tied to the obsessions themselves?
+
+========== OUTPUT [patient] ==========
+I think the anxiety is mostly tied to the obsessions themselves—like when I start thinking something’s contaminated, unsafe, or that I’ve made some kind of mistake. I do worry about things like my health or whether I’ve done something wrong, but it usually feels connected to those specific thoughts rather than a constant, general worry about everything.
+=====================================
+
+[call 12] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F42", "F41.1", "F32.1"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+Doctor: Aside from the obsessive thoughts and rituals, do you also find yourself worrying excessively about many different everyday things (like work, health, family, finances) most days, even when there’s no specific trigger, or is the anxiety mainly tied to the obsessions themselves?
+
+Patient: I think the anxiety is mostly tied to the obsessions themselves—like when I start thinking something’s contaminated, unsafe, or that I’ve made some kind of mistake. I do worry about things like my health or whether I’ve done something wrong, but it usually feels connected to those specific thoughts rather than a constant, general worry about everything.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F42", "F41.1", "F32.1"], "note": "Previously the candidates were [F42, F41.1, F32.1]. The patient now clearly describes intrusive, obsessional thoughts about contamination, safety, and things being \"wrong,\" along with repetitive behaviors done to reduce distress and significant functional interference. This strongly supports F42 as the primary working diagnosis. The patient reports being tense and on edge, but the anxiety appears closely linked to the obsessions and related triggers rather than being a free-floating, generalized worry across multiple domains, which makes F41.1 less likely but not yet entirely excludable without more detail about the breadth and duration of worries. The patient denies feeling constantly sad and instead emphasizes anxiety and tension; there is no clear evidence of a sustained depressive episode with pervasive low mood or anhedonia, so F32.1 becomes less likely, though I will keep it on the list until I clarify mood, sleep, energy, guilt, and suicidal ideation more systematically. Therefore, the candidates remain [F42, F41.1, F32.1], with F42 now most strongly supported and the others decreasing in likelihood but not yet ruled out.", "is_final": false}
+=====================================
+
+[call 13] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F42
+- F41.1
+- F32.1
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F42", "F41.1", "F32.1"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+Doctor: Aside from the obsessive thoughts and rituals, do you also find yourself worrying excessively about many different everyday things (like work, health, family, finances) most days, even when there’s no specific trigger, or is the anxiety mainly tied to the obsessions themselves?
+
+Patient: I think the anxiety is mostly tied to the obsessions themselves—like when I start thinking something’s contaminated, unsafe, or that I’ve made some kind of mistake. I do worry about things like my health or whether I’ve done something wrong, but it usually feels connected to those specific thoughts rather than a constant, general worry about everything.
+
+Patient: I think the anxiety is mostly tied to the obsessions themselves—like when I start thinking something’s contaminated, unsafe, or that I’ve made some kind of mistake. I do worry about things like my health or whether I’ve done something wrong, but it usually feels connected to those specific thoughts rather than a constant, general worry about everything.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "insight into obsessions",
+  "question": "When these intrusive thoughts come up, do you recognize that they’re unreasonable or excessive, or do they feel realistic and you’re convinced the feared outcome will actually happen if you don’t do the rituals?"
+}
+=====================================
+
+--- turn 04 ---
+
+[call 14] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ obsessive_compulsive_symptoms
+  - Contamination Obsessions: Recurrent and intrusive worries about contamination, germs, or dirt.
+  - Pathological Doubt: Pathological doubt regarding safety or mistakes, such as whether doors are locked or gas valves are closed.
+  - Symmetry and Exactness Obsessions: A strong urge that items must be lined up exactly or be symmetrical.
+  - Forbidden or Taboo Thoughts: Intrusive thoughts involving aggressive (harming others), sexual, or religious content that are prohibited.
+  - Somatic Obsessions: Persistent and specific fear that one might have a serious disease.
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 4
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+When these intrusive thoughts come up, do you recognize that they’re unreasonable or excessive, or do they feel realistic and you’re convinced the feared outcome will actually happen if you don’t do the rituals?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["obsessive_compulsive_symptoms", "Forbidden or Taboo Thoughts", "Contamination Obsessions", "Pathological Doubt", "Somatic Obsessions"], "answer_strategy": "Answer directly about how you experience the intrusive thoughts: say whether, in the moment, you realize they are irrational/excessive or whether they feel very real and convincing. You can mention if this varies depending on the type of obsession (e.g., contamination, doubt about safety, taboo thoughts, health fears). Use simple, concrete examples of what goes through your mind and how certain you feel about the feared outcome, and whether doing or not doing rituals changes that feeling. Keep the tone honest and descriptive rather than analytical."}
+=====================================
+
+[call 15] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Obsessive-Compulsive Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ obsessive_compulsive_symptoms
+  - Contamination Obsessions: Recurrent and intrusive worries about contamination, germs, or dirt.
+  - Pathological Doubt: Pathological doubt regarding safety or mistakes, such as whether doors are locked or gas valves are closed.
+  - Symmetry and Exactness Obsessions: A strong urge that items must be lined up exactly or be symmetrical.
+  - Forbidden or Taboo Thoughts: Intrusive thoughts involving aggressive (harming others), sexual, or religious content that are prohibited.
+  - Somatic Obsessions: Persistent and specific fear that one might have a serious disease.
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Obsessions
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: obsessive_compulsive_symptoms, Forbidden or Taboo Thoughts, Contamination Obsessions, Pathological Doubt, Somatic Obsessions
+Answer strategy: Answer directly about how you experience the intrusive thoughts: say whether, in the moment, you realize they are irrational/excessive or whether they feel very real and convincing. You can mention if this varies depending on the type of obsession (e.g., contamination, doubt about safety, taboo thoughts, health fears). Use simple, concrete examples of what goes through your mind and how certain you feel about the feared outcome, and whether doing or not doing rituals changes that feeling. Keep the tone honest and descriptive rather than analytical.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+Doctor: Aside from the obsessive thoughts and rituals, do you also find yourself worrying excessively about many different everyday things (like work, health, family, finances) most days, even when there’s no specific trigger, or is the anxiety mainly tied to the obsessions themselves?
+
+Patient: I think the anxiety is mostly tied to the obsessions themselves—like when I start thinking something’s contaminated, unsafe, or that I’ve made some kind of mistake. I do worry about things like my health or whether I’ve done something wrong, but it usually feels connected to those specific thoughts rather than a constant, general worry about everything.
+
+Doctor: When these intrusive thoughts come up, do you recognize that they’re unreasonable or excessive, or do they feel realistic and you’re convinced the feared outcome will actually happen if you don’t do the rituals?
+
+========== OUTPUT [patient] ==========
+It kind of depends on the thought. With contamination or health stuff, in the moment it often feels very real, like “what if this actually makes me or someone else sick,” and I get pretty convinced something bad will happen if I don’t do the ritual. With some of the more taboo or “what if I hurt someone” thoughts, a part of me knows they’re irrational, but they still feel so disturbing that I act like they might be true just in case.
+=====================================
+
+[call 16] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F42", "F41.1", "F32.1"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+Doctor: Aside from the obsessive thoughts and rituals, do you also find yourself worrying excessively about many different everyday things (like work, health, family, finances) most days, even when there’s no specific trigger, or is the anxiety mainly tied to the obsessions themselves?
+
+Patient: I think the anxiety is mostly tied to the obsessions themselves—like when I start thinking something’s contaminated, unsafe, or that I’ve made some kind of mistake. I do worry about things like my health or whether I’ve done something wrong, but it usually feels connected to those specific thoughts rather than a constant, general worry about everything.
+
+Doctor: When these intrusive thoughts come up, do you recognize that they’re unreasonable or excessive, or do they feel realistic and you’re convinced the feared outcome will actually happen if you don’t do the rituals?
+
+Patient: It kind of depends on the thought. With contamination or health stuff, in the moment it often feels very real, like “what if this actually makes me or someone else sick,” and I get pretty convinced something bad will happen if I don’t do the ritual. With some of the more taboo or “what if I hurt someone” thoughts, a part of me knows they’re irrational, but they still feel so disturbing that I act like they might be true just in case.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F42", "F41.1", "F32.1"], "note": "Previously the candidates were [F42, F41.1, F32.1]. The current exchange strongly supports a primary obsessive–compulsive syndrome: the patient describes intrusive thoughts about contamination, harm, and things being \"wrong,\" along with repetitive rituals done to reduce distress and significant interference with daily functioning, which is highly consistent with F42. The patient reports being tense and on edge, but this appears to be largely driven by the obsessions and rituals rather than by a free-floating, generalized pattern of worry across many domains, which makes an independent generalized anxiety syndrome (F41.1) less likely as a primary diagnosis, though some residual diagnostic uncertainty remains so it stays on the list for now. They explicitly deny being constantly sad or unable to enjoy things, which argues against a current moderate depressive episode (F32.1) as a main problem; however, we have not yet systematically assessed other depressive symptoms (sleep, appetite, energy, guilt, concentration, suicidality), so F32.1 remains as a lower-probability candidate pending further questioning. Thus the candidate list remains [F42, F41.1, F32.1], with F42 now the leading consideration.", "is_final": false}
+=====================================
+
+[call 17] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F42
+- F41.1
+- F32.1
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F42", "F41.1", "F32.1"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+Doctor: Aside from the obsessive thoughts and rituals, do you also find yourself worrying excessively about many different everyday things (like work, health, family, finances) most days, even when there’s no specific trigger, or is the anxiety mainly tied to the obsessions themselves?
+
+Patient: I think the anxiety is mostly tied to the obsessions themselves—like when I start thinking something’s contaminated, unsafe, or that I’ve made some kind of mistake. I do worry about things like my health or whether I’ve done something wrong, but it usually feels connected to those specific thoughts rather than a constant, general worry about everything.
+
+Doctor: When these intrusive thoughts come up, do you recognize that they’re unreasonable or excessive, or do they feel realistic and you’re convinced the feared outcome will actually happen if you don’t do the rituals?
+
+Patient: It kind of depends on the thought. With contamination or health stuff, in the moment it often feels very real, like “what if this actually makes me or someone else sick,” and I get pretty convinced something bad will happen if I don’t do the ritual. With some of the more taboo or “what if I hurt someone” thoughts, a part of me knows they’re irrational, but they still feel so disturbing that I act like they might be true just in case.
+
+Patient: It kind of depends on the thought. With contamination or health stuff, in the moment it often feels very real, like “what if this actually makes me or someone else sick,” and I get pretty convinced something bad will happen if I don’t do the ritual. With some of the more taboo or “what if I hurt someone” thoughts, a part of me knows they’re irrational, but they still feel so disturbing that I act like they might be true just in case.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "mood symptoms",
+  "question": "Over the last month, have there been most days when you felt clearly down or depressed for hours at a time, or lost interest in things you usually enjoy, separate from the anxiety and obsessions?"
+}
+=====================================
+
+--- turn 05 ---
+
+[call 18] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ obsessive_compulsive_symptoms
+  - Contamination Obsessions: Recurrent and intrusive worries about contamination, germs, or dirt.
+  - Pathological Doubt: Pathological doubt regarding safety or mistakes, such as whether doors are locked or gas valves are closed.
+  - Symmetry and Exactness Obsessions: A strong urge that items must be lined up exactly or be symmetrical.
+  - Forbidden or Taboo Thoughts: Intrusive thoughts involving aggressive (harming others), sexual, or religious content that are prohibited.
+  - Somatic Obsessions: Persistent and specific fear that one might have a serious disease.
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 5
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Over the last month, have there been most days when you felt clearly down or depressed for hours at a time, or lost interest in things you usually enjoy, separate from the anxiety and obsessions?
+
+========== OUTPUT [patient] ==========
+{"matched": false, "matched_sections": [], "answer_strategy": "This question is about your mood (feeling down, depressed, or losing interest), which is not described in the symptom profile. Answer honestly from your own experience over the last month, briefly and clearly. For example, you might say yes or no, and if yes, roughly how often and how strong it was. If you’re unsure, it’s fine to say you haven’t really noticed or haven’t thought about it much."}
+=====================================
+
+[call 19] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Obsessive-Compulsive Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ obsessive_compulsive_symptoms
+  - Contamination Obsessions: Recurrent and intrusive worries about contamination, germs, or dirt.
+  - Pathological Doubt: Pathological doubt regarding safety or mistakes, such as whether doors are locked or gas valves are closed.
+  - Symmetry and Exactness Obsessions: A strong urge that items must be lined up exactly or be symmetrical.
+  - Forbidden or Taboo Thoughts: Intrusive thoughts involving aggressive (harming others), sexual, or religious content that are prohibited.
+  - Somatic Obsessions: Persistent and specific fear that one might have a serious disease.
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Obsessions
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(No match in profile or inference only)
+Answer strategy: This question is about your mood (feeling down, depressed, or losing interest), which is not described in the symptom profile. Answer honestly from your own experience over the last month, briefly and clearly. For example, you might say yes or no, and if yes, roughly how often and how strong it was. If you’re unsure, it’s fine to say you haven’t really noticed or haven’t thought about it much.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+Doctor: Aside from the obsessive thoughts and rituals, do you also find yourself worrying excessively about many different everyday things (like work, health, family, finances) most days, even when there’s no specific trigger, or is the anxiety mainly tied to the obsessions themselves?
+
+Patient: I think the anxiety is mostly tied to the obsessions themselves—like when I start thinking something’s contaminated, unsafe, or that I’ve made some kind of mistake. I do worry about things like my health or whether I’ve done something wrong, but it usually feels connected to those specific thoughts rather than a constant, general worry about everything.
+
+Doctor: When these intrusive thoughts come up, do you recognize that they’re unreasonable or excessive, or do they feel realistic and you’re convinced the feared outcome will actually happen if you don’t do the rituals?
+
+Patient: It kind of depends on the thought. With contamination or health stuff, in the moment it often feels very real, like “what if this actually makes me or someone else sick,” and I get pretty convinced something bad will happen if I don’t do the ritual. With some of the more taboo or “what if I hurt someone” thoughts, a part of me knows they’re irrational, but they still feel so disturbing that I act like they might be true just in case.
+
+Doctor: Over the last month, have there been most days when you felt clearly down or depressed for hours at a time, or lost interest in things you usually enjoy, separate from the anxiety and obsessions?
+
+========== OUTPUT [patient] ==========
+I’m not really sure I’d call it clearly depressed most days. I do feel worn down and less interested in things because the anxiety and rituals take so much out of me, but I wouldn’t say I’m consistently low in mood for hours every day.
+=====================================
+
+[call 20] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F42", "F41.1", "F32.1"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+Doctor: Aside from the obsessive thoughts and rituals, do you also find yourself worrying excessively about many different everyday things (like work, health, family, finances) most days, even when there’s no specific trigger, or is the anxiety mainly tied to the obsessions themselves?
+
+Patient: I think the anxiety is mostly tied to the obsessions themselves—like when I start thinking something’s contaminated, unsafe, or that I’ve made some kind of mistake. I do worry about things like my health or whether I’ve done something wrong, but it usually feels connected to those specific thoughts rather than a constant, general worry about everything.
+
+Doctor: When these intrusive thoughts come up, do you recognize that they’re unreasonable or excessive, or do they feel realistic and you’re convinced the feared outcome will actually happen if you don’t do the rituals?
+
+Patient: It kind of depends on the thought. With contamination or health stuff, in the moment it often feels very real, like “what if this actually makes me or someone else sick,” and I get pretty convinced something bad will happen if I don’t do the ritual. With some of the more taboo or “what if I hurt someone” thoughts, a part of me knows they’re irrational, but they still feel so disturbing that I act like they might be true just in case.
+
+Doctor: Over the last month, have there been most days when you felt clearly down or depressed for hours at a time, or lost interest in things you usually enjoy, separate from the anxiety and obsessions?
+
+Patient: I’m not really sure I’d call it clearly depressed most days. I do feel worn down and less interested in things because the anxiety and rituals take so much out of me, but I wouldn’t say I’m consistently low in mood for hours every day.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F42", "F41.1"], "note": "Previously the candidates were [F42, F41.1, F32.1]. The patient clearly describes intrusive thoughts about contamination, harm, and things being \"wrong,\" along with repetitive rituals done to reduce distress, which strongly supports F42 as a primary candidate. The anxiety is reported as mainly tied to these obsessions and rituals rather than being a pervasive, free-floating worry about many life domains, which makes a separate generalized anxiety picture (F41.1) less prominent but still possible as a comorbid condition, so it remains on the list for now. The patient denies a clearly persistent depressed mood or sustained loss of interest for most days over the last month, and instead attributes feeling worn down to the anxiety and rituals; this makes a current moderate depressive episode (F32.1) unlikely, so F32.1 is removed from the candidate list. The current candidates are therefore [F42, F41.1].", "is_final": false}
+=====================================
+
+[call 21] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F42
+- F41.1
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F42", "F41.1"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+Doctor: Aside from the obsessive thoughts and rituals, do you also find yourself worrying excessively about many different everyday things (like work, health, family, finances) most days, even when there’s no specific trigger, or is the anxiety mainly tied to the obsessions themselves?
+
+Patient: I think the anxiety is mostly tied to the obsessions themselves—like when I start thinking something’s contaminated, unsafe, or that I’ve made some kind of mistake. I do worry about things like my health or whether I’ve done something wrong, but it usually feels connected to those specific thoughts rather than a constant, general worry about everything.
+
+Doctor: When these intrusive thoughts come up, do you recognize that they’re unreasonable or excessive, or do they feel realistic and you’re convinced the feared outcome will actually happen if you don’t do the rituals?
+
+Patient: It kind of depends on the thought. With contamination or health stuff, in the moment it often feels very real, like “what if this actually makes me or someone else sick,” and I get pretty convinced something bad will happen if I don’t do the ritual. With some of the more taboo or “what if I hurt someone” thoughts, a part of me knows they’re irrational, but they still feel so disturbing that I act like they might be true just in case.
+
+Doctor: Over the last month, have there been most days when you felt clearly down or depressed for hours at a time, or lost interest in things you usually enjoy, separate from the anxiety and obsessions?
+
+Patient: I’m not really sure I’d call it clearly depressed most days. I do feel worn down and less interested in things because the anxiety and rituals take so much out of me, but I wouldn’t say I’m consistently low in mood for hours every day.
+
+Patient: I’m not really sure I’d call it clearly depressed most days. I do feel worn down and less interested in things because the anxiety and rituals take so much out of me, but I wouldn’t say I’m consistently low in mood for hours every day.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "compulsions",
+  "question": "When you feel anxious or have these intrusive thoughts, do you feel driven to perform specific repetitive behaviors or mental rituals (like checking, washing, counting, or repeating phrases in your head) to reduce the anxiety, and do these take up a lot of time each day?"
+}
+=====================================
+
+--- turn 06 ---
+
+[call 22] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ obsessive_compulsive_symptoms
+  - Contamination Obsessions: Recurrent and intrusive worries about contamination, germs, or dirt.
+  - Pathological Doubt: Pathological doubt regarding safety or mistakes, such as whether doors are locked or gas valves are closed.
+  - Symmetry and Exactness Obsessions: A strong urge that items must be lined up exactly or be symmetrical.
+  - Forbidden or Taboo Thoughts: Intrusive thoughts involving aggressive (harming others), sexual, or religious content that are prohibited.
+  - Somatic Obsessions: Persistent and specific fear that one might have a serious disease.
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 6
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+When you feel anxious or have these intrusive thoughts, do you feel driven to perform specific repetitive behaviors or mental rituals (like checking, washing, counting, or repeating phrases in your head) to reduce the anxiety, and do these take up a lot of time each day?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["obsessive_compulsive_symptoms - Contamination Obsessions", "obsessive_compulsive_symptoms - Pathological Doubt", "obsessive_compulsive_symptoms - Symmetry and Exactness Obsessions", "obsessive_compulsive_symptoms - Forbidden or Taboo Thoughts", "obsessive_compulsive_symptoms - Somatic Obsessions"], "answer_strategy": "Answer clearly whether you do specific repetitive actions or mental rituals in response to these intrusive thoughts or anxieties. Mention concrete examples (e.g., repeated handwashing for contamination fears, checking doors or appliances for doubt, arranging items symmetrically, mentally repeating phrases or prayers to neutralize forbidden thoughts, repeatedly checking your body or searching online for somatic fears). Also say roughly how much time they take per day and whether they interfere with your daily life. Keep the tone straightforward and honest, focusing on what you actually do and how often."}
+=====================================
+
+[call 23] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Obsessive-Compulsive Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ obsessive_compulsive_symptoms
+  - Contamination Obsessions: Recurrent and intrusive worries about contamination, germs, or dirt.
+  - Pathological Doubt: Pathological doubt regarding safety or mistakes, such as whether doors are locked or gas valves are closed.
+  - Symmetry and Exactness Obsessions: A strong urge that items must be lined up exactly or be symmetrical.
+  - Forbidden or Taboo Thoughts: Intrusive thoughts involving aggressive (harming others), sexual, or religious content that are prohibited.
+  - Somatic Obsessions: Persistent and specific fear that one might have a serious disease.
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Obsessions
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: obsessive_compulsive_symptoms - Contamination Obsessions, obsessive_compulsive_symptoms - Pathological Doubt, obsessive_compulsive_symptoms - Symmetry and Exactness Obsessions, obsessive_compulsive_symptoms - Forbidden or Taboo Thoughts, obsessive_compulsive_symptoms - Somatic Obsessions
+Answer strategy: Answer clearly whether you do specific repetitive actions or mental rituals in response to these intrusive thoughts or anxieties. Mention concrete examples (e.g., repeated handwashing for contamination fears, checking doors or appliances for doubt, arranging items symmetrically, mentally repeating phrases or prayers to neutralize forbidden thoughts, repeatedly checking your body or searching online for somatic fears). Also say roughly how much time they take per day and whether they interfere with your daily life. Keep the tone straightforward and honest, focusing on what you actually do and how often.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+Doctor: Aside from the obsessive thoughts and rituals, do you also find yourself worrying excessively about many different everyday things (like work, health, family, finances) most days, even when there’s no specific trigger, or is the anxiety mainly tied to the obsessions themselves?
+
+Patient: I think the anxiety is mostly tied to the obsessions themselves—like when I start thinking something’s contaminated, unsafe, or that I’ve made some kind of mistake. I do worry about things like my health or whether I’ve done something wrong, but it usually feels connected to those specific thoughts rather than a constant, general worry about everything.
+
+Doctor: When these intrusive thoughts come up, do you recognize that they’re unreasonable or excessive, or do they feel realistic and you’re convinced the feared outcome will actually happen if you don’t do the rituals?
+
+Patient: It kind of depends on the thought. With contamination or health stuff, in the moment it often feels very real, like “what if this actually makes me or someone else sick,” and I get pretty convinced something bad will happen if I don’t do the ritual. With some of the more taboo or “what if I hurt someone” thoughts, a part of me knows they’re irrational, but they still feel so disturbing that I act like they might be true just in case.
+
+Doctor: Over the last month, have there been most days when you felt clearly down or depressed for hours at a time, or lost interest in things you usually enjoy, separate from the anxiety and obsessions?
+
+Patient: I’m not really sure I’d call it clearly depressed most days. I do feel worn down and less interested in things because the anxiety and rituals take so much out of me, but I wouldn’t say I’m consistently low in mood for hours every day.
+
+Doctor: When you feel anxious or have these intrusive thoughts, do you feel driven to perform specific repetitive behaviors or mental rituals (like checking, washing, counting, or repeating phrases in your head) to reduce the anxiety, and do these take up a lot of time each day?
+
+========== OUTPUT [patient] ==========
+Yeah, I feel like I have to do certain things over and over to get the anxiety down. I wash my hands a lot, check locks and appliances repeatedly, line things up “just right,” and sometimes repeat certain phrases or prayers in my head, and altogether that can easily take one to two hours a day and makes me late or distracted with normal tasks.
+=====================================
+
+[call 24] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F42", "F41.1"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+Doctor: Aside from the obsessive thoughts and rituals, do you also find yourself worrying excessively about many different everyday things (like work, health, family, finances) most days, even when there’s no specific trigger, or is the anxiety mainly tied to the obsessions themselves?
+
+Patient: I think the anxiety is mostly tied to the obsessions themselves—like when I start thinking something’s contaminated, unsafe, or that I’ve made some kind of mistake. I do worry about things like my health or whether I’ve done something wrong, but it usually feels connected to those specific thoughts rather than a constant, general worry about everything.
+
+Doctor: When these intrusive thoughts come up, do you recognize that they’re unreasonable or excessive, or do they feel realistic and you’re convinced the feared outcome will actually happen if you don’t do the rituals?
+
+Patient: It kind of depends on the thought. With contamination or health stuff, in the moment it often feels very real, like “what if this actually makes me or someone else sick,” and I get pretty convinced something bad will happen if I don’t do the ritual. With some of the more taboo or “what if I hurt someone” thoughts, a part of me knows they’re irrational, but they still feel so disturbing that I act like they might be true just in case.
+
+Doctor: Over the last month, have there been most days when you felt clearly down or depressed for hours at a time, or lost interest in things you usually enjoy, separate from the anxiety and obsessions?
+
+Patient: I’m not really sure I’d call it clearly depressed most days. I do feel worn down and less interested in things because the anxiety and rituals take so much out of me, but I wouldn’t say I’m consistently low in mood for hours every day.
+
+Doctor: When you feel anxious or have these intrusive thoughts, do you feel driven to perform specific repetitive behaviors or mental rituals (like checking, washing, counting, or repeating phrases in your head) to reduce the anxiety, and do these take up a lot of time each day?
+
+Patient: Yeah, I feel like I have to do certain things over and over to get the anxiety down. I wash my hands a lot, check locks and appliances repeatedly, line things up “just right,” and sometimes repeat certain phrases or prayers in my head, and altogether that can easily take one to two hours a day and makes me late or distracted with normal tasks.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F42"], "note": "Previously the candidates were [F42, F41.1]. In this segment, the patient describes clear intrusive thoughts about contamination, harm, and things feeling \"wrong,\" along with time‑consuming compulsions (washing, checking, arranging, mental rituals) that take 1–2 hours per day and cause functional impairment—this pattern is highly consistent with a primary obsessive–compulsive syndrome. They report feeling tense and on edge, but the anxiety is described as mainly tied to the obsessions and triggers (contamination, safety, mistakes) rather than a pervasive, free‑floating worry across many domains most days, which would be more characteristic of generalized anxiety. They also do not describe a chronic pattern of excessive worry about multiple everyday matters independent of obsessions. Because the anxiety appears secondary to and largely driven by the obsessions/compulsions, a separate generalized anxiety condition is less likely, so F41.1 is removed. The current candidate list is therefore limited to F42. Further questioning is still needed to clarify duration, degree of insight, rule out other comorbidities (e.g., mood or psychotic symptoms, substance use, medical causes), and confirm diagnostic criteria, so this is not yet final.", "is_final": false}
+=====================================
+
+[call 25] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F42
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F42"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+Doctor: Aside from the obsessive thoughts and rituals, do you also find yourself worrying excessively about many different everyday things (like work, health, family, finances) most days, even when there’s no specific trigger, or is the anxiety mainly tied to the obsessions themselves?
+
+Patient: I think the anxiety is mostly tied to the obsessions themselves—like when I start thinking something’s contaminated, unsafe, or that I’ve made some kind of mistake. I do worry about things like my health or whether I’ve done something wrong, but it usually feels connected to those specific thoughts rather than a constant, general worry about everything.
+
+Doctor: When these intrusive thoughts come up, do you recognize that they’re unreasonable or excessive, or do they feel realistic and you’re convinced the feared outcome will actually happen if you don’t do the rituals?
+
+Patient: It kind of depends on the thought. With contamination or health stuff, in the moment it often feels very real, like “what if this actually makes me or someone else sick,” and I get pretty convinced something bad will happen if I don’t do the ritual. With some of the more taboo or “what if I hurt someone” thoughts, a part of me knows they’re irrational, but they still feel so disturbing that I act like they might be true just in case.
+
+Doctor: Over the last month, have there been most days when you felt clearly down or depressed for hours at a time, or lost interest in things you usually enjoy, separate from the anxiety and obsessions?
+
+Patient: I’m not really sure I’d call it clearly depressed most days. I do feel worn down and less interested in things because the anxiety and rituals take so much out of me, but I wouldn’t say I’m consistently low in mood for hours every day.
+
+Doctor: When you feel anxious or have these intrusive thoughts, do you feel driven to perform specific repetitive behaviors or mental rituals (like checking, washing, counting, or repeating phrases in your head) to reduce the anxiety, and do these take up a lot of time each day?
+
+Patient: Yeah, I feel like I have to do certain things over and over to get the anxiety down. I wash my hands a lot, check locks and appliances repeatedly, line things up “just right,” and sometimes repeat certain phrases or prayers in my head, and altogether that can easily take one to two hours a day and makes me late or distracted with normal tasks.
+
+Patient: Yeah, I feel like I have to do certain things over and over to get the anxiety down. I wash my hands a lot, check locks and appliances repeatedly, line things up “just right,” and sometimes repeat certain phrases or prayers in my head, and altogether that can easily take one to two hours a day and makes me late or distracted with normal tasks.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "insight and resistance",
+  "question": "When these thoughts and urges to do rituals come up, do you usually try to resist or delay doing the compulsions because you see them as unreasonable, or do they feel more like something you simply must do and you don’t really question them in the moment?"
+}
+=====================================
+
+--- turn 07 ---
+
+[call 26] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ obsessive_compulsive_symptoms
+  - Contamination Obsessions: Recurrent and intrusive worries about contamination, germs, or dirt.
+  - Pathological Doubt: Pathological doubt regarding safety or mistakes, such as whether doors are locked or gas valves are closed.
+  - Symmetry and Exactness Obsessions: A strong urge that items must be lined up exactly or be symmetrical.
+  - Forbidden or Taboo Thoughts: Intrusive thoughts involving aggressive (harming others), sexual, or religious content that are prohibited.
+  - Somatic Obsessions: Persistent and specific fear that one might have a serious disease.
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 7
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+When these thoughts and urges to do rituals come up, do you usually try to resist or delay doing the compulsions because you see them as unreasonable, or do they feel more like something you simply must do and you don’t really question them in the moment?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["obsessive_compulsive_symptoms - Contamination Obsessions", "obsessive_compulsive_symptoms - Pathological Doubt", "obsessive_compulsive_symptoms - Symmetry and Exactness Obsessions", "obsessive_compulsive_symptoms - Forbidden or Taboo Thoughts", "obsessive_compulsive_symptoms - Somatic Obsessions"], "answer_strategy": "Answer directly how you experience your obsessions and any rituals/compulsions: say whether you recognize them as unreasonable and try to resist or delay them, or whether in the moment they feel completely necessary and you just do them without questioning. Be concrete and honest, maybe give a brief example (e.g., with checking, cleaning, arranging, or health worries), but keep it short and focused on how much insight and control you feel you have when the thoughts/urges appear."}
+=====================================
+
+[call 27] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Obsessive-Compulsive Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ obsessive_compulsive_symptoms
+  - Contamination Obsessions: Recurrent and intrusive worries about contamination, germs, or dirt.
+  - Pathological Doubt: Pathological doubt regarding safety or mistakes, such as whether doors are locked or gas valves are closed.
+  - Symmetry and Exactness Obsessions: A strong urge that items must be lined up exactly or be symmetrical.
+  - Forbidden or Taboo Thoughts: Intrusive thoughts involving aggressive (harming others), sexual, or religious content that are prohibited.
+  - Somatic Obsessions: Persistent and specific fear that one might have a serious disease.
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Obsessions
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: obsessive_compulsive_symptoms - Contamination Obsessions, obsessive_compulsive_symptoms - Pathological Doubt, obsessive_compulsive_symptoms - Symmetry and Exactness Obsessions, obsessive_compulsive_symptoms - Forbidden or Taboo Thoughts, obsessive_compulsive_symptoms - Somatic Obsessions
+Answer strategy: Answer directly how you experience your obsessions and any rituals/compulsions: say whether you recognize them as unreasonable and try to resist or delay them, or whether in the moment they feel completely necessary and you just do them without questioning. Be concrete and honest, maybe give a brief example (e.g., with checking, cleaning, arranging, or health worries), but keep it short and focused on how much insight and control you feel you have when the thoughts/urges appear.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+Doctor: Aside from the obsessive thoughts and rituals, do you also find yourself worrying excessively about many different everyday things (like work, health, family, finances) most days, even when there’s no specific trigger, or is the anxiety mainly tied to the obsessions themselves?
+
+Patient: I think the anxiety is mostly tied to the obsessions themselves—like when I start thinking something’s contaminated, unsafe, or that I’ve made some kind of mistake. I do worry about things like my health or whether I’ve done something wrong, but it usually feels connected to those specific thoughts rather than a constant, general worry about everything.
+
+Doctor: When these intrusive thoughts come up, do you recognize that they’re unreasonable or excessive, or do they feel realistic and you’re convinced the feared outcome will actually happen if you don’t do the rituals?
+
+Patient: It kind of depends on the thought. With contamination or health stuff, in the moment it often feels very real, like “what if this actually makes me or someone else sick,” and I get pretty convinced something bad will happen if I don’t do the ritual. With some of the more taboo or “what if I hurt someone” thoughts, a part of me knows they’re irrational, but they still feel so disturbing that I act like they might be true just in case.
+
+Doctor: Over the last month, have there been most days when you felt clearly down or depressed for hours at a time, or lost interest in things you usually enjoy, separate from the anxiety and obsessions?
+
+Patient: I’m not really sure I’d call it clearly depressed most days. I do feel worn down and less interested in things because the anxiety and rituals take so much out of me, but I wouldn’t say I’m consistently low in mood for hours every day.
+
+Doctor: When you feel anxious or have these intrusive thoughts, do you feel driven to perform specific repetitive behaviors or mental rituals (like checking, washing, counting, or repeating phrases in your head) to reduce the anxiety, and do these take up a lot of time each day?
+
+Patient: Yeah, I feel like I have to do certain things over and over to get the anxiety down. I wash my hands a lot, check locks and appliances repeatedly, line things up “just right,” and sometimes repeat certain phrases or prayers in my head, and altogether that can easily take one to two hours a day and makes me late or distracted with normal tasks.
+
+Doctor: When these thoughts and urges to do rituals come up, do you usually try to resist or delay doing the compulsions because you see them as unreasonable, or do they feel more like something you simply must do and you don’t really question them in the moment?
+
+========== OUTPUT [patient] ==========
+Most of the time they feel like something I just have to do in the moment, like an urgent pressure, and it’s really hard to think clearly about whether they’re reasonable. I do sometimes try to resist or delay, especially if I’m in public or running late, but the anxiety ramps up so much that I usually end up giving in just to get some relief.
+=====================================
+
+[call 28] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F42"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+Doctor: Aside from the obsessive thoughts and rituals, do you also find yourself worrying excessively about many different everyday things (like work, health, family, finances) most days, even when there’s no specific trigger, or is the anxiety mainly tied to the obsessions themselves?
+
+Patient: I think the anxiety is mostly tied to the obsessions themselves—like when I start thinking something’s contaminated, unsafe, or that I’ve made some kind of mistake. I do worry about things like my health or whether I’ve done something wrong, but it usually feels connected to those specific thoughts rather than a constant, general worry about everything.
+
+Doctor: When these intrusive thoughts come up, do you recognize that they’re unreasonable or excessive, or do they feel realistic and you’re convinced the feared outcome will actually happen if you don’t do the rituals?
+
+Patient: It kind of depends on the thought. With contamination or health stuff, in the moment it often feels very real, like “what if this actually makes me or someone else sick,” and I get pretty convinced something bad will happen if I don’t do the ritual. With some of the more taboo or “what if I hurt someone” thoughts, a part of me knows they’re irrational, but they still feel so disturbing that I act like they might be true just in case.
+
+Doctor: Over the last month, have there been most days when you felt clearly down or depressed for hours at a time, or lost interest in things you usually enjoy, separate from the anxiety and obsessions?
+
+Patient: I’m not really sure I’d call it clearly depressed most days. I do feel worn down and less interested in things because the anxiety and rituals take so much out of me, but I wouldn’t say I’m consistently low in mood for hours every day.
+
+Doctor: When you feel anxious or have these intrusive thoughts, do you feel driven to perform specific repetitive behaviors or mental rituals (like checking, washing, counting, or repeating phrases in your head) to reduce the anxiety, and do these take up a lot of time each day?
+
+Patient: Yeah, I feel like I have to do certain things over and over to get the anxiety down. I wash my hands a lot, check locks and appliances repeatedly, line things up “just right,” and sometimes repeat certain phrases or prayers in my head, and altogether that can easily take one to two hours a day and makes me late or distracted with normal tasks.
+
+Doctor: When these thoughts and urges to do rituals come up, do you usually try to resist or delay doing the compulsions because you see them as unreasonable, or do they feel more like something you simply must do and you don’t really question them in the moment?
+
+Patient: Most of the time they feel like something I just have to do in the moment, like an urgent pressure, and it’s really hard to think clearly about whether they’re reasonable. I do sometimes try to resist or delay, especially if I’m in public or running late, but the anxiety ramps up so much that I usually end up giving in just to get some relief.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F42", "F41.1"], "note": "Previously the only candidate was F42, based on prominent obsessions and compulsions. In this segment, the patient clearly describes recurrent intrusive thoughts (contamination, harm, taboo themes) and time‑consuming rituals (washing, checking, ordering, mental prayers) that take 1–2 hours per day and cause significant interference—this remains fully consistent with F42, so it stays as the primary candidate. The patient reports feeling tense and on edge, but the anxiety is described as mainly tied to the obsessions and compulsions rather than a free‑floating, generalized worry across many domains; this pattern still strongly favors F42 as the main diagnosis. However, because the patient does endorse a more pervasive sense of tension and some health/mistake worries, and we have not yet done a full, structured review of generalized worries, duration, and physical symptoms, F41.1 (generalized anxiety) is added as a secondary differential to be clarified. There is no clear evidence for a separate depressive episode (no persistent low mood or anhedonia independent of the OCD burden), so no mood disorder codes are added. Current candidates are therefore F42 and F41.1, with F42 most likely, and further questioning is needed to clarify the presence or absence of a comorbid generalized anxiety condition.", "is_final": false}
+=====================================
+
+[call 29] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F42
+- F41.1
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F42", "F41.1"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+Doctor: Aside from the obsessive thoughts and rituals, do you also find yourself worrying excessively about many different everyday things (like work, health, family, finances) most days, even when there’s no specific trigger, or is the anxiety mainly tied to the obsessions themselves?
+
+Patient: I think the anxiety is mostly tied to the obsessions themselves—like when I start thinking something’s contaminated, unsafe, or that I’ve made some kind of mistake. I do worry about things like my health or whether I’ve done something wrong, but it usually feels connected to those specific thoughts rather than a constant, general worry about everything.
+
+Doctor: When these intrusive thoughts come up, do you recognize that they’re unreasonable or excessive, or do they feel realistic and you’re convinced the feared outcome will actually happen if you don’t do the rituals?
+
+Patient: It kind of depends on the thought. With contamination or health stuff, in the moment it often feels very real, like “what if this actually makes me or someone else sick,” and I get pretty convinced something bad will happen if I don’t do the ritual. With some of the more taboo or “what if I hurt someone” thoughts, a part of me knows they’re irrational, but they still feel so disturbing that I act like they might be true just in case.
+
+Doctor: Over the last month, have there been most days when you felt clearly down or depressed for hours at a time, or lost interest in things you usually enjoy, separate from the anxiety and obsessions?
+
+Patient: I’m not really sure I’d call it clearly depressed most days. I do feel worn down and less interested in things because the anxiety and rituals take so much out of me, but I wouldn’t say I’m consistently low in mood for hours every day.
+
+Doctor: When you feel anxious or have these intrusive thoughts, do you feel driven to perform specific repetitive behaviors or mental rituals (like checking, washing, counting, or repeating phrases in your head) to reduce the anxiety, and do these take up a lot of time each day?
+
+Patient: Yeah, I feel like I have to do certain things over and over to get the anxiety down. I wash my hands a lot, check locks and appliances repeatedly, line things up “just right,” and sometimes repeat certain phrases or prayers in my head, and altogether that can easily take one to two hours a day and makes me late or distracted with normal tasks.
+
+Doctor: When these thoughts and urges to do rituals come up, do you usually try to resist or delay doing the compulsions because you see them as unreasonable, or do they feel more like something you simply must do and you don’t really question them in the moment?
+
+Patient: Most of the time they feel like something I just have to do in the moment, like an urgent pressure, and it’s really hard to think clearly about whether they’re reasonable. I do sometimes try to resist or delay, especially if I’m in public or running late, but the anxiety ramps up so much that I usually end up giving in just to get some relief.
+
+Patient: Most of the time they feel like something I just have to do in the moment, like an urgent pressure, and it’s really hard to think clearly about whether they’re reasonable. I do sometimes try to resist or delay, especially if I’m in public or running late, but the anxiety ramps up so much that I usually end up giving in just to get some relief.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "free-floating worry vs obsession-linked anxiety",
+  "question": "On days when your obsessions and rituals are relatively mild or not happening much, do you still find yourself feeling generally anxious and worrying about lots of different everyday things most of the day, or does your anxiety mostly fade when the obsessions and rituals ease up?"
+}
+=====================================
+
+--- turn 08 ---
+
+[call 30] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ obsessive_compulsive_symptoms
+  - Contamination Obsessions: Recurrent and intrusive worries about contamination, germs, or dirt.
+  - Pathological Doubt: Pathological doubt regarding safety or mistakes, such as whether doors are locked or gas valves are closed.
+  - Symmetry and Exactness Obsessions: A strong urge that items must be lined up exactly or be symmetrical.
+  - Forbidden or Taboo Thoughts: Intrusive thoughts involving aggressive (harming others), sexual, or religious content that are prohibited.
+  - Somatic Obsessions: Persistent and specific fear that one might have a serious disease.
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 8
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+On days when your obsessions and rituals are relatively mild or not happening much, do you still find yourself feeling generally anxious and worrying about lots of different everyday things most of the day, or does your anxiety mostly fade when the obsessions and rituals ease up?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["obsessive_compulsive_symptoms"], "answer_strategy": "Answer by describing how your anxiety changes in relation to your obsessions and compulsions. Be concrete: say whether, on days when your obsessions/rituals are mild, you still feel tense and worry about many everyday issues (work, family, health, money, etc.) most of the day, or whether your anxiety mostly fades when the OCD symptoms are quieter. If it varies, briefly explain when you feel generally anxious versus when you feel mostly calm. Keep the tone straightforward and focused on what you actually notice in yourself day to day."}
+=====================================
+
+[call 31] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Obsessive-Compulsive Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ obsessive_compulsive_symptoms
+  - Contamination Obsessions: Recurrent and intrusive worries about contamination, germs, or dirt.
+  - Pathological Doubt: Pathological doubt regarding safety or mistakes, such as whether doors are locked or gas valves are closed.
+  - Symmetry and Exactness Obsessions: A strong urge that items must be lined up exactly or be symmetrical.
+  - Forbidden or Taboo Thoughts: Intrusive thoughts involving aggressive (harming others), sexual, or religious content that are prohibited.
+  - Somatic Obsessions: Persistent and specific fear that one might have a serious disease.
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Obsessions
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: obsessive_compulsive_symptoms
+Answer strategy: Answer by describing how your anxiety changes in relation to your obsessions and compulsions. Be concrete: say whether, on days when your obsessions/rituals are mild, you still feel tense and worry about many everyday issues (work, family, health, money, etc.) most of the day, or whether your anxiety mostly fades when the OCD symptoms are quieter. If it varies, briefly explain when you feel generally anxious versus when you feel mostly calm. Keep the tone straightforward and focused on what you actually notice in yourself day to day.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+Doctor: Aside from the obsessive thoughts and rituals, do you also find yourself worrying excessively about many different everyday things (like work, health, family, finances) most days, even when there’s no specific trigger, or is the anxiety mainly tied to the obsessions themselves?
+
+Patient: I think the anxiety is mostly tied to the obsessions themselves—like when I start thinking something’s contaminated, unsafe, or that I’ve made some kind of mistake. I do worry about things like my health or whether I’ve done something wrong, but it usually feels connected to those specific thoughts rather than a constant, general worry about everything.
+
+Doctor: When these intrusive thoughts come up, do you recognize that they’re unreasonable or excessive, or do they feel realistic and you’re convinced the feared outcome will actually happen if you don’t do the rituals?
+
+Patient: It kind of depends on the thought. With contamination or health stuff, in the moment it often feels very real, like “what if this actually makes me or someone else sick,” and I get pretty convinced something bad will happen if I don’t do the ritual. With some of the more taboo or “what if I hurt someone” thoughts, a part of me knows they’re irrational, but they still feel so disturbing that I act like they might be true just in case.
+
+Doctor: Over the last month, have there been most days when you felt clearly down or depressed for hours at a time, or lost interest in things you usually enjoy, separate from the anxiety and obsessions?
+
+Patient: I’m not really sure I’d call it clearly depressed most days. I do feel worn down and less interested in things because the anxiety and rituals take so much out of me, but I wouldn’t say I’m consistently low in mood for hours every day.
+
+Doctor: When you feel anxious or have these intrusive thoughts, do you feel driven to perform specific repetitive behaviors or mental rituals (like checking, washing, counting, or repeating phrases in your head) to reduce the anxiety, and do these take up a lot of time each day?
+
+Patient: Yeah, I feel like I have to do certain things over and over to get the anxiety down. I wash my hands a lot, check locks and appliances repeatedly, line things up “just right,” and sometimes repeat certain phrases or prayers in my head, and altogether that can easily take one to two hours a day and makes me late or distracted with normal tasks.
+
+Doctor: When these thoughts and urges to do rituals come up, do you usually try to resist or delay doing the compulsions because you see them as unreasonable, or do they feel more like something you simply must do and you don’t really question them in the moment?
+
+Patient: Most of the time they feel like something I just have to do in the moment, like an urgent pressure, and it’s really hard to think clearly about whether they’re reasonable. I do sometimes try to resist or delay, especially if I’m in public or running late, but the anxiety ramps up so much that I usually end up giving in just to get some relief.
+
+Doctor: On days when your obsessions and rituals are relatively mild or not happening much, do you still find yourself feeling generally anxious and worrying about lots of different everyday things most of the day, or does your anxiety mostly fade when the obsessions and rituals ease up?
+
+========== OUTPUT [patient] ==========
+When the obsessions and rituals ease up, my anxiety definitely goes down a lot. I might still have some normal worries about work or family, but I don’t feel that same constant, intense tension unless the obsessive thoughts are really active.
+=====================================
+
+[call 32] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F42", "F41.1"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+Doctor: Aside from the obsessive thoughts and rituals, do you also find yourself worrying excessively about many different everyday things (like work, health, family, finances) most days, even when there’s no specific trigger, or is the anxiety mainly tied to the obsessions themselves?
+
+Patient: I think the anxiety is mostly tied to the obsessions themselves—like when I start thinking something’s contaminated, unsafe, or that I’ve made some kind of mistake. I do worry about things like my health or whether I’ve done something wrong, but it usually feels connected to those specific thoughts rather than a constant, general worry about everything.
+
+Doctor: When these intrusive thoughts come up, do you recognize that they’re unreasonable or excessive, or do they feel realistic and you’re convinced the feared outcome will actually happen if you don’t do the rituals?
+
+Patient: It kind of depends on the thought. With contamination or health stuff, in the moment it often feels very real, like “what if this actually makes me or someone else sick,” and I get pretty convinced something bad will happen if I don’t do the ritual. With some of the more taboo or “what if I hurt someone” thoughts, a part of me knows they’re irrational, but they still feel so disturbing that I act like they might be true just in case.
+
+Doctor: Over the last month, have there been most days when you felt clearly down or depressed for hours at a time, or lost interest in things you usually enjoy, separate from the anxiety and obsessions?
+
+Patient: I’m not really sure I’d call it clearly depressed most days. I do feel worn down and less interested in things because the anxiety and rituals take so much out of me, but I wouldn’t say I’m consistently low in mood for hours every day.
+
+Doctor: When you feel anxious or have these intrusive thoughts, do you feel driven to perform specific repetitive behaviors or mental rituals (like checking, washing, counting, or repeating phrases in your head) to reduce the anxiety, and do these take up a lot of time each day?
+
+Patient: Yeah, I feel like I have to do certain things over and over to get the anxiety down. I wash my hands a lot, check locks and appliances repeatedly, line things up “just right,” and sometimes repeat certain phrases or prayers in my head, and altogether that can easily take one to two hours a day and makes me late or distracted with normal tasks.
+
+Doctor: When these thoughts and urges to do rituals come up, do you usually try to resist or delay doing the compulsions because you see them as unreasonable, or do they feel more like something you simply must do and you don’t really question them in the moment?
+
+Patient: Most of the time they feel like something I just have to do in the moment, like an urgent pressure, and it’s really hard to think clearly about whether they’re reasonable. I do sometimes try to resist or delay, especially if I’m in public or running late, but the anxiety ramps up so much that I usually end up giving in just to get some relief.
+
+Doctor: On days when your obsessions and rituals are relatively mild or not happening much, do you still find yourself feeling generally anxious and worrying about lots of different everyday things most of the day, or does your anxiety mostly fade when the obsessions and rituals ease up?
+
+Patient: When the obsessions and rituals ease up, my anxiety definitely goes down a lot. I might still have some normal worries about work or family, but I don’t feel that same constant, intense tension unless the obsessive thoughts are really active.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F42"], "note": "Previously the candidates were [F42, F41.1]. Based on this conversation, the picture is dominated by intrusive, repetitive thoughts about contamination, harm, and things being \"wrong,\" along with clearly time‑consuming compulsions (washing, checking, arranging, mental rituals) that the patient feels driven to perform to reduce anxiety. The anxiety largely tracks the presence and intensity of these obsessions and compulsions and decreases substantially when they ease up. The patient does not describe a persistent, free‑floating worry about many life domains on most days that is independent of the obsessions, which is required for the second candidate. Because the anxiety appears secondary to and largely contingent on the obsessions/compulsions, a separate generalized anxiety condition is less likely, so the current candidate list is narrowed to [F42]. I do not yet have enough information about duration, functional impact across settings, and any comorbid conditions, so I will continue the interview.", "is_final": false}
+=====================================
+
+[call 33] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F42
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F42"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+Doctor: Aside from the obsessive thoughts and rituals, do you also find yourself worrying excessively about many different everyday things (like work, health, family, finances) most days, even when there’s no specific trigger, or is the anxiety mainly tied to the obsessions themselves?
+
+Patient: I think the anxiety is mostly tied to the obsessions themselves—like when I start thinking something’s contaminated, unsafe, or that I’ve made some kind of mistake. I do worry about things like my health or whether I’ve done something wrong, but it usually feels connected to those specific thoughts rather than a constant, general worry about everything.
+
+Doctor: When these intrusive thoughts come up, do you recognize that they’re unreasonable or excessive, or do they feel realistic and you’re convinced the feared outcome will actually happen if you don’t do the rituals?
+
+Patient: It kind of depends on the thought. With contamination or health stuff, in the moment it often feels very real, like “what if this actually makes me or someone else sick,” and I get pretty convinced something bad will happen if I don’t do the ritual. With some of the more taboo or “what if I hurt someone” thoughts, a part of me knows they’re irrational, but they still feel so disturbing that I act like they might be true just in case.
+
+Doctor: Over the last month, have there been most days when you felt clearly down or depressed for hours at a time, or lost interest in things you usually enjoy, separate from the anxiety and obsessions?
+
+Patient: I’m not really sure I’d call it clearly depressed most days. I do feel worn down and less interested in things because the anxiety and rituals take so much out of me, but I wouldn’t say I’m consistently low in mood for hours every day.
+
+Doctor: When you feel anxious or have these intrusive thoughts, do you feel driven to perform specific repetitive behaviors or mental rituals (like checking, washing, counting, or repeating phrases in your head) to reduce the anxiety, and do these take up a lot of time each day?
+
+Patient: Yeah, I feel like I have to do certain things over and over to get the anxiety down. I wash my hands a lot, check locks and appliances repeatedly, line things up “just right,” and sometimes repeat certain phrases or prayers in my head, and altogether that can easily take one to two hours a day and makes me late or distracted with normal tasks.
+
+Doctor: When these thoughts and urges to do rituals come up, do you usually try to resist or delay doing the compulsions because you see them as unreasonable, or do they feel more like something you simply must do and you don’t really question them in the moment?
+
+Patient: Most of the time they feel like something I just have to do in the moment, like an urgent pressure, and it’s really hard to think clearly about whether they’re reasonable. I do sometimes try to resist or delay, especially if I’m in public or running late, but the anxiety ramps up so much that I usually end up giving in just to get some relief.
+
+Doctor: On days when your obsessions and rituals are relatively mild or not happening much, do you still find yourself feeling generally anxious and worrying about lots of different everyday things most of the day, or does your anxiety mostly fade when the obsessions and rituals ease up?
+
+Patient: When the obsessions and rituals ease up, my anxiety definitely goes down a lot. I might still have some normal worries about work or family, but I don’t feel that same constant, intense tension unless the obsessive thoughts are really active.
+
+Patient: When the obsessions and rituals ease up, my anxiety definitely goes down a lot. I might still have some normal worries about work or family, but I don’t feel that same constant, intense tension unless the obsessive thoughts are really active.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "duration",
+  "subcategory": "course of symptoms",
+  "question": "How long have you been experiencing these obsessive thoughts and rituals—are we talking weeks, months, or several years, and have there been periods when they went away or were much milder?"
+}
+=====================================
+
+--- turn 09 ---
+
+[call 34] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ obsessive_compulsive_symptoms
+  - Contamination Obsessions: Recurrent and intrusive worries about contamination, germs, or dirt.
+  - Pathological Doubt: Pathological doubt regarding safety or mistakes, such as whether doors are locked or gas valves are closed.
+  - Symmetry and Exactness Obsessions: A strong urge that items must be lined up exactly or be symmetrical.
+  - Forbidden or Taboo Thoughts: Intrusive thoughts involving aggressive (harming others), sexual, or religious content that are prohibited.
+  - Somatic Obsessions: Persistent and specific fear that one might have a serious disease.
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 9
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+How long have you been experiencing these obsessive thoughts and rituals—are we talking weeks, months, or several years, and have there been periods when they went away or were much milder?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["obsessive_compulsive_symptoms", "Contamination Obsessions", "Pathological Doubt", "Symmetry and Exactness Obsessions", "Forbidden or Taboo Thoughts", "Somatic Obsessions"], "answer_strategy": "Clearly state the overall duration in simple time frames (e.g., 'about 6 months', 'for several years since high school'). Then describe whether the intensity has fluctuated: mention if there were stretches when the obsessions/rituals almost disappeared, were milder, or if they’ve been fairly constant. If helpful, anchor changes to life events (starting school, new job, stress). Keep the tone factual and straightforward, focusing on timeline and changes in severity rather than detailed descriptions of each specific obsession."}
+=====================================
+
+[call 35] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Obsessive-Compulsive Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ obsessive_compulsive_symptoms
+  - Contamination Obsessions: Recurrent and intrusive worries about contamination, germs, or dirt.
+  - Pathological Doubt: Pathological doubt regarding safety or mistakes, such as whether doors are locked or gas valves are closed.
+  - Symmetry and Exactness Obsessions: A strong urge that items must be lined up exactly or be symmetrical.
+  - Forbidden or Taboo Thoughts: Intrusive thoughts involving aggressive (harming others), sexual, or religious content that are prohibited.
+  - Somatic Obsessions: Persistent and specific fear that one might have a serious disease.
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Obsessions
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: obsessive_compulsive_symptoms, Contamination Obsessions, Pathological Doubt, Symmetry and Exactness Obsessions, Forbidden or Taboo Thoughts, Somatic Obsessions
+Answer strategy: Clearly state the overall duration in simple time frames (e.g., 'about 6 months', 'for several years since high school'). Then describe whether the intensity has fluctuated: mention if there were stretches when the obsessions/rituals almost disappeared, were milder, or if they’ve been fairly constant. If helpful, anchor changes to life events (starting school, new job, stress). Keep the tone factual and straightforward, focusing on timeline and changes in severity rather than detailed descriptions of each specific obsession.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+Doctor: Aside from the obsessive thoughts and rituals, do you also find yourself worrying excessively about many different everyday things (like work, health, family, finances) most days, even when there’s no specific trigger, or is the anxiety mainly tied to the obsessions themselves?
+
+Patient: I think the anxiety is mostly tied to the obsessions themselves—like when I start thinking something’s contaminated, unsafe, or that I’ve made some kind of mistake. I do worry about things like my health or whether I’ve done something wrong, but it usually feels connected to those specific thoughts rather than a constant, general worry about everything.
+
+Doctor: When these intrusive thoughts come up, do you recognize that they’re unreasonable or excessive, or do they feel realistic and you’re convinced the feared outcome will actually happen if you don’t do the rituals?
+
+Patient: It kind of depends on the thought. With contamination or health stuff, in the moment it often feels very real, like “what if this actually makes me or someone else sick,” and I get pretty convinced something bad will happen if I don’t do the ritual. With some of the more taboo or “what if I hurt someone” thoughts, a part of me knows they’re irrational, but they still feel so disturbing that I act like they might be true just in case.
+
+Doctor: Over the last month, have there been most days when you felt clearly down or depressed for hours at a time, or lost interest in things you usually enjoy, separate from the anxiety and obsessions?
+
+Patient: I’m not really sure I’d call it clearly depressed most days. I do feel worn down and less interested in things because the anxiety and rituals take so much out of me, but I wouldn’t say I’m consistently low in mood for hours every day.
+
+Doctor: When you feel anxious or have these intrusive thoughts, do you feel driven to perform specific repetitive behaviors or mental rituals (like checking, washing, counting, or repeating phrases in your head) to reduce the anxiety, and do these take up a lot of time each day?
+
+Patient: Yeah, I feel like I have to do certain things over and over to get the anxiety down. I wash my hands a lot, check locks and appliances repeatedly, line things up “just right,” and sometimes repeat certain phrases or prayers in my head, and altogether that can easily take one to two hours a day and makes me late or distracted with normal tasks.
+
+Doctor: When these thoughts and urges to do rituals come up, do you usually try to resist or delay doing the compulsions because you see them as unreasonable, or do they feel more like something you simply must do and you don’t really question them in the moment?
+
+Patient: Most of the time they feel like something I just have to do in the moment, like an urgent pressure, and it’s really hard to think clearly about whether they’re reasonable. I do sometimes try to resist or delay, especially if I’m in public or running late, but the anxiety ramps up so much that I usually end up giving in just to get some relief.
+
+Doctor: On days when your obsessions and rituals are relatively mild or not happening much, do you still find yourself feeling generally anxious and worrying about lots of different everyday things most of the day, or does your anxiety mostly fade when the obsessions and rituals ease up?
+
+Patient: When the obsessions and rituals ease up, my anxiety definitely goes down a lot. I might still have some normal worries about work or family, but I don’t feel that same constant, intense tension unless the obsessive thoughts are really active.
+
+Doctor: How long have you been experiencing these obsessive thoughts and rituals—are we talking weeks, months, or several years, and have there been periods when they went away or were much milder?
+
+========== OUTPUT [patient] ==========
+I’ve been dealing with them for several years now, probably since late high school or early college, but they’ve gotten noticeably worse over the past year or so. There have been stretches where they were milder or I could ignore them more, usually when life was less stressful, but they’ve never completely gone away.
+=====================================
+
+[call 36] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F42"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+Doctor: Aside from the obsessive thoughts and rituals, do you also find yourself worrying excessively about many different everyday things (like work, health, family, finances) most days, even when there’s no specific trigger, or is the anxiety mainly tied to the obsessions themselves?
+
+Patient: I think the anxiety is mostly tied to the obsessions themselves—like when I start thinking something’s contaminated, unsafe, or that I’ve made some kind of mistake. I do worry about things like my health or whether I’ve done something wrong, but it usually feels connected to those specific thoughts rather than a constant, general worry about everything.
+
+Doctor: When these intrusive thoughts come up, do you recognize that they’re unreasonable or excessive, or do they feel realistic and you’re convinced the feared outcome will actually happen if you don’t do the rituals?
+
+Patient: It kind of depends on the thought. With contamination or health stuff, in the moment it often feels very real, like “what if this actually makes me or someone else sick,” and I get pretty convinced something bad will happen if I don’t do the ritual. With some of the more taboo or “what if I hurt someone” thoughts, a part of me knows they’re irrational, but they still feel so disturbing that I act like they might be true just in case.
+
+Doctor: Over the last month, have there been most days when you felt clearly down or depressed for hours at a time, or lost interest in things you usually enjoy, separate from the anxiety and obsessions?
+
+Patient: I’m not really sure I’d call it clearly depressed most days. I do feel worn down and less interested in things because the anxiety and rituals take so much out of me, but I wouldn’t say I’m consistently low in mood for hours every day.
+
+Doctor: When you feel anxious or have these intrusive thoughts, do you feel driven to perform specific repetitive behaviors or mental rituals (like checking, washing, counting, or repeating phrases in your head) to reduce the anxiety, and do these take up a lot of time each day?
+
+Patient: Yeah, I feel like I have to do certain things over and over to get the anxiety down. I wash my hands a lot, check locks and appliances repeatedly, line things up “just right,” and sometimes repeat certain phrases or prayers in my head, and altogether that can easily take one to two hours a day and makes me late or distracted with normal tasks.
+
+Doctor: When these thoughts and urges to do rituals come up, do you usually try to resist or delay doing the compulsions because you see them as unreasonable, or do they feel more like something you simply must do and you don’t really question them in the moment?
+
+Patient: Most of the time they feel like something I just have to do in the moment, like an urgent pressure, and it’s really hard to think clearly about whether they’re reasonable. I do sometimes try to resist or delay, especially if I’m in public or running late, but the anxiety ramps up so much that I usually end up giving in just to get some relief.
+
+Doctor: On days when your obsessions and rituals are relatively mild or not happening much, do you still find yourself feeling generally anxious and worrying about lots of different everyday things most of the day, or does your anxiety mostly fade when the obsessions and rituals ease up?
+
+Patient: When the obsessions and rituals ease up, my anxiety definitely goes down a lot. I might still have some normal worries about work or family, but I don’t feel that same constant, intense tension unless the obsessive thoughts are really active.
+
+Doctor: How long have you been experiencing these obsessive thoughts and rituals—are we talking weeks, months, or several years, and have there been periods when they went away or were much milder?
+
+Patient: I’ve been dealing with them for several years now, probably since late high school or early college, but they’ve gotten noticeably worse over the past year or so. There have been stretches where they were milder or I could ignore them more, usually when life was less stressful, but they’ve never completely gone away.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F42"], "note": "Previously the only candidate was F42, based on the presence of intrusive thoughts and repetitive behaviors. The additional information confirms a longstanding pattern of intrusive, ego-dystonic thoughts (contamination, harm, taboo themes) and time-consuming compulsions (washing, checking, ordering, mental rituals) that are clearly linked to relief of anxiety and cause significant interference. The patient’s baseline anxiety largely tracks with the intensity of obsessions and compulsions, arguing against a separate, pervasive worry pattern characteristic of another primary anxiety condition. They also do not describe a distinct, persistent depressive syndrome; low energy and reduced interest appear secondary to anxiety and rituals rather than a separate mood disorder. There is no evidence of psychotic loss of reality testing, manic symptoms, or primary generalized worry apart from the obsessions. Thus no new differential diagnoses are strongly supported at this stage, and F42 remains the sole candidate.", "is_final": false}
+=====================================
+
+[call 37] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F42
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F42"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+Doctor: Aside from the obsessive thoughts and rituals, do you also find yourself worrying excessively about many different everyday things (like work, health, family, finances) most days, even when there’s no specific trigger, or is the anxiety mainly tied to the obsessions themselves?
+
+Patient: I think the anxiety is mostly tied to the obsessions themselves—like when I start thinking something’s contaminated, unsafe, or that I’ve made some kind of mistake. I do worry about things like my health or whether I’ve done something wrong, but it usually feels connected to those specific thoughts rather than a constant, general worry about everything.
+
+Doctor: When these intrusive thoughts come up, do you recognize that they’re unreasonable or excessive, or do they feel realistic and you’re convinced the feared outcome will actually happen if you don’t do the rituals?
+
+Patient: It kind of depends on the thought. With contamination or health stuff, in the moment it often feels very real, like “what if this actually makes me or someone else sick,” and I get pretty convinced something bad will happen if I don’t do the ritual. With some of the more taboo or “what if I hurt someone” thoughts, a part of me knows they’re irrational, but they still feel so disturbing that I act like they might be true just in case.
+
+Doctor: Over the last month, have there been most days when you felt clearly down or depressed for hours at a time, or lost interest in things you usually enjoy, separate from the anxiety and obsessions?
+
+Patient: I’m not really sure I’d call it clearly depressed most days. I do feel worn down and less interested in things because the anxiety and rituals take so much out of me, but I wouldn’t say I’m consistently low in mood for hours every day.
+
+Doctor: When you feel anxious or have these intrusive thoughts, do you feel driven to perform specific repetitive behaviors or mental rituals (like checking, washing, counting, or repeating phrases in your head) to reduce the anxiety, and do these take up a lot of time each day?
+
+Patient: Yeah, I feel like I have to do certain things over and over to get the anxiety down. I wash my hands a lot, check locks and appliances repeatedly, line things up “just right,” and sometimes repeat certain phrases or prayers in my head, and altogether that can easily take one to two hours a day and makes me late or distracted with normal tasks.
+
+Doctor: When these thoughts and urges to do rituals come up, do you usually try to resist or delay doing the compulsions because you see them as unreasonable, or do they feel more like something you simply must do and you don’t really question them in the moment?
+
+Patient: Most of the time they feel like something I just have to do in the moment, like an urgent pressure, and it’s really hard to think clearly about whether they’re reasonable. I do sometimes try to resist or delay, especially if I’m in public or running late, but the anxiety ramps up so much that I usually end up giving in just to get some relief.
+
+Doctor: On days when your obsessions and rituals are relatively mild or not happening much, do you still find yourself feeling generally anxious and worrying about lots of different everyday things most of the day, or does your anxiety mostly fade when the obsessions and rituals ease up?
+
+Patient: When the obsessions and rituals ease up, my anxiety definitely goes down a lot. I might still have some normal worries about work or family, but I don’t feel that same constant, intense tension unless the obsessive thoughts are really active.
+
+Doctor: How long have you been experiencing these obsessive thoughts and rituals—are we talking weeks, months, or several years, and have there been periods when they went away or were much milder?
+
+Patient: I’ve been dealing with them for several years now, probably since late high school or early college, but they’ve gotten noticeably worse over the past year or so. There have been stretches where they were milder or I could ignore them more, usually when life was less stressful, but they’ve never completely gone away.
+
+Patient: I’ve been dealing with them for several years now, probably since late high school or early college, but they’ve gotten noticeably worse over the past year or so. There have been stretches where they were milder or I could ignore them more, usually when life was less stressful, but they’ve never completely gone away.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "symptom presence",
+  "subcategory": "insight/ego-dystonic nature",
+  "question": "Overall, do these obsessive thoughts and rituals feel unwanted and out of line with what you believe is reasonable (something you wish you could stop), or do you mostly feel they’re justified and necessary to stay safe?"
+}
+=====================================
+
+--- turn 10 ---
+
+[call 38] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ obsessive_compulsive_symptoms
+  - Contamination Obsessions: Recurrent and intrusive worries about contamination, germs, or dirt.
+  - Pathological Doubt: Pathological doubt regarding safety or mistakes, such as whether doors are locked or gas valves are closed.
+  - Symmetry and Exactness Obsessions: A strong urge that items must be lined up exactly or be symmetrical.
+  - Forbidden or Taboo Thoughts: Intrusive thoughts involving aggressive (harming others), sexual, or religious content that are prohibited.
+  - Somatic Obsessions: Persistent and specific fear that one might have a serious disease.
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 10
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Overall, do these obsessive thoughts and rituals feel unwanted and out of line with what you believe is reasonable (something you wish you could stop), or do you mostly feel they’re justified and necessary to stay safe?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["obsessive_compulsive_symptoms - Contamination Obsessions", "obsessive_compulsive_symptoms - Pathological Doubt", "obsessive_compulsive_symptoms - Symmetry and Exactness Obsessions", "obsessive_compulsive_symptoms - Forbidden or Taboo Thoughts", "obsessive_compulsive_symptoms - Somatic Obsessions"], "answer_strategy": "Answer directly whether these obsessions and compulsions feel ego-dystonic (unwanted, excessive, unreasonable, something you wish you could stop) or ego-syntonic (they feel justified, necessary, or like the right thing to do). Use a calm, honest tone. You can mention that you recognize they’re irrational but still feel compelled to do them, or, if true, that they feel like the only way to stay safe. If it’s mixed, say that—for example, that part of you knows they’re unreasonable but in the moment they feel absolutely necessary."}
+=====================================
+
+[call 39] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Obsessive-Compulsive Disorder.
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ obsessive_compulsive_symptoms
+  - Contamination Obsessions: Recurrent and intrusive worries about contamination, germs, or dirt.
+  - Pathological Doubt: Pathological doubt regarding safety or mistakes, such as whether doors are locked or gas valves are closed.
+  - Symmetry and Exactness Obsessions: A strong urge that items must be lined up exactly or be symmetrical.
+  - Forbidden or Taboo Thoughts: Intrusive thoughts involving aggressive (harming others), sexual, or religious content that are prohibited.
+  - Somatic Obsessions: Persistent and specific fear that one might have a serious disease.
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Obsessions
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: obsessive_compulsive_symptoms - Contamination Obsessions, obsessive_compulsive_symptoms - Pathological Doubt, obsessive_compulsive_symptoms - Symmetry and Exactness Obsessions, obsessive_compulsive_symptoms - Forbidden or Taboo Thoughts, obsessive_compulsive_symptoms - Somatic Obsessions
+Answer strategy: Answer directly whether these obsessions and compulsions feel ego-dystonic (unwanted, excessive, unreasonable, something you wish you could stop) or ego-syntonic (they feel justified, necessary, or like the right thing to do). Use a calm, honest tone. You can mention that you recognize they’re irrational but still feel compelled to do them, or, if true, that they feel like the only way to stay safe. If it’s mixed, say that—for example, that part of you knows they’re unreasonable but in the moment they feel absolutely necessary.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+Doctor: Aside from the obsessive thoughts and rituals, do you also find yourself worrying excessively about many different everyday things (like work, health, family, finances) most days, even when there’s no specific trigger, or is the anxiety mainly tied to the obsessions themselves?
+
+Patient: I think the anxiety is mostly tied to the obsessions themselves—like when I start thinking something’s contaminated, unsafe, or that I’ve made some kind of mistake. I do worry about things like my health or whether I’ve done something wrong, but it usually feels connected to those specific thoughts rather than a constant, general worry about everything.
+
+Doctor: When these intrusive thoughts come up, do you recognize that they’re unreasonable or excessive, or do they feel realistic and you’re convinced the feared outcome will actually happen if you don’t do the rituals?
+
+Patient: It kind of depends on the thought. With contamination or health stuff, in the moment it often feels very real, like “what if this actually makes me or someone else sick,” and I get pretty convinced something bad will happen if I don’t do the ritual. With some of the more taboo or “what if I hurt someone” thoughts, a part of me knows they’re irrational, but they still feel so disturbing that I act like they might be true just in case.
+
+Doctor: Over the last month, have there been most days when you felt clearly down or depressed for hours at a time, or lost interest in things you usually enjoy, separate from the anxiety and obsessions?
+
+Patient: I’m not really sure I’d call it clearly depressed most days. I do feel worn down and less interested in things because the anxiety and rituals take so much out of me, but I wouldn’t say I’m consistently low in mood for hours every day.
+
+Doctor: When you feel anxious or have these intrusive thoughts, do you feel driven to perform specific repetitive behaviors or mental rituals (like checking, washing, counting, or repeating phrases in your head) to reduce the anxiety, and do these take up a lot of time each day?
+
+Patient: Yeah, I feel like I have to do certain things over and over to get the anxiety down. I wash my hands a lot, check locks and appliances repeatedly, line things up “just right,” and sometimes repeat certain phrases or prayers in my head, and altogether that can easily take one to two hours a day and makes me late or distracted with normal tasks.
+
+Doctor: When these thoughts and urges to do rituals come up, do you usually try to resist or delay doing the compulsions because you see them as unreasonable, or do they feel more like something you simply must do and you don’t really question them in the moment?
+
+Patient: Most of the time they feel like something I just have to do in the moment, like an urgent pressure, and it’s really hard to think clearly about whether they’re reasonable. I do sometimes try to resist or delay, especially if I’m in public or running late, but the anxiety ramps up so much that I usually end up giving in just to get some relief.
+
+Doctor: On days when your obsessions and rituals are relatively mild or not happening much, do you still find yourself feeling generally anxious and worrying about lots of different everyday things most of the day, or does your anxiety mostly fade when the obsessions and rituals ease up?
+
+Patient: When the obsessions and rituals ease up, my anxiety definitely goes down a lot. I might still have some normal worries about work or family, but I don’t feel that same constant, intense tension unless the obsessive thoughts are really active.
+
+Doctor: How long have you been experiencing these obsessive thoughts and rituals—are we talking weeks, months, or several years, and have there been periods when they went away or were much milder?
+
+Patient: I’ve been dealing with them for several years now, probably since late high school or early college, but they’ve gotten noticeably worse over the past year or so. There have been stretches where they were milder or I could ignore them more, usually when life was less stressful, but they’ve never completely gone away.
+
+Doctor: Overall, do these obsessive thoughts and rituals feel unwanted and out of line with what you believe is reasonable (something you wish you could stop), or do you mostly feel they’re justified and necessary to stay safe?
+
+========== OUTPUT [patient] ==========
+They mostly feel unwanted and out of line with what I think is reasonable—I’m very aware they’re excessive and I wish I could just stop doing them. But in the moment they still feel necessary to keep myself or others safe, so it’s like my logical side and my anxious side are fighting with each other.
+=====================================
+
+[call 40] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F42"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+Doctor: Aside from the obsessive thoughts and rituals, do you also find yourself worrying excessively about many different everyday things (like work, health, family, finances) most days, even when there’s no specific trigger, or is the anxiety mainly tied to the obsessions themselves?
+
+Patient: I think the anxiety is mostly tied to the obsessions themselves—like when I start thinking something’s contaminated, unsafe, or that I’ve made some kind of mistake. I do worry about things like my health or whether I’ve done something wrong, but it usually feels connected to those specific thoughts rather than a constant, general worry about everything.
+
+Doctor: When these intrusive thoughts come up, do you recognize that they’re unreasonable or excessive, or do they feel realistic and you’re convinced the feared outcome will actually happen if you don’t do the rituals?
+
+Patient: It kind of depends on the thought. With contamination or health stuff, in the moment it often feels very real, like “what if this actually makes me or someone else sick,” and I get pretty convinced something bad will happen if I don’t do the ritual. With some of the more taboo or “what if I hurt someone” thoughts, a part of me knows they’re irrational, but they still feel so disturbing that I act like they might be true just in case.
+
+Doctor: Over the last month, have there been most days when you felt clearly down or depressed for hours at a time, or lost interest in things you usually enjoy, separate from the anxiety and obsessions?
+
+Patient: I’m not really sure I’d call it clearly depressed most days. I do feel worn down and less interested in things because the anxiety and rituals take so much out of me, but I wouldn’t say I’m consistently low in mood for hours every day.
+
+Doctor: When you feel anxious or have these intrusive thoughts, do you feel driven to perform specific repetitive behaviors or mental rituals (like checking, washing, counting, or repeating phrases in your head) to reduce the anxiety, and do these take up a lot of time each day?
+
+Patient: Yeah, I feel like I have to do certain things over and over to get the anxiety down. I wash my hands a lot, check locks and appliances repeatedly, line things up “just right,” and sometimes repeat certain phrases or prayers in my head, and altogether that can easily take one to two hours a day and makes me late or distracted with normal tasks.
+
+Doctor: When these thoughts and urges to do rituals come up, do you usually try to resist or delay doing the compulsions because you see them as unreasonable, or do they feel more like something you simply must do and you don’t really question them in the moment?
+
+Patient: Most of the time they feel like something I just have to do in the moment, like an urgent pressure, and it’s really hard to think clearly about whether they’re reasonable. I do sometimes try to resist or delay, especially if I’m in public or running late, but the anxiety ramps up so much that I usually end up giving in just to get some relief.
+
+Doctor: On days when your obsessions and rituals are relatively mild or not happening much, do you still find yourself feeling generally anxious and worrying about lots of different everyday things most of the day, or does your anxiety mostly fade when the obsessions and rituals ease up?
+
+Patient: When the obsessions and rituals ease up, my anxiety definitely goes down a lot. I might still have some normal worries about work or family, but I don’t feel that same constant, intense tension unless the obsessive thoughts are really active.
+
+Doctor: How long have you been experiencing these obsessive thoughts and rituals—are we talking weeks, months, or several years, and have there been periods when they went away or were much milder?
+
+Patient: I’ve been dealing with them for several years now, probably since late high school or early college, but they’ve gotten noticeably worse over the past year or so. There have been stretches where they were milder or I could ignore them more, usually when life was less stressful, but they’ve never completely gone away.
+
+Doctor: Overall, do these obsessive thoughts and rituals feel unwanted and out of line with what you believe is reasonable (something you wish you could stop), or do you mostly feel they’re justified and necessary to stay safe?
+
+Patient: They mostly feel unwanted and out of line with what I think is reasonable—I’m very aware they’re excessive and I wish I could just stop doing them. But in the moment they still feel necessary to keep myself or others safe, so it’s like my logical side and my anxious side are fighting with each other.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F42"], "note": "Previously the only candidate was F42, reflecting a working hypothesis of an obsessive–compulsive type condition. The current interview strongly supports this: the patient reports recurrent intrusive thoughts about contamination, harm, and things being \"wrong\"; recognizes them as excessive or unreasonable at least part of the time; and performs time‑consuming compulsions (washing, checking, ordering, mental rituals) aimed at reducing anxiety. Symptoms have been present for several years, cause clear distress and functional impairment, and are not better explained by a persistent low mood or a generalized, free‑floating worry pattern. The anxiety is closely tied to the obsessions and largely subsides when these are less active, which argues against adding a separate generalized anxiety condition. The patient does not describe a sustained depressive syndrome independent of the obsessions/compulsions, so a primary mood disorder is not added to the differential at this stage. Thus, no new major diagnostic candidates are introduced, and F42 remains the sole candidate.", "is_final": false}
+=====================================
+
+[call 41] doctor-final-diagnosis
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the full interview transcript and the differential diagnosis candidates, write the final diagnosis report.
+
+Both the "diagnosis" and "candidates" MUST be ICD-10 codes.
+
+[Field Instructions]
+- diagnosis: The single diagnosis code of ICD-10.
+- candidates: Top 2–3 differential candidates of ICD-10 codes considered until the end.
+- reason: Brief diagnostic rationale.
+- diagnostic_checklist: Structured evidence summary organized by diagnostic criterion type.
+  List only symptom groups that are relevant to your diagnosis, with the symptoms the patient actually confirmed.
+
+Output Format (JSON only, no other text):
+{
+  "diagnosis": "Final Diagnosis ICD-10 code",
+  "candidates": ["Disease Code1", "Disease Code2"],
+  "reason": "Brief diagnostic rationale.",
+  "diagnostic_checklist": {
+    "symptom_groups": [
+      {
+        "group": "clinical group name (e.g., inattention, manic_episode, psychotic_symptoms)",
+        "confirmed_symptoms": ["natural language description of each confirmed symptom in this group"],
+        "count": <integer>
+      }
+    ],
+    "duration_verified": "Description of how the duration criterion was established (e.g., 'symptoms present for over 6 months since childhood'), or null if not assessed.",
+    "functional_impairment": <true if functional impairment was confirmed, false if denied, null if not assessed>,
+    "traumatic_stressor": <true if a qualifying traumatic stressor was confirmed, null if not applicable or not assessed>,
+    "psychosocial_stressor": <true if a qualifying psychosocial stressor was confirmed, null if not applicable or not assessed>,
+    "additional_requirements": ["Each additional criterion that was explicitly verified during the interview (e.g., 'Onset prior to age 12 confirmed')"]
+  }
+}
+
+[2. USER]
+Candidate Diseases: 
+["F42"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—what has been bothering you lately that made you decide to come in today?
+
+Patient: I’ve been having these obsessive, intrusive thoughts that won’t stop, and I feel like I have to do certain things over and over to calm myself down. It’s getting to the point where it’s really interfering with my day and I’m exhausted by it.
+
+Doctor: Over the past couple of weeks, have you been feeling mostly sad or unable to enjoy things you usually like, or is it more that you feel tense and worried all the time even when you’re not doing the rituals?
+
+Patient: It’s more that I feel tense and on edge most of the time, even when I’m not actually doing the rituals. The obsessive thoughts—about things being contaminated, not safe, or “wrong” somehow—are always kind of in the background, and that makes it hard to relax or enjoy things, even though I wouldn’t say I’m constantly sad.
+
+Doctor: Aside from the obsessive thoughts and rituals, do you also find yourself worrying excessively about many different everyday things (like work, health, family, finances) most days, even when there’s no specific trigger, or is the anxiety mainly tied to the obsessions themselves?
+
+Patient: I think the anxiety is mostly tied to the obsessions themselves—like when I start thinking something’s contaminated, unsafe, or that I’ve made some kind of mistake. I do worry about things like my health or whether I’ve done something wrong, but it usually feels connected to those specific thoughts rather than a constant, general worry about everything.
+
+Doctor: When these intrusive thoughts come up, do you recognize that they’re unreasonable or excessive, or do they feel realistic and you’re convinced the feared outcome will actually happen if you don’t do the rituals?
+
+Patient: It kind of depends on the thought. With contamination or health stuff, in the moment it often feels very real, like “what if this actually makes me or someone else sick,” and I get pretty convinced something bad will happen if I don’t do the ritual. With some of the more taboo or “what if I hurt someone” thoughts, a part of me knows they’re irrational, but they still feel so disturbing that I act like they might be true just in case.
+
+Doctor: Over the last month, have there been most days when you felt clearly down or depressed for hours at a time, or lost interest in things you usually enjoy, separate from the anxiety and obsessions?
+
+Patient: I’m not really sure I’d call it clearly depressed most days. I do feel worn down and less interested in things because the anxiety and rituals take so much out of me, but I wouldn’t say I’m consistently low in mood for hours every day.
+
+Doctor: When you feel anxious or have these intrusive thoughts, do you feel driven to perform specific repetitive behaviors or mental rituals (like checking, washing, counting, or repeating phrases in your head) to reduce the anxiety, and do these take up a lot of time each day?
+
+Patient: Yeah, I feel like I have to do certain things over and over to get the anxiety down. I wash my hands a lot, check locks and appliances repeatedly, line things up “just right,” and sometimes repeat certain phrases or prayers in my head, and altogether that can easily take one to two hours a day and makes me late or distracted with normal tasks.
+
+Doctor: When these thoughts and urges to do rituals come up, do you usually try to resist or delay doing the compulsions because you see them as unreasonable, or do they feel more like something you simply must do and you don’t really question them in the moment?
+
+Patient: Most of the time they feel like something I just have to do in the moment, like an urgent pressure, and it’s really hard to think clearly about whether they’re reasonable. I do sometimes try to resist or delay, especially if I’m in public or running late, but the anxiety ramps up so much that I usually end up giving in just to get some relief.
+
+Doctor: On days when your obsessions and rituals are relatively mild or not happening much, do you still find yourself feeling generally anxious and worrying about lots of different everyday things most of the day, or does your anxiety mostly fade when the obsessions and rituals ease up?
+
+Patient: When the obsessions and rituals ease up, my anxiety definitely goes down a lot. I might still have some normal worries about work or family, but I don’t feel that same constant, intense tension unless the obsessive thoughts are really active.
+
+Doctor: How long have you been experiencing these obsessive thoughts and rituals—are we talking weeks, months, or several years, and have there been periods when they went away or were much milder?
+
+Patient: I’ve been dealing with them for several years now, probably since late high school or early college, but they’ve gotten noticeably worse over the past year or so. There have been stretches where they were milder or I could ignore them more, usually when life was less stressful, but they’ve never completely gone away.
+
+Doctor: Overall, do these obsessive thoughts and rituals feel unwanted and out of line with what you believe is reasonable (something you wish you could stop), or do you mostly feel they’re justified and necessary to stay safe?
+
+Patient: They mostly feel unwanted and out of line with what I think is reasonable—I’m very aware they’re excessive and I wish I could just stop doing them. But in the moment they still feel necessary to keep myself or others safe, so it’s like my logical side and my anxious side are fighting with each other.
+
+========== OUTPUT [doctor] ==========
+{
+  "diagnosis": "F42",
+  "candidates": ["F42", "F41.1"],
+  "reason": "The patient has recurrent, intrusive, unwanted thoughts (contamination, harm, things being 'wrong') recognized as excessive and ego-dystonic, accompanied by repetitive compulsive behaviors and mental rituals (washing, checking, ordering, mental prayers) performed to reduce anxiety. These symptoms consume 1–2 hours daily, have persisted for several years, and cause clear functional impairment (lateness, distraction, exhaustion). Anxiety is largely contingent on the obsessions and markedly decreases when obsessions/rituals ease, arguing against a separate generalized anxiety disorder and supporting a primary diagnosis of obsessive-compulsive disorder (F42).",
+  "diagnostic_checklist": {
+    "symptom_groups": [
+      {
+        "group": "obsessions",
+        "confirmed_symptoms": [
+          "Recurrent intrusive thoughts about contamination, things being unsafe, or 'wrong' in some way",
+          "Intrusive taboo thoughts and fears of possibly harming someone",
+          "Thoughts are experienced as unwanted and excessive, not consistent with the patient’s values or usual beliefs",
+          "Patient recognizes, at least part of the time, that the thoughts are irrational or unreasonable",
+          "Obsessive thoughts cause marked anxiety and tension when they occur",
+          "Obsessions have been present since late high school/early college and recur over several years"
+        ],
+        "count": 6
+      },
+      {
+        "group": "compulsions",
+        "confirmed_symptoms": [
+          "Repetitive handwashing in response to contamination fears",
+          "Repeated checking of locks and appliances",
+          "Arranging or lining things up until they feel 'just right'",
+          "Mental rituals such as repeating phrases or prayers in the head",
+          "Compulsions are performed to reduce anxiety or prevent feared harm",
+          "Patient feels driven to perform rituals with a sense of internal pressure and urgency",
+          "Attempts to resist or delay rituals lead to marked anxiety and are usually unsuccessful",
+          "Rituals occupy approximately one to two hours per day"
+        ],
+        "count": 8
+      },
+      {
+        "group": "insight_and_ego_dystonicity",
+        "confirmed_symptoms": [
+          "Patient reports that obsessions and rituals are unwanted and out of line with what they believe is reasonable",
+          "Patient wishes to stop the behaviors but feels compelled to continue them to feel safe",
+          "Describes an internal conflict between a 'logical side' and an 'anxious side'"
+        ],
+        "count": 3
+      },
+      {
+        "group": "anxiety_related_to_obsessions",
+        "confirmed_symptoms": [
+          "Persistent tension and feeling on edge primarily when obsessions are active",
+          "Anxiety markedly decreases when obsessions and rituals are milder or less frequent",
+          "No evidence of pervasive, free-floating worry across multiple domains independent of obsessions"
+        ],
+        "count": 3
+      },
+      {
+        "group": "functional_impairment",
+        "confirmed_symptoms": [
+          "Rituals make the patient late for activities and interfere with normal tasks",
+          "Patient feels exhausted and less interested in activities due to time and energy consumed by symptoms",
+          "Overall daily functioning is significantly interfered with by obsessions and compulsions"
+        ],
+        "count": 3
+      }
+    ],
+    "duration_verified": "Obsessions and compulsions have been present since late high school or early college (several years), with fluctuating severity but no full remission.",
+    "functional_impairment": true,
+    "traumatic_stressor": null,
+    "psychosocial_stressor": true,
+    "additional_requirements": [
+      "Insight into the excessiveness and unreasonableness of obsessions and compulsions is at least fair",
+      "Anxiety is primarily obsession-related rather than generalized, supporting OCD as the primary diagnosis",
+      "No persistent, clearly depressive mood independent of anxiety was reported, arguing against a primary mood disorder"
+    ]
+  }
+}
+=====================================
+

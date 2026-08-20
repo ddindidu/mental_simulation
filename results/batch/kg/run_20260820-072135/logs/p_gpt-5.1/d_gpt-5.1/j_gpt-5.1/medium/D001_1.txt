@@ -1,0 +1,2286 @@
+--- turn 00 ---
+
+[call 01] doctor-opening-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "open-ended",
+  "subcategory": null,
+  "question": "Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?"
+}
+=====================================
+
+--- turn 01 ---
+
+[call 02] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ inattention
+  - Listening_Difficulty: Often does not seem to listen when spoken to directly.
+  - Instruction_Follow through_Difficulty: Often does not follow through on instructions and fails to finish schoolwork, chores, or duties in the workplace.
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Interrupting_Intruding: Often interrupts or intrudes on others (e.g., butts into conversations, games, or activities).
+▸ Critical Diagnostic Criteria
+  - Duration: 11 months
+  - Additional: Onset prior to age 12 years
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 1
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["inattention", "hyperactivity_impulsivity"], "answer_strategy": "Briefly describe that you’re having ongoing trouble paying attention and staying focused, and that you also tend to be very active or impulsive in ways that cause problems. Use everyday examples like not listening when people talk directly to you, or struggling to sit still or play quietly. Keep the tone straightforward and honest, focusing on how these attention and activity issues are affecting school, work, or daily life. Since this is your first reply, don’t go into detailed lists of all symptoms—just clearly state that attention and activity/impulsivity problems are the main reasons you’re seeking help."}
+=====================================
+
+[call 03] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Combined Presentation).
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ inattention
+  - Listening_Difficulty: Often does not seem to listen when spoken to directly.
+  - Instruction_Follow through_Difficulty: Often does not follow through on instructions and fails to finish schoolwork, chores, or duties in the workplace.
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Interrupting_Intruding: Often interrupts or intrudes on others (e.g., butts into conversations, games, or activities).
+▸ Critical Diagnostic Criteria
+  - Duration: 11 months
+  - Additional: Onset prior to age 12 years
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Listening_Difficulty
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: inattention, hyperactivity_impulsivity
+Answer strategy: Briefly describe that you’re having ongoing trouble paying attention and staying focused, and that you also tend to be very active or impulsive in ways that cause problems. Use everyday examples like not listening when people talk directly to you, or struggling to sit still or play quietly. Keep the tone straightforward and honest, focusing on how these attention and activity issues are affecting school, work, or daily life. Since this is your first reply, don’t go into detailed lists of all symptoms—just clearly state that attention and activity/impulsivity problems are the main reasons you’re seeking help.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+========== OUTPUT [patient] ==========
+Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+=====================================
+
+[call 04] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F90.0", "F41.1", "F32.0"], "note": "Initial presentation includes difficulty sustaining attention, being perceived as not listening, and functional problems at home and work. At this very early stage, multiple possibilities must be considered. F90.0 (attention-related neurodevelopmental condition) is included because the core complaint is trouble listening and seeming spaced out even when trying to pay attention, which is characteristic of an inattention pattern. F41.1 (anxiety-related condition) is included because anxiety can cause concentration problems and feeling mentally preoccupied, which might look like spacing out. F32.0 (depressive episode) is included because low mood and loss of interest can also impair concentration and make someone appear disengaged. This is the first step in the interview, so there are no previous candidates to compare against; the list is broad and will need to be refined with further history about mood, anxiety, duration, childhood symptoms, substance use, medical issues, and functional impact. Further questioning is needed, so the interview is not final.", "is_final": false}
+=====================================
+
+[call 05] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F90.0
+- F41.1
+- F32.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F90.0", "F41.1", "F32.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "worry and anxiety",
+  "question": "Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?"
+}
+=====================================
+
+--- turn 02 ---
+
+[call 06] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ inattention
+  - Listening_Difficulty: Often does not seem to listen when spoken to directly.
+  - Instruction_Follow through_Difficulty: Often does not follow through on instructions and fails to finish schoolwork, chores, or duties in the workplace.
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Interrupting_Intruding: Often interrupts or intrudes on others (e.g., butts into conversations, games, or activities).
+▸ Critical Diagnostic Criteria
+  - Duration: 11 months
+  - Additional: Onset prior to age 12 years
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 2
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["inattention", "Listening_Difficulty", "Instruction_Follow through_Difficulty"], "answer_strategy": "Focus on describing whether your main problem is your mind drifting off, going blank, or not staying on the task or conversation, rather than on feeling tense or worried. Use a straightforward, calm tone and relate your answer to how you experience listening and following instructions day to day (e.g., mind wandering vs. anxiety). If you don’t usually feel very tense or worried but do lose focus, say that clearly; if you do also worry a lot, briefly mention that too."}
+=====================================
+
+[call 07] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Combined Presentation).
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ inattention
+  - Listening_Difficulty: Often does not seem to listen when spoken to directly.
+  - Instruction_Follow through_Difficulty: Often does not follow through on instructions and fails to finish schoolwork, chores, or duties in the workplace.
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Interrupting_Intruding: Often interrupts or intrudes on others (e.g., butts into conversations, games, or activities).
+▸ Critical Diagnostic Criteria
+  - Duration: 11 months
+  - Additional: Onset prior to age 12 years
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Listening_Difficulty
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: inattention, Listening_Difficulty, Instruction_Follow through_Difficulty
+Answer strategy: Focus on describing whether your main problem is your mind drifting off, going blank, or not staying on the task or conversation, rather than on feeling tense or worried. Use a straightforward, calm tone and relate your answer to how you experience listening and following instructions day to day (e.g., mind wandering vs. anxiety). If you don’t usually feel very tense or worried but do lose focus, say that clearly; if you do also worry a lot, briefly mention that too.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+========== OUTPUT [patient] ==========
+It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+=====================================
+
+[call 08] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F90.0", "F41.1", "F32.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F90.0", "F32.0"], "note": "Previously the candidates were [F90.0, F41.1, F32.0]. The patient describes prominent, recurrent lapses in attention and seeming not to listen, with the experience of the mind drifting or going blank even when not feeling particularly worried. This pattern is more consistent with an attention-related condition than with generalized anxiety. There is no report of excessive or uncontrollable worry, tension, or feeling on edge most days, which makes an anxiety-related explanation less likely, so F41.1 is removed from the list. Depressive symptoms have not yet been explored in detail, so F32.0 remains as a possible explanation (e.g., concentration problems in the context of low mood or other depressive symptoms), and F90.0 remains as a leading candidate given the attentional difficulties. Further questioning is needed to clarify mood, duration, functional impact, and childhood history of similar symptoms.", "is_final": false}
+=====================================
+
+[call 09] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F90.0
+- F32.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F90.0", "F32.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "pervasiveness and history of attention problems",
+  "question": "Have you had similar problems with attention and seeming ‘spaced out’ since you were a child or teenager, for example in school, or is this a more recent change that started within the past few months to a year?"
+}
+=====================================
+
+--- turn 03 ---
+
+[call 10] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ inattention
+  - Listening_Difficulty: Often does not seem to listen when spoken to directly.
+  - Instruction_Follow through_Difficulty: Often does not follow through on instructions and fails to finish schoolwork, chores, or duties in the workplace.
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Interrupting_Intruding: Often interrupts or intrudes on others (e.g., butts into conversations, games, or activities).
+▸ Critical Diagnostic Criteria
+  - Duration: 11 months
+  - Additional: Onset prior to age 12 years
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 3
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Have you had similar problems with attention and seeming ‘spaced out’ since you were a child or teenager, for example in school, or is this a more recent change that started within the past few months to a year?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["inattention", "Critical Diagnostic Criteria - Duration", "Critical Diagnostic Criteria - Additional: Onset prior to age 12 years"], "answer_strategy": "Clearly state that these attention problems have been present since childhood, not just in the past year, and if possible give a brief example from school (like teachers saying you didn’t listen or had trouble following instructions). Keep the tone straightforward and factual, focusing on how long this has been going on and that it started before age 12 rather than being a new, recent change."}
+=====================================
+
+[call 11] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Combined Presentation).
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ inattention
+  - Listening_Difficulty: Often does not seem to listen when spoken to directly.
+  - Instruction_Follow through_Difficulty: Often does not follow through on instructions and fails to finish schoolwork, chores, or duties in the workplace.
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Interrupting_Intruding: Often interrupts or intrudes on others (e.g., butts into conversations, games, or activities).
+▸ Critical Diagnostic Criteria
+  - Duration: 11 months
+  - Additional: Onset prior to age 12 years
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Listening_Difficulty
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: inattention, Critical Diagnostic Criteria - Duration, Critical Diagnostic Criteria - Additional: Onset prior to age 12 years
+Answer strategy: Clearly state that these attention problems have been present since childhood, not just in the past year, and if possible give a brief example from school (like teachers saying you didn’t listen or had trouble following instructions). Keep the tone straightforward and factual, focusing on how long this has been going on and that it started before age 12 rather than being a new, recent change.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+Doctor: Have you had similar problems with attention and seeming ‘spaced out’ since you were a child or teenager, for example in school, or is this a more recent change that started within the past few months to a year?
+
+========== OUTPUT [patient] ==========
+It’s been going on pretty much as long as I can remember, definitely since I was a kid in school. Teachers used to say I didn’t listen or that I “zoned out” in class, and I’d miss parts of instructions even when I was trying to pay attention.
+=====================================
+
+[call 12] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F90.0", "F32.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+Doctor: Have you had similar problems with attention and seeming ‘spaced out’ since you were a child or teenager, for example in school, or is this a more recent change that started within the past few months to a year?
+
+Patient: It’s been going on pretty much as long as I can remember, definitely since I was a kid in school. Teachers used to say I didn’t listen or that I “zoned out” in class, and I’d miss parts of instructions even when I was trying to pay attention.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F90.0", "F32.0"], "note": "Previously the candidates were [F90.0, F32.0]. The patient describes lifelong, childhood-onset difficulties with attention and being perceived as ‘zoned out’ despite trying to listen, which is consistent with an attention-related condition and keeps F90.0 as a strong candidate. There is no new information about low mood, loss of interest, or other depressive symptoms, so F32.0 remains possible but currently less supported rather than ruled out. No additional diagnoses have become likely based on the limited information so far, so the candidate list is unchanged. Further questioning is needed about mood, functioning, and other symptom domains to clarify the picture.", "is_final": false}
+=====================================
+
+[call 13] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F90.0
+- F32.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F90.0", "F32.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+Doctor: Have you had similar problems with attention and seeming ‘spaced out’ since you were a child or teenager, for example in school, or is this a more recent change that started within the past few months to a year?
+
+Patient: It’s been going on pretty much as long as I can remember, definitely since I was a kid in school. Teachers used to say I didn’t listen or that I “zoned out” in class, and I’d miss parts of instructions even when I was trying to pay attention.
+
+Patient: It’s been going on pretty much as long as I can remember, definitely since I was a kid in school. Teachers used to say I didn’t listen or that I “zoned out” in class, and I’d miss parts of instructions even when I was trying to pay attention.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "mood (depressive symptoms)",
+  "question": "Over the past few weeks, have you been feeling noticeably down, sad, or losing interest or pleasure in things you usually enjoy most days, or has your mood been mostly okay despite the attention problems?"
+}
+=====================================
+
+--- turn 04 ---
+
+[call 14] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ inattention
+  - Listening_Difficulty: Often does not seem to listen when spoken to directly.
+  - Instruction_Follow through_Difficulty: Often does not follow through on instructions and fails to finish schoolwork, chores, or duties in the workplace.
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Interrupting_Intruding: Often interrupts or intrudes on others (e.g., butts into conversations, games, or activities).
+▸ Critical Diagnostic Criteria
+  - Duration: 11 months
+  - Additional: Onset prior to age 12 years
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 4
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Over the past few weeks, have you been feeling noticeably down, sad, or losing interest or pleasure in things you usually enjoy most days, or has your mood been mostly okay despite the attention problems?
+
+========== OUTPUT [patient] ==========
+{"matched": false, "matched_sections": [], "answer_strategy": "This question is about your recent mood and interest in activities, which isn’t described in the profile. Answer briefly and honestly from your own experience, for example: whether you’ve been feeling down or losing interest most days, or if your mood has mostly been okay aside from the attention and hyperactivity issues. If you’re unsure, you can say something like, ‘I’m not really sure, I haven’t thought about it carefully.’"}
+=====================================
+
+[call 15] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Combined Presentation).
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ inattention
+  - Listening_Difficulty: Often does not seem to listen when spoken to directly.
+  - Instruction_Follow through_Difficulty: Often does not follow through on instructions and fails to finish schoolwork, chores, or duties in the workplace.
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Interrupting_Intruding: Often interrupts or intrudes on others (e.g., butts into conversations, games, or activities).
+▸ Critical Diagnostic Criteria
+  - Duration: 11 months
+  - Additional: Onset prior to age 12 years
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Listening_Difficulty
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(No match in profile or inference only)
+Answer strategy: This question is about your recent mood and interest in activities, which isn’t described in the profile. Answer briefly and honestly from your own experience, for example: whether you’ve been feeling down or losing interest most days, or if your mood has mostly been okay aside from the attention and hyperactivity issues. If you’re unsure, you can say something like, ‘I’m not really sure, I haven’t thought about it carefully.’
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+Doctor: Have you had similar problems with attention and seeming ‘spaced out’ since you were a child or teenager, for example in school, or is this a more recent change that started within the past few months to a year?
+
+Patient: It’s been going on pretty much as long as I can remember, definitely since I was a kid in school. Teachers used to say I didn’t listen or that I “zoned out” in class, and I’d miss parts of instructions even when I was trying to pay attention.
+
+Doctor: Over the past few weeks, have you been feeling noticeably down, sad, or losing interest or pleasure in things you usually enjoy most days, or has your mood been mostly okay despite the attention problems?
+
+========== OUTPUT [patient] ==========
+My mood has been mostly okay; I wouldn’t say I’ve been feeling especially down or losing interest in things I usually like. I do get frustrated with myself about the attention issues, but overall I still enjoy my usual activities.
+=====================================
+
+[call 16] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F90.0", "F32.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+Doctor: Have you had similar problems with attention and seeming ‘spaced out’ since you were a child or teenager, for example in school, or is this a more recent change that started within the past few months to a year?
+
+Patient: It’s been going on pretty much as long as I can remember, definitely since I was a kid in school. Teachers used to say I didn’t listen or that I “zoned out” in class, and I’d miss parts of instructions even when I was trying to pay attention.
+
+Doctor: Over the past few weeks, have you been feeling noticeably down, sad, or losing interest or pleasure in things you usually enjoy most days, or has your mood been mostly okay despite the attention problems?
+
+Patient: My mood has been mostly okay; I wouldn’t say I’ve been feeling especially down or losing interest in things I usually like. I do get frustrated with myself about the attention issues, but overall I still enjoy my usual activities.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F90.0"], "note": "Previously the candidates were [F90.0, F32.0]. The patient describes lifelong, pervasive attention problems starting in childhood, with zoning out and missing instructions despite trying to pay attention, which is consistent with an attention-related condition. They explicitly deny persistent low mood or loss of interest/pleasure in activities in recent weeks, and describe mood as mostly okay aside from situational frustration about attention, which makes a current depressive episode unlikely. Therefore F32.0 is now unlikely and removed, leaving F90.0 as the current candidate. However, further questioning is still needed to clarify the full symptom profile and rule out other possible explanations, so the interview is not yet final.", "is_final": false}
+=====================================
+
+[call 17] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F90.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F90.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+Doctor: Have you had similar problems with attention and seeming ‘spaced out’ since you were a child or teenager, for example in school, or is this a more recent change that started within the past few months to a year?
+
+Patient: It’s been going on pretty much as long as I can remember, definitely since I was a kid in school. Teachers used to say I didn’t listen or that I “zoned out” in class, and I’d miss parts of instructions even when I was trying to pay attention.
+
+Doctor: Over the past few weeks, have you been feeling noticeably down, sad, or losing interest or pleasure in things you usually enjoy most days, or has your mood been mostly okay despite the attention problems?
+
+Patient: My mood has been mostly okay; I wouldn’t say I’ve been feeling especially down or losing interest in things I usually like. I do get frustrated with myself about the attention issues, but overall I still enjoy my usual activities.
+
+Patient: My mood has been mostly okay; I wouldn’t say I’ve been feeling especially down or losing interest in things I usually like. I do get frustrated with myself about the attention issues, but overall I still enjoy my usual activities.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "symptom presence",
+  "subcategory": "hyperactivity_impulsivity",
+  "question": "Besides feeling spaced out, do you also tend to be very fidgety, restless, or act on impulses quickly (like blurting things out or interrupting), or is it mainly the inattention and zoning out that causes you problems?"
+}
+=====================================
+
+--- turn 05 ---
+
+[call 18] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ inattention
+  - Listening_Difficulty: Often does not seem to listen when spoken to directly.
+  - Instruction_Follow through_Difficulty: Often does not follow through on instructions and fails to finish schoolwork, chores, or duties in the workplace.
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Interrupting_Intruding: Often interrupts or intrudes on others (e.g., butts into conversations, games, or activities).
+▸ Critical Diagnostic Criteria
+  - Duration: 11 months
+  - Additional: Onset prior to age 12 years
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 5
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Besides feeling spaced out, do you also tend to be very fidgety, restless, or act on impulses quickly (like blurting things out or interrupting), or is it mainly the inattention and zoning out that causes you problems?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["hyperactivity_impulsivity", "hyperactivity_impulsivity.Quiet_Activity_Difficulty", "hyperactivity_impulsivity.Interrupting_Intruding", "inattention"], "answer_strategy": "Answer clearly about both sides: first confirm that the inattention/zoning out is an issue, then say whether you also have problems with restlessness, staying still, playing or relaxing quietly, and interrupting or blurting things out. Use concrete, everyday examples (e.g., tapping, needing to move, cutting people off in conversation, trouble doing quiet activities) and be honest about how often it happens and in what situations (school, work, home, social). Keep the tone straightforward and descriptive, focusing on what you actually do rather than what you think might be happening."}
+=====================================
+
+[call 19] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Combined Presentation).
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ inattention
+  - Listening_Difficulty: Often does not seem to listen when spoken to directly.
+  - Instruction_Follow through_Difficulty: Often does not follow through on instructions and fails to finish schoolwork, chores, or duties in the workplace.
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Interrupting_Intruding: Often interrupts or intrudes on others (e.g., butts into conversations, games, or activities).
+▸ Critical Diagnostic Criteria
+  - Duration: 11 months
+  - Additional: Onset prior to age 12 years
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Listening_Difficulty
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: hyperactivity_impulsivity, hyperactivity_impulsivity.Quiet_Activity_Difficulty, hyperactivity_impulsivity.Interrupting_Intruding, inattention
+Answer strategy: Answer clearly about both sides: first confirm that the inattention/zoning out is an issue, then say whether you also have problems with restlessness, staying still, playing or relaxing quietly, and interrupting or blurting things out. Use concrete, everyday examples (e.g., tapping, needing to move, cutting people off in conversation, trouble doing quiet activities) and be honest about how often it happens and in what situations (school, work, home, social). Keep the tone straightforward and descriptive, focusing on what you actually do rather than what you think might be happening.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+Doctor: Have you had similar problems with attention and seeming ‘spaced out’ since you were a child or teenager, for example in school, or is this a more recent change that started within the past few months to a year?
+
+Patient: It’s been going on pretty much as long as I can remember, definitely since I was a kid in school. Teachers used to say I didn’t listen or that I “zoned out” in class, and I’d miss parts of instructions even when I was trying to pay attention.
+
+Doctor: Over the past few weeks, have you been feeling noticeably down, sad, or losing interest or pleasure in things you usually enjoy most days, or has your mood been mostly okay despite the attention problems?
+
+Patient: My mood has been mostly okay; I wouldn’t say I’ve been feeling especially down or losing interest in things I usually like. I do get frustrated with myself about the attention issues, but overall I still enjoy my usual activities.
+
+Doctor: Besides feeling spaced out, do you also tend to be very fidgety, restless, or act on impulses quickly (like blurting things out or interrupting), or is it mainly the inattention and zoning out that causes you problems?
+
+========== OUTPUT [patient] ==========
+It’s both, honestly. I’m often really fidgety and have a hard time sitting still or doing quiet things without tapping or moving around, and I catch myself interrupting people or jumping into conversations before they’ve finished talking.
+=====================================
+
+[call 20] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F90.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+Doctor: Have you had similar problems with attention and seeming ‘spaced out’ since you were a child or teenager, for example in school, or is this a more recent change that started within the past few months to a year?
+
+Patient: It’s been going on pretty much as long as I can remember, definitely since I was a kid in school. Teachers used to say I didn’t listen or that I “zoned out” in class, and I’d miss parts of instructions even when I was trying to pay attention.
+
+Doctor: Over the past few weeks, have you been feeling noticeably down, sad, or losing interest or pleasure in things you usually enjoy most days, or has your mood been mostly okay despite the attention problems?
+
+Patient: My mood has been mostly okay; I wouldn’t say I’ve been feeling especially down or losing interest in things I usually like. I do get frustrated with myself about the attention issues, but overall I still enjoy my usual activities.
+
+Doctor: Besides feeling spaced out, do you also tend to be very fidgety, restless, or act on impulses quickly (like blurting things out or interrupting), or is it mainly the inattention and zoning out that causes you problems?
+
+Patient: It’s both, honestly. I’m often really fidgety and have a hard time sitting still or doing quiet things without tapping or moving around, and I catch myself interrupting people or jumping into conversations before they’ve finished talking.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F90.0"], "note": "Previously the only candidate was F90.0, based on longstanding attention problems. The new information adds clear evidence of hyperactivity and impulsivity (fidgetiness, difficulty sitting still, interrupting others), beginning in childhood and persisting into adulthood, with no prominent mood or anxiety symptoms driving the inattention. This pattern continues to fit a single diagnosis characterized by both inattentive and hyperactive-impulsive symptoms starting in childhood and causing current impairment. No new features suggest alternative conditions such as a primary mood, anxiety, or psychotic disorder, so the candidate list remains the same with F90.0 as the working diagnosis. Further questioning about functional impairment across settings, developmental history, and exclusion of other medical or substance causes is still warranted, so this is not yet final.", "is_final": false}
+=====================================
+
+[call 21] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F90.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F90.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+Doctor: Have you had similar problems with attention and seeming ‘spaced out’ since you were a child or teenager, for example in school, or is this a more recent change that started within the past few months to a year?
+
+Patient: It’s been going on pretty much as long as I can remember, definitely since I was a kid in school. Teachers used to say I didn’t listen or that I “zoned out” in class, and I’d miss parts of instructions even when I was trying to pay attention.
+
+Doctor: Over the past few weeks, have you been feeling noticeably down, sad, or losing interest or pleasure in things you usually enjoy most days, or has your mood been mostly okay despite the attention problems?
+
+Patient: My mood has been mostly okay; I wouldn’t say I’ve been feeling especially down or losing interest in things I usually like. I do get frustrated with myself about the attention issues, but overall I still enjoy my usual activities.
+
+Doctor: Besides feeling spaced out, do you also tend to be very fidgety, restless, or act on impulses quickly (like blurting things out or interrupting), or is it mainly the inattention and zoning out that causes you problems?
+
+Patient: It’s both, honestly. I’m often really fidgety and have a hard time sitting still or doing quiet things without tapping or moving around, and I catch myself interrupting people or jumping into conversations before they’ve finished talking.
+
+Patient: It’s both, honestly. I’m often really fidgety and have a hard time sitting still or doing quiet things without tapping or moving around, and I catch myself interrupting people or jumping into conversations before they’ve finished talking.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "functional impairment across settings",
+  "question": "Do these attention and fidgeting problems cause significant difficulties for you in at least two different areas of your life, like both at work and at home or in relationships, and have they been pretty consistent over the years rather than coming and going in short phases?"
+}
+=====================================
+
+--- turn 06 ---
+
+[call 22] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ inattention
+  - Listening_Difficulty: Often does not seem to listen when spoken to directly.
+  - Instruction_Follow through_Difficulty: Often does not follow through on instructions and fails to finish schoolwork, chores, or duties in the workplace.
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Interrupting_Intruding: Often interrupts or intrudes on others (e.g., butts into conversations, games, or activities).
+▸ Critical Diagnostic Criteria
+  - Duration: 11 months
+  - Additional: Onset prior to age 12 years
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 6
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Do these attention and fidgeting problems cause significant difficulties for you in at least two different areas of your life, like both at work and at home or in relationships, and have they been pretty consistent over the years rather than coming and going in short phases?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["inattention", "hyperactivity_impulsivity", "Critical Diagnostic Criteria - Duration"], "answer_strategy": "Answer clearly about how these problems affect multiple areas of life (for example, work/school, home, relationships). Mention specific, concrete ways the listening, follow-through, quiet activity, and interrupting issues show up in at least two settings. Confirm that the problems have been ongoing and fairly steady over the 11 months (and since before age 12 if that fits your experience), rather than brief phases that come and go. Use a straightforward, matter-of-fact tone and give 1–2 examples so the doctor can see the impact and consistency over time."}
+=====================================
+
+[call 23] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Combined Presentation).
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ inattention
+  - Listening_Difficulty: Often does not seem to listen when spoken to directly.
+  - Instruction_Follow through_Difficulty: Often does not follow through on instructions and fails to finish schoolwork, chores, or duties in the workplace.
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Interrupting_Intruding: Often interrupts or intrudes on others (e.g., butts into conversations, games, or activities).
+▸ Critical Diagnostic Criteria
+  - Duration: 11 months
+  - Additional: Onset prior to age 12 years
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Listening_Difficulty
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: inattention, hyperactivity_impulsivity, Critical Diagnostic Criteria - Duration
+Answer strategy: Answer clearly about how these problems affect multiple areas of life (for example, work/school, home, relationships). Mention specific, concrete ways the listening, follow-through, quiet activity, and interrupting issues show up in at least two settings. Confirm that the problems have been ongoing and fairly steady over the 11 months (and since before age 12 if that fits your experience), rather than brief phases that come and go. Use a straightforward, matter-of-fact tone and give 1–2 examples so the doctor can see the impact and consistency over time.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+Doctor: Have you had similar problems with attention and seeming ‘spaced out’ since you were a child or teenager, for example in school, or is this a more recent change that started within the past few months to a year?
+
+Patient: It’s been going on pretty much as long as I can remember, definitely since I was a kid in school. Teachers used to say I didn’t listen or that I “zoned out” in class, and I’d miss parts of instructions even when I was trying to pay attention.
+
+Doctor: Over the past few weeks, have you been feeling noticeably down, sad, or losing interest or pleasure in things you usually enjoy most days, or has your mood been mostly okay despite the attention problems?
+
+Patient: My mood has been mostly okay; I wouldn’t say I’ve been feeling especially down or losing interest in things I usually like. I do get frustrated with myself about the attention issues, but overall I still enjoy my usual activities.
+
+Doctor: Besides feeling spaced out, do you also tend to be very fidgety, restless, or act on impulses quickly (like blurting things out or interrupting), or is it mainly the inattention and zoning out that causes you problems?
+
+Patient: It’s both, honestly. I’m often really fidgety and have a hard time sitting still or doing quiet things without tapping or moving around, and I catch myself interrupting people or jumping into conversations before they’ve finished talking.
+
+Doctor: Do these attention and fidgeting problems cause significant difficulties for you in at least two different areas of your life, like both at work and at home or in relationships, and have they been pretty consistent over the years rather than coming and going in short phases?
+
+========== OUTPUT [patient] ==========
+Yeah, they cause problems both at work and at home. At work I miss parts of instructions, forget steps, and sometimes interrupt in meetings, and at home my partner gets annoyed because I zone out mid-conversation and cut people off without meaning to. It’s been like this pretty steadily for years, not just in short phases.
+=====================================
+
+[call 24] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F90.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+Doctor: Have you had similar problems with attention and seeming ‘spaced out’ since you were a child or teenager, for example in school, or is this a more recent change that started within the past few months to a year?
+
+Patient: It’s been going on pretty much as long as I can remember, definitely since I was a kid in school. Teachers used to say I didn’t listen or that I “zoned out” in class, and I’d miss parts of instructions even when I was trying to pay attention.
+
+Doctor: Over the past few weeks, have you been feeling noticeably down, sad, or losing interest or pleasure in things you usually enjoy most days, or has your mood been mostly okay despite the attention problems?
+
+Patient: My mood has been mostly okay; I wouldn’t say I’ve been feeling especially down or losing interest in things I usually like. I do get frustrated with myself about the attention issues, but overall I still enjoy my usual activities.
+
+Doctor: Besides feeling spaced out, do you also tend to be very fidgety, restless, or act on impulses quickly (like blurting things out or interrupting), or is it mainly the inattention and zoning out that causes you problems?
+
+Patient: It’s both, honestly. I’m often really fidgety and have a hard time sitting still or doing quiet things without tapping or moving around, and I catch myself interrupting people or jumping into conversations before they’ve finished talking.
+
+Doctor: Do these attention and fidgeting problems cause significant difficulties for you in at least two different areas of your life, like both at work and at home or in relationships, and have they been pretty consistent over the years rather than coming and going in short phases?
+
+Patient: Yeah, they cause problems both at work and at home. At work I miss parts of instructions, forget steps, and sometimes interrupt in meetings, and at home my partner gets annoyed because I zone out mid-conversation and cut people off without meaning to. It’s been like this pretty steadily for years, not just in short phases.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F90.0"], "note": "Previously the only candidate was F90.0, reflecting a longstanding pattern of inattention and hyperactivity/impulsivity. In this segment, the patient describes persistent since-childhood inattention (zoning out, missing instructions), hyperactivity (fidgety, difficulty sitting still), and impulsivity (interrupting, jumping into conversations), with clear impairment across work and home and no evidence of prominent mood or anxiety symptoms driving the attentional issues. This history further supports the same diagnostic direction and does not introduce features suggesting alternative primary conditions (such as mood, anxiety, psychotic, or neurocognitive disorders). Therefore the candidate list remains F90.0, and confidence in this single candidate is strengthened, though final diagnostic confirmation would still require full DSM/ICD-structured assessment, collateral history, and rule-out of other medical or substance-related causes.", "is_final": false}
+=====================================
+
+[call 25] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F90.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F90.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+Doctor: Have you had similar problems with attention and seeming ‘spaced out’ since you were a child or teenager, for example in school, or is this a more recent change that started within the past few months to a year?
+
+Patient: It’s been going on pretty much as long as I can remember, definitely since I was a kid in school. Teachers used to say I didn’t listen or that I “zoned out” in class, and I’d miss parts of instructions even when I was trying to pay attention.
+
+Doctor: Over the past few weeks, have you been feeling noticeably down, sad, or losing interest or pleasure in things you usually enjoy most days, or has your mood been mostly okay despite the attention problems?
+
+Patient: My mood has been mostly okay; I wouldn’t say I’ve been feeling especially down or losing interest in things I usually like. I do get frustrated with myself about the attention issues, but overall I still enjoy my usual activities.
+
+Doctor: Besides feeling spaced out, do you also tend to be very fidgety, restless, or act on impulses quickly (like blurting things out or interrupting), or is it mainly the inattention and zoning out that causes you problems?
+
+Patient: It’s both, honestly. I’m often really fidgety and have a hard time sitting still or doing quiet things without tapping or moving around, and I catch myself interrupting people or jumping into conversations before they’ve finished talking.
+
+Doctor: Do these attention and fidgeting problems cause significant difficulties for you in at least two different areas of your life, like both at work and at home or in relationships, and have they been pretty consistent over the years rather than coming and going in short phases?
+
+Patient: Yeah, they cause problems both at work and at home. At work I miss parts of instructions, forget steps, and sometimes interrupt in meetings, and at home my partner gets annoyed because I zone out mid-conversation and cut people off without meaning to. It’s been like this pretty steadily for years, not just in short phases.
+
+Patient: Yeah, they cause problems both at work and at home. At work I miss parts of instructions, forget steps, and sometimes interrupt in meetings, and at home my partner gets annoyed because I zone out mid-conversation and cut people off without meaning to. It’s been like this pretty steadily for years, not just in short phases.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "functional impairment and coping",
+  "question": "When you were a child or teenager, did these attention and fidgeting problems ever lead to things like needing special help at school, getting in trouble a lot, or struggling to keep up with homework and chores compared to other kids your age?"
+}
+=====================================
+
+--- turn 07 ---
+
+[call 26] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ inattention
+  - Listening_Difficulty: Often does not seem to listen when spoken to directly.
+  - Instruction_Follow through_Difficulty: Often does not follow through on instructions and fails to finish schoolwork, chores, or duties in the workplace.
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Interrupting_Intruding: Often interrupts or intrudes on others (e.g., butts into conversations, games, or activities).
+▸ Critical Diagnostic Criteria
+  - Duration: 11 months
+  - Additional: Onset prior to age 12 years
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 7
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+When you were a child or teenager, did these attention and fidgeting problems ever lead to things like needing special help at school, getting in trouble a lot, or struggling to keep up with homework and chores compared to other kids your age?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["inattention", "inattention > Instruction_Follow through_Difficulty", "hyperactivity_impulsivity", "hyperactivity_impulsivity > Quiet_Activity_Difficulty", "hyperactivity_impulsivity > Interrupting_Intruding", "Critical Diagnostic Criteria > Additional: Onset prior to age 12 years"], "answer_strategy": "Answer clearly about whether these attention and fidgeting issues were present in childhood and how they affected school and home. Mention if you needed extra help, got in trouble for not listening, not finishing homework or chores, or for interrupting and being too active. Compare yourself to other kids your age (for example, if teachers or parents said you were more distracted or restless than others). Keep the tone straightforward and specific, giving concrete examples if you remember them."}
+=====================================
+
+[call 27] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Combined Presentation).
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ inattention
+  - Listening_Difficulty: Often does not seem to listen when spoken to directly.
+  - Instruction_Follow through_Difficulty: Often does not follow through on instructions and fails to finish schoolwork, chores, or duties in the workplace.
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Interrupting_Intruding: Often interrupts or intrudes on others (e.g., butts into conversations, games, or activities).
+▸ Critical Diagnostic Criteria
+  - Duration: 11 months
+  - Additional: Onset prior to age 12 years
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Listening_Difficulty
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: inattention, inattention > Instruction_Follow through_Difficulty, hyperactivity_impulsivity, hyperactivity_impulsivity > Quiet_Activity_Difficulty, hyperactivity_impulsivity > Interrupting_Intruding, Critical Diagnostic Criteria > Additional: Onset prior to age 12 years
+Answer strategy: Answer clearly about whether these attention and fidgeting issues were present in childhood and how they affected school and home. Mention if you needed extra help, got in trouble for not listening, not finishing homework or chores, or for interrupting and being too active. Compare yourself to other kids your age (for example, if teachers or parents said you were more distracted or restless than others). Keep the tone straightforward and specific, giving concrete examples if you remember them.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+Doctor: Have you had similar problems with attention and seeming ‘spaced out’ since you were a child or teenager, for example in school, or is this a more recent change that started within the past few months to a year?
+
+Patient: It’s been going on pretty much as long as I can remember, definitely since I was a kid in school. Teachers used to say I didn’t listen or that I “zoned out” in class, and I’d miss parts of instructions even when I was trying to pay attention.
+
+Doctor: Over the past few weeks, have you been feeling noticeably down, sad, or losing interest or pleasure in things you usually enjoy most days, or has your mood been mostly okay despite the attention problems?
+
+Patient: My mood has been mostly okay; I wouldn’t say I’ve been feeling especially down or losing interest in things I usually like. I do get frustrated with myself about the attention issues, but overall I still enjoy my usual activities.
+
+Doctor: Besides feeling spaced out, do you also tend to be very fidgety, restless, or act on impulses quickly (like blurting things out or interrupting), or is it mainly the inattention and zoning out that causes you problems?
+
+Patient: It’s both, honestly. I’m often really fidgety and have a hard time sitting still or doing quiet things without tapping or moving around, and I catch myself interrupting people or jumping into conversations before they’ve finished talking.
+
+Doctor: Do these attention and fidgeting problems cause significant difficulties for you in at least two different areas of your life, like both at work and at home or in relationships, and have they been pretty consistent over the years rather than coming and going in short phases?
+
+Patient: Yeah, they cause problems both at work and at home. At work I miss parts of instructions, forget steps, and sometimes interrupt in meetings, and at home my partner gets annoyed because I zone out mid-conversation and cut people off without meaning to. It’s been like this pretty steadily for years, not just in short phases.
+
+Doctor: When you were a child or teenager, did these attention and fidgeting problems ever lead to things like needing special help at school, getting in trouble a lot, or struggling to keep up with homework and chores compared to other kids your age?
+
+========== OUTPUT [patient] ==========
+Yeah, I definitely struggled more than other kids with homework and chores—I’d start but not finish, or forget what I was supposed to be doing. Teachers often said I didn’t follow directions or wasn’t listening, and I’d get in trouble for that and for blurting things out or talking over other kids in class.
+=====================================
+
+[call 28] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F90.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+Doctor: Have you had similar problems with attention and seeming ‘spaced out’ since you were a child or teenager, for example in school, or is this a more recent change that started within the past few months to a year?
+
+Patient: It’s been going on pretty much as long as I can remember, definitely since I was a kid in school. Teachers used to say I didn’t listen or that I “zoned out” in class, and I’d miss parts of instructions even when I was trying to pay attention.
+
+Doctor: Over the past few weeks, have you been feeling noticeably down, sad, or losing interest or pleasure in things you usually enjoy most days, or has your mood been mostly okay despite the attention problems?
+
+Patient: My mood has been mostly okay; I wouldn’t say I’ve been feeling especially down or losing interest in things I usually like. I do get frustrated with myself about the attention issues, but overall I still enjoy my usual activities.
+
+Doctor: Besides feeling spaced out, do you also tend to be very fidgety, restless, or act on impulses quickly (like blurting things out or interrupting), or is it mainly the inattention and zoning out that causes you problems?
+
+Patient: It’s both, honestly. I’m often really fidgety and have a hard time sitting still or doing quiet things without tapping or moving around, and I catch myself interrupting people or jumping into conversations before they’ve finished talking.
+
+Doctor: Do these attention and fidgeting problems cause significant difficulties for you in at least two different areas of your life, like both at work and at home or in relationships, and have they been pretty consistent over the years rather than coming and going in short phases?
+
+Patient: Yeah, they cause problems both at work and at home. At work I miss parts of instructions, forget steps, and sometimes interrupt in meetings, and at home my partner gets annoyed because I zone out mid-conversation and cut people off without meaning to. It’s been like this pretty steadily for years, not just in short phases.
+
+Doctor: When you were a child or teenager, did these attention and fidgeting problems ever lead to things like needing special help at school, getting in trouble a lot, or struggling to keep up with homework and chores compared to other kids your age?
+
+Patient: Yeah, I definitely struggled more than other kids with homework and chores—I’d start but not finish, or forget what I was supposed to be doing. Teachers often said I didn’t follow directions or wasn’t listening, and I’d get in trouble for that and for blurting things out or talking over other kids in class.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F90.0", "F90.1"], "note": "Previously the only candidate was F90.0, reflecting a picture of primarily inattentive symptoms. In this segment of the interview, the patient describes not only long‑standing inattention and zoning out since childhood, but also clear and persistent hyperactive/impulsive features (marked fidgetiness, difficulty sitting still, interrupting and blurting out both currently and in childhood). This symptom pattern, with onset in childhood and impairment across home, school, and now work/relationships, is consistent with a combined presentation of the same overarching condition, so a code that includes both inattention and hyperactivity/impulsivity must now be considered alongside the inattentive-focused code. There is no evidence of prominent mood or anxiety symptoms, psychosis, or episodic changes that would suggest alternative explanations, so the differential remains within the same diagnostic family but now includes a code reflecting combined features. Further questioning is still needed to clarify the exact subtype and rule out other contributing conditions, so the interview is not yet final.", "is_final": false}
+=====================================
+
+[call 29] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F90.0
+- F90.1
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F90.0", "F90.1"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+Doctor: Have you had similar problems with attention and seeming ‘spaced out’ since you were a child or teenager, for example in school, or is this a more recent change that started within the past few months to a year?
+
+Patient: It’s been going on pretty much as long as I can remember, definitely since I was a kid in school. Teachers used to say I didn’t listen or that I “zoned out” in class, and I’d miss parts of instructions even when I was trying to pay attention.
+
+Doctor: Over the past few weeks, have you been feeling noticeably down, sad, or losing interest or pleasure in things you usually enjoy most days, or has your mood been mostly okay despite the attention problems?
+
+Patient: My mood has been mostly okay; I wouldn’t say I’ve been feeling especially down or losing interest in things I usually like. I do get frustrated with myself about the attention issues, but overall I still enjoy my usual activities.
+
+Doctor: Besides feeling spaced out, do you also tend to be very fidgety, restless, or act on impulses quickly (like blurting things out or interrupting), or is it mainly the inattention and zoning out that causes you problems?
+
+Patient: It’s both, honestly. I’m often really fidgety and have a hard time sitting still or doing quiet things without tapping or moving around, and I catch myself interrupting people or jumping into conversations before they’ve finished talking.
+
+Doctor: Do these attention and fidgeting problems cause significant difficulties for you in at least two different areas of your life, like both at work and at home or in relationships, and have they been pretty consistent over the years rather than coming and going in short phases?
+
+Patient: Yeah, they cause problems both at work and at home. At work I miss parts of instructions, forget steps, and sometimes interrupt in meetings, and at home my partner gets annoyed because I zone out mid-conversation and cut people off without meaning to. It’s been like this pretty steadily for years, not just in short phases.
+
+Doctor: When you were a child or teenager, did these attention and fidgeting problems ever lead to things like needing special help at school, getting in trouble a lot, or struggling to keep up with homework and chores compared to other kids your age?
+
+Patient: Yeah, I definitely struggled more than other kids with homework and chores—I’d start but not finish, or forget what I was supposed to be doing. Teachers often said I didn’t follow directions or wasn’t listening, and I’d get in trouble for that and for blurting things out or talking over other kids in class.
+
+Patient: Yeah, I definitely struggled more than other kids with homework and chores—I’d start but not finish, or forget what I was supposed to be doing. Teachers often said I didn’t follow directions or wasn’t listening, and I’d get in trouble for that and for blurting things out or talking over other kids in class.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "predominant symptom pattern",
+  "question": "Thinking about your current difficulties, would you say the trouble paying attention and zoning out causes you more problems overall than the fidgeting and impulsive behaviors, or are the hyperactive and impulsive behaviors just as big a problem as the inattention?"
+}
+=====================================
+
+--- turn 08 ---
+
+[call 30] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ inattention
+  - Listening_Difficulty: Often does not seem to listen when spoken to directly.
+  - Instruction_Follow through_Difficulty: Often does not follow through on instructions and fails to finish schoolwork, chores, or duties in the workplace.
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Interrupting_Intruding: Often interrupts or intrudes on others (e.g., butts into conversations, games, or activities).
+▸ Critical Diagnostic Criteria
+  - Duration: 11 months
+  - Additional: Onset prior to age 12 years
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 8
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Thinking about your current difficulties, would you say the trouble paying attention and zoning out causes you more problems overall than the fidgeting and impulsive behaviors, or are the hyperactive and impulsive behaviors just as big a problem as the inattention?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["inattention", "hyperactivity_impulsivity"], "answer_strategy": "Compare directly which set of symptoms affects daily life more. Briefly describe whether the trouble listening, following instructions, and zoning out is a bigger issue than the fidgeting, difficulty being quiet, and interrupting others, or if they’re about equal. Use a straightforward, reflective tone, and give 1–2 concrete examples (school/work, home, or social situations) to show which group of problems causes more overall difficulty."}
+=====================================
+
+[call 31] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Combined Presentation).
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ inattention
+  - Listening_Difficulty: Often does not seem to listen when spoken to directly.
+  - Instruction_Follow through_Difficulty: Often does not follow through on instructions and fails to finish schoolwork, chores, or duties in the workplace.
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Interrupting_Intruding: Often interrupts or intrudes on others (e.g., butts into conversations, games, or activities).
+▸ Critical Diagnostic Criteria
+  - Duration: 11 months
+  - Additional: Onset prior to age 12 years
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Listening_Difficulty
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: inattention, hyperactivity_impulsivity
+Answer strategy: Compare directly which set of symptoms affects daily life more. Briefly describe whether the trouble listening, following instructions, and zoning out is a bigger issue than the fidgeting, difficulty being quiet, and interrupting others, or if they’re about equal. Use a straightforward, reflective tone, and give 1–2 concrete examples (school/work, home, or social situations) to show which group of problems causes more overall difficulty.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+Doctor: Have you had similar problems with attention and seeming ‘spaced out’ since you were a child or teenager, for example in school, or is this a more recent change that started within the past few months to a year?
+
+Patient: It’s been going on pretty much as long as I can remember, definitely since I was a kid in school. Teachers used to say I didn’t listen or that I “zoned out” in class, and I’d miss parts of instructions even when I was trying to pay attention.
+
+Doctor: Over the past few weeks, have you been feeling noticeably down, sad, or losing interest or pleasure in things you usually enjoy most days, or has your mood been mostly okay despite the attention problems?
+
+Patient: My mood has been mostly okay; I wouldn’t say I’ve been feeling especially down or losing interest in things I usually like. I do get frustrated with myself about the attention issues, but overall I still enjoy my usual activities.
+
+Doctor: Besides feeling spaced out, do you also tend to be very fidgety, restless, or act on impulses quickly (like blurting things out or interrupting), or is it mainly the inattention and zoning out that causes you problems?
+
+Patient: It’s both, honestly. I’m often really fidgety and have a hard time sitting still or doing quiet things without tapping or moving around, and I catch myself interrupting people or jumping into conversations before they’ve finished talking.
+
+Doctor: Do these attention and fidgeting problems cause significant difficulties for you in at least two different areas of your life, like both at work and at home or in relationships, and have they been pretty consistent over the years rather than coming and going in short phases?
+
+Patient: Yeah, they cause problems both at work and at home. At work I miss parts of instructions, forget steps, and sometimes interrupt in meetings, and at home my partner gets annoyed because I zone out mid-conversation and cut people off without meaning to. It’s been like this pretty steadily for years, not just in short phases.
+
+Doctor: When you were a child or teenager, did these attention and fidgeting problems ever lead to things like needing special help at school, getting in trouble a lot, or struggling to keep up with homework and chores compared to other kids your age?
+
+Patient: Yeah, I definitely struggled more than other kids with homework and chores—I’d start but not finish, or forget what I was supposed to be doing. Teachers often said I didn’t follow directions or wasn’t listening, and I’d get in trouble for that and for blurting things out or talking over other kids in class.
+
+Doctor: Thinking about your current difficulties, would you say the trouble paying attention and zoning out causes you more problems overall than the fidgeting and impulsive behaviors, or are the hyperactive and impulsive behaviors just as big a problem as the inattention?
+
+========== OUTPUT [patient] ==========
+I’d say the attention and zoning out causes me a bit more trouble overall, especially with missing instructions at work and spacing out during important conversations at home. The fidgeting and interrupting are definitely issues too, but the not-listening and losing track of what I’m supposed to be doing seem to get me into more serious problems.
+=====================================
+
+[call 32] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F90.0", "F90.1"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+Doctor: Have you had similar problems with attention and seeming ‘spaced out’ since you were a child or teenager, for example in school, or is this a more recent change that started within the past few months to a year?
+
+Patient: It’s been going on pretty much as long as I can remember, definitely since I was a kid in school. Teachers used to say I didn’t listen or that I “zoned out” in class, and I’d miss parts of instructions even when I was trying to pay attention.
+
+Doctor: Over the past few weeks, have you been feeling noticeably down, sad, or losing interest or pleasure in things you usually enjoy most days, or has your mood been mostly okay despite the attention problems?
+
+Patient: My mood has been mostly okay; I wouldn’t say I’ve been feeling especially down or losing interest in things I usually like. I do get frustrated with myself about the attention issues, but overall I still enjoy my usual activities.
+
+Doctor: Besides feeling spaced out, do you also tend to be very fidgety, restless, or act on impulses quickly (like blurting things out or interrupting), or is it mainly the inattention and zoning out that causes you problems?
+
+Patient: It’s both, honestly. I’m often really fidgety and have a hard time sitting still or doing quiet things without tapping or moving around, and I catch myself interrupting people or jumping into conversations before they’ve finished talking.
+
+Doctor: Do these attention and fidgeting problems cause significant difficulties for you in at least two different areas of your life, like both at work and at home or in relationships, and have they been pretty consistent over the years rather than coming and going in short phases?
+
+Patient: Yeah, they cause problems both at work and at home. At work I miss parts of instructions, forget steps, and sometimes interrupt in meetings, and at home my partner gets annoyed because I zone out mid-conversation and cut people off without meaning to. It’s been like this pretty steadily for years, not just in short phases.
+
+Doctor: When you were a child or teenager, did these attention and fidgeting problems ever lead to things like needing special help at school, getting in trouble a lot, or struggling to keep up with homework and chores compared to other kids your age?
+
+Patient: Yeah, I definitely struggled more than other kids with homework and chores—I’d start but not finish, or forget what I was supposed to be doing. Teachers often said I didn’t follow directions or wasn’t listening, and I’d get in trouble for that and for blurting things out or talking over other kids in class.
+
+Doctor: Thinking about your current difficulties, would you say the trouble paying attention and zoning out causes you more problems overall than the fidgeting and impulsive behaviors, or are the hyperactive and impulsive behaviors just as big a problem as the inattention?
+
+Patient: I’d say the attention and zoning out causes me a bit more trouble overall, especially with missing instructions at work and spacing out during important conversations at home. The fidgeting and interrupting are definitely issues too, but the not-listening and losing track of what I’m supposed to be doing seem to get me into more serious problems.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F90.0"], "note": "Previously the candidates were [F90.0, F90.1]. F90.0 corresponds to a presentation where both inattentive and hyperactive-impulsive symptoms are present, while F90.1 corresponds to a presentation where hyperactivity/impulsivity is present without clinically significant inattention. In this conversation, the patient clearly describes long-standing, functionally impairing inattention (zoning out, missing instructions, being described as not listening since childhood) AND clear hyperactive/impulsive features (fidgety, difficulty sitting still, interrupting others). The patient also reports that inattention is at least as impairing, if not more so, than the hyperactive/impulsive symptoms. This pattern aligns with a combined-type picture rather than a purely hyperactive/impulsive picture, making the F90.1-like option unlikely. Therefore the current candidate list is narrowed to [F90.0]. I am reasonably confident in this, but since we have not yet systematically ruled out other possible explanations (e.g., medical, neurological, or other psychiatric conditions) or fully assessed all diagnostic criteria, I will not mark this as final yet.", "is_final": false}
+=====================================
+
+[call 33] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F90.0
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F90.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+Doctor: Have you had similar problems with attention and seeming ‘spaced out’ since you were a child or teenager, for example in school, or is this a more recent change that started within the past few months to a year?
+
+Patient: It’s been going on pretty much as long as I can remember, definitely since I was a kid in school. Teachers used to say I didn’t listen or that I “zoned out” in class, and I’d miss parts of instructions even when I was trying to pay attention.
+
+Doctor: Over the past few weeks, have you been feeling noticeably down, sad, or losing interest or pleasure in things you usually enjoy most days, or has your mood been mostly okay despite the attention problems?
+
+Patient: My mood has been mostly okay; I wouldn’t say I’ve been feeling especially down or losing interest in things I usually like. I do get frustrated with myself about the attention issues, but overall I still enjoy my usual activities.
+
+Doctor: Besides feeling spaced out, do you also tend to be very fidgety, restless, or act on impulses quickly (like blurting things out or interrupting), or is it mainly the inattention and zoning out that causes you problems?
+
+Patient: It’s both, honestly. I’m often really fidgety and have a hard time sitting still or doing quiet things without tapping or moving around, and I catch myself interrupting people or jumping into conversations before they’ve finished talking.
+
+Doctor: Do these attention and fidgeting problems cause significant difficulties for you in at least two different areas of your life, like both at work and at home or in relationships, and have they been pretty consistent over the years rather than coming and going in short phases?
+
+Patient: Yeah, they cause problems both at work and at home. At work I miss parts of instructions, forget steps, and sometimes interrupt in meetings, and at home my partner gets annoyed because I zone out mid-conversation and cut people off without meaning to. It’s been like this pretty steadily for years, not just in short phases.
+
+Doctor: When you were a child or teenager, did these attention and fidgeting problems ever lead to things like needing special help at school, getting in trouble a lot, or struggling to keep up with homework and chores compared to other kids your age?
+
+Patient: Yeah, I definitely struggled more than other kids with homework and chores—I’d start but not finish, or forget what I was supposed to be doing. Teachers often said I didn’t follow directions or wasn’t listening, and I’d get in trouble for that and for blurting things out or talking over other kids in class.
+
+Doctor: Thinking about your current difficulties, would you say the trouble paying attention and zoning out causes you more problems overall than the fidgeting and impulsive behaviors, or are the hyperactive and impulsive behaviors just as big a problem as the inattention?
+
+Patient: I’d say the attention and zoning out causes me a bit more trouble overall, especially with missing instructions at work and spacing out during important conversations at home. The fidgeting and interrupting are definitely issues too, but the not-listening and losing track of what I’m supposed to be doing seem to get me into more serious problems.
+
+Patient: I’d say the attention and zoning out causes me a bit more trouble overall, especially with missing instructions at work and spacing out during important conversations at home. The fidgeting and interrupting are definitely issues too, but the not-listening and losing track of what I’m supposed to be doing seem to get me into more serious problems.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "medical history",
+  "subcategory": "substance use",
+  "question": "Do you regularly use alcohol, cannabis, or any other drugs, or take any prescription medications that affect your thinking, and if so have your attention and fidgeting problems changed noticeably with their use?"
+}
+=====================================
+
+--- turn 09 ---
+
+[call 34] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ inattention
+  - Listening_Difficulty: Often does not seem to listen when spoken to directly.
+  - Instruction_Follow through_Difficulty: Often does not follow through on instructions and fails to finish schoolwork, chores, or duties in the workplace.
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Interrupting_Intruding: Often interrupts or intrudes on others (e.g., butts into conversations, games, or activities).
+▸ Critical Diagnostic Criteria
+  - Duration: 11 months
+  - Additional: Onset prior to age 12 years
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 9
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Do you regularly use alcohol, cannabis, or any other drugs, or take any prescription medications that affect your thinking, and if so have your attention and fidgeting problems changed noticeably with their use?
+
+========== OUTPUT [patient] ==========
+{"matched": false, "matched_sections": [], "answer_strategy": "Briefly and honestly describe your use of alcohol, cannabis, other drugs, and any prescription medications that might affect your thinking. If you don’t use any, say so clearly. If you do, mention how often and whether you’ve noticed your attention or fidgeting getting better, worse, or staying the same when you use them. If you’re unsure, it’s fine to say you haven’t really noticed or haven’t thought about it."}
+=====================================
+
+[call 35] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Combined Presentation).
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ inattention
+  - Listening_Difficulty: Often does not seem to listen when spoken to directly.
+  - Instruction_Follow through_Difficulty: Often does not follow through on instructions and fails to finish schoolwork, chores, or duties in the workplace.
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Interrupting_Intruding: Often interrupts or intrudes on others (e.g., butts into conversations, games, or activities).
+▸ Critical Diagnostic Criteria
+  - Duration: 11 months
+  - Additional: Onset prior to age 12 years
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Listening_Difficulty
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(No match in profile or inference only)
+Answer strategy: Briefly and honestly describe your use of alcohol, cannabis, other drugs, and any prescription medications that might affect your thinking. If you don’t use any, say so clearly. If you do, mention how often and whether you’ve noticed your attention or fidgeting getting better, worse, or staying the same when you use them. If you’re unsure, it’s fine to say you haven’t really noticed or haven’t thought about it.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+Doctor: Have you had similar problems with attention and seeming ‘spaced out’ since you were a child or teenager, for example in school, or is this a more recent change that started within the past few months to a year?
+
+Patient: It’s been going on pretty much as long as I can remember, definitely since I was a kid in school. Teachers used to say I didn’t listen or that I “zoned out” in class, and I’d miss parts of instructions even when I was trying to pay attention.
+
+Doctor: Over the past few weeks, have you been feeling noticeably down, sad, or losing interest or pleasure in things you usually enjoy most days, or has your mood been mostly okay despite the attention problems?
+
+Patient: My mood has been mostly okay; I wouldn’t say I’ve been feeling especially down or losing interest in things I usually like. I do get frustrated with myself about the attention issues, but overall I still enjoy my usual activities.
+
+Doctor: Besides feeling spaced out, do you also tend to be very fidgety, restless, or act on impulses quickly (like blurting things out or interrupting), or is it mainly the inattention and zoning out that causes you problems?
+
+Patient: It’s both, honestly. I’m often really fidgety and have a hard time sitting still or doing quiet things without tapping or moving around, and I catch myself interrupting people or jumping into conversations before they’ve finished talking.
+
+Doctor: Do these attention and fidgeting problems cause significant difficulties for you in at least two different areas of your life, like both at work and at home or in relationships, and have they been pretty consistent over the years rather than coming and going in short phases?
+
+Patient: Yeah, they cause problems both at work and at home. At work I miss parts of instructions, forget steps, and sometimes interrupt in meetings, and at home my partner gets annoyed because I zone out mid-conversation and cut people off without meaning to. It’s been like this pretty steadily for years, not just in short phases.
+
+Doctor: When you were a child or teenager, did these attention and fidgeting problems ever lead to things like needing special help at school, getting in trouble a lot, or struggling to keep up with homework and chores compared to other kids your age?
+
+Patient: Yeah, I definitely struggled more than other kids with homework and chores—I’d start but not finish, or forget what I was supposed to be doing. Teachers often said I didn’t follow directions or wasn’t listening, and I’d get in trouble for that and for blurting things out or talking over other kids in class.
+
+Doctor: Thinking about your current difficulties, would you say the trouble paying attention and zoning out causes you more problems overall than the fidgeting and impulsive behaviors, or are the hyperactive and impulsive behaviors just as big a problem as the inattention?
+
+Patient: I’d say the attention and zoning out causes me a bit more trouble overall, especially with missing instructions at work and spacing out during important conversations at home. The fidgeting and interrupting are definitely issues too, but the not-listening and losing track of what I’m supposed to be doing seem to get me into more serious problems.
+
+Doctor: Do you regularly use alcohol, cannabis, or any other drugs, or take any prescription medications that affect your thinking, and if so have your attention and fidgeting problems changed noticeably with their use?
+
+========== OUTPUT [patient] ==========
+I drink socially maybe once or twice a week, but not heavily, and I haven’t noticed it really changing my attention or fidgeting, aside from feeling a bit sluggish if I overdo it. I don’t use cannabis or other drugs, and I’m not on any prescription medications that affect my thinking.
+=====================================
+
+[call 36] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F90.0"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+Doctor: Have you had similar problems with attention and seeming ‘spaced out’ since you were a child or teenager, for example in school, or is this a more recent change that started within the past few months to a year?
+
+Patient: It’s been going on pretty much as long as I can remember, definitely since I was a kid in school. Teachers used to say I didn’t listen or that I “zoned out” in class, and I’d miss parts of instructions even when I was trying to pay attention.
+
+Doctor: Over the past few weeks, have you been feeling noticeably down, sad, or losing interest or pleasure in things you usually enjoy most days, or has your mood been mostly okay despite the attention problems?
+
+Patient: My mood has been mostly okay; I wouldn’t say I’ve been feeling especially down or losing interest in things I usually like. I do get frustrated with myself about the attention issues, but overall I still enjoy my usual activities.
+
+Doctor: Besides feeling spaced out, do you also tend to be very fidgety, restless, or act on impulses quickly (like blurting things out or interrupting), or is it mainly the inattention and zoning out that causes you problems?
+
+Patient: It’s both, honestly. I’m often really fidgety and have a hard time sitting still or doing quiet things without tapping or moving around, and I catch myself interrupting people or jumping into conversations before they’ve finished talking.
+
+Doctor: Do these attention and fidgeting problems cause significant difficulties for you in at least two different areas of your life, like both at work and at home or in relationships, and have they been pretty consistent over the years rather than coming and going in short phases?
+
+Patient: Yeah, they cause problems both at work and at home. At work I miss parts of instructions, forget steps, and sometimes interrupt in meetings, and at home my partner gets annoyed because I zone out mid-conversation and cut people off without meaning to. It’s been like this pretty steadily for years, not just in short phases.
+
+Doctor: When you were a child or teenager, did these attention and fidgeting problems ever lead to things like needing special help at school, getting in trouble a lot, or struggling to keep up with homework and chores compared to other kids your age?
+
+Patient: Yeah, I definitely struggled more than other kids with homework and chores—I’d start but not finish, or forget what I was supposed to be doing. Teachers often said I didn’t follow directions or wasn’t listening, and I’d get in trouble for that and for blurting things out or talking over other kids in class.
+
+Doctor: Thinking about your current difficulties, would you say the trouble paying attention and zoning out causes you more problems overall than the fidgeting and impulsive behaviors, or are the hyperactive and impulsive behaviors just as big a problem as the inattention?
+
+Patient: I’d say the attention and zoning out causes me a bit more trouble overall, especially with missing instructions at work and spacing out during important conversations at home. The fidgeting and interrupting are definitely issues too, but the not-listening and losing track of what I’m supposed to be doing seem to get me into more serious problems.
+
+Doctor: Do you regularly use alcohol, cannabis, or any other drugs, or take any prescription medications that affect your thinking, and if so have your attention and fidgeting problems changed noticeably with their use?
+
+Patient: I drink socially maybe once or twice a week, but not heavily, and I haven’t noticed it really changing my attention or fidgeting, aside from feeling a bit sluggish if I overdo it. I don’t use cannabis or other drugs, and I’m not on any prescription medications that affect my thinking.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F90.0", "F90.1"], "note": "Previously the only candidate was F90.0, reflecting a predominantly inattentive presentation of a longstanding attention problem beginning in childhood and persisting across settings. In this conversation, the patient continues to describe clear, pervasive inattention starting in childhood and causing impairment at work and home, which is consistent with the original candidate, so F90.0 remains. However, the patient also reports significant and persistent fidgetiness, difficulty sitting still, and impulsive behaviors such as interrupting and talking over others, present since school years and currently impairing functioning. This pattern suggests that hyperactive-impulsive symptoms may be at least as clinically relevant as the inattentive ones, raising the possibility of a combined-type presentation. Therefore, a second candidate reflecting a more mixed pattern is added (F90.1). No evidence has emerged for mood, anxiety, or substance-related conditions driving the symptoms, so no additional non-ADHD candidates are added at this time. Further questioning is needed to clarify the full symptom count and developmental history to distinguish between these two ADHD presentations, so the process is not yet final.", "is_final": false}
+=====================================
+
+[call 37] doctor-followup-question
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
+
+[Candidate Diseases]
+
+[Current Candidate Diagnoses]
+- F90.0
+- F90.1
+
+[Interview Strategy]
+- Review the conversation and ask one follow-up question that best differentiates among the candidates.
+- Keep the question clear and easy for the patient to understand. Two sentences at most.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{
+  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
+  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
+  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
+}
+
+[2. USER]
+Candidate Diseases: 
+["F90.0", "F90.1"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+Doctor: Have you had similar problems with attention and seeming ‘spaced out’ since you were a child or teenager, for example in school, or is this a more recent change that started within the past few months to a year?
+
+Patient: It’s been going on pretty much as long as I can remember, definitely since I was a kid in school. Teachers used to say I didn’t listen or that I “zoned out” in class, and I’d miss parts of instructions even when I was trying to pay attention.
+
+Doctor: Over the past few weeks, have you been feeling noticeably down, sad, or losing interest or pleasure in things you usually enjoy most days, or has your mood been mostly okay despite the attention problems?
+
+Patient: My mood has been mostly okay; I wouldn’t say I’ve been feeling especially down or losing interest in things I usually like. I do get frustrated with myself about the attention issues, but overall I still enjoy my usual activities.
+
+Doctor: Besides feeling spaced out, do you also tend to be very fidgety, restless, or act on impulses quickly (like blurting things out or interrupting), or is it mainly the inattention and zoning out that causes you problems?
+
+Patient: It’s both, honestly. I’m often really fidgety and have a hard time sitting still or doing quiet things without tapping or moving around, and I catch myself interrupting people or jumping into conversations before they’ve finished talking.
+
+Doctor: Do these attention and fidgeting problems cause significant difficulties for you in at least two different areas of your life, like both at work and at home or in relationships, and have they been pretty consistent over the years rather than coming and going in short phases?
+
+Patient: Yeah, they cause problems both at work and at home. At work I miss parts of instructions, forget steps, and sometimes interrupt in meetings, and at home my partner gets annoyed because I zone out mid-conversation and cut people off without meaning to. It’s been like this pretty steadily for years, not just in short phases.
+
+Doctor: When you were a child or teenager, did these attention and fidgeting problems ever lead to things like needing special help at school, getting in trouble a lot, or struggling to keep up with homework and chores compared to other kids your age?
+
+Patient: Yeah, I definitely struggled more than other kids with homework and chores—I’d start but not finish, or forget what I was supposed to be doing. Teachers often said I didn’t follow directions or wasn’t listening, and I’d get in trouble for that and for blurting things out or talking over other kids in class.
+
+Doctor: Thinking about your current difficulties, would you say the trouble paying attention and zoning out causes you more problems overall than the fidgeting and impulsive behaviors, or are the hyperactive and impulsive behaviors just as big a problem as the inattention?
+
+Patient: I’d say the attention and zoning out causes me a bit more trouble overall, especially with missing instructions at work and spacing out during important conversations at home. The fidgeting and interrupting are definitely issues too, but the not-listening and losing track of what I’m supposed to be doing seem to get me into more serious problems.
+
+Doctor: Do you regularly use alcohol, cannabis, or any other drugs, or take any prescription medications that affect your thinking, and if so have your attention and fidgeting problems changed noticeably with their use?
+
+Patient: I drink socially maybe once or twice a week, but not heavily, and I haven’t noticed it really changing my attention or fidgeting, aside from feeling a bit sluggish if I overdo it. I don’t use cannabis or other drugs, and I’m not on any prescription medications that affect my thinking.
+
+Patient: I drink socially maybe once or twice a week, but not heavily, and I haven’t noticed it really changing my attention or fidgeting, aside from feeling a bit sluggish if I overdo it. I don’t use cannabis or other drugs, and I’m not on any prescription medications that affect my thinking.
+
+========== OUTPUT [doctor] ==========
+{
+  "category": "differential point",
+  "subcategory": "current hyperactivity/impulsivity impact",
+  "question": "Right now in your adult life, do the fidgeting, restlessness, and impulsive behaviors (like interrupting or acting before thinking) cause you just as much difficulty as the inattention, or are they clearly less of a problem day to day?"
+}
+=====================================
+
+--- turn 10 ---
+
+[call 38] patient-profile-alignment
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are an assistant analyst connecting the [Symptom Profile] with the doctor's question.
+Determine which part of the profile (chief complaint, associated symptoms, social history, etc.)
+the doctor's **last question** is related to.
+
+[Symptom Profile]
+▸ inattention
+  - Listening_Difficulty: Often does not seem to listen when spoken to directly.
+  - Instruction_Follow through_Difficulty: Often does not follow through on instructions and fails to finish schoolwork, chores, or duties in the workplace.
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Interrupting_Intruding: Often interrupts or intrudes on others (e.g., butts into conversations, games, or activities).
+▸ Critical Diagnostic Criteria
+  - Duration: 11 months
+  - Additional: Onset prior to age 12 years
+
+Rules:
+- If the patient can specifically answer based on the profile, set matched=true, list related
+  sections/items in matched_sections, and write a short English strategy in answer_strategy
+  on what tone and content the patient should reply with.
+- If the question is not in the profile or can only be inferred, set matched=false and instruct
+  in answer_strategy to respond briefly (e.g., "I'm not sure", "I haven't thought about it").
+- If patient_turn_index is 1 (patient's first reply), ONLY focus the strategy on the chief complaint
+  (do NOT reveal other symptoms).
+
+[Output Format — JSON only, no other text]
+{"matched": true|false, "matched_sections": ["..."], "answer_strategy": "..."}
+
+[2. USER]
+patient_turn_index: 10
+(If 1, this is the patient's first reply — focus strategy on chief complaint only.)
+
+Doctor's question:
+Right now in your adult life, do the fidgeting, restlessness, and impulsive behaviors (like interrupting or acting before thinking) cause you just as much difficulty as the inattention, or are they clearly less of a problem day to day?
+
+========== OUTPUT [patient] ==========
+{"matched": true, "matched_sections": ["hyperactivity_impulsivity > Quiet_Activity_Difficulty", "hyperactivity_impulsivity > Interrupting_Intruding", "inattention > Listening_Difficulty", "inattention > Instruction_Follow through_Difficulty"], "answer_strategy": "Directly compare how much trouble the hyperactive/impulsive behaviors cause you versus the inattentive ones in your current adult life. Mention whether things like interrupting others, feeling restless, or being unable to do quiet activities are equal to, worse than, or clearly less of a problem than your difficulty listening and following through on tasks. Use concrete day‑to‑day examples if you can (work, relationships, chores), and keep the tone straightforward and honest about what feels most impairing now."}
+=====================================
+
+[call 39] patient-response
+
+========== INPUT [patient] ==========
+[1. SYSTEM]
+/no_think
+You are a patient experiencing Attention-Deficit/Hyperactivity Disorder (Combined Presentation).
+Respond to the doctor's questions based on the symptom profile provided below.
+
+[Symptom Profile]
+▸ inattention
+  - Listening_Difficulty: Often does not seem to listen when spoken to directly.
+  - Instruction_Follow through_Difficulty: Often does not follow through on instructions and fails to finish schoolwork, chores, or duties in the workplace.
+▸ hyperactivity_impulsivity
+  - Quiet_Activity_Difficulty: Often unable to play or engage in leisure activities quietly.
+  - Interrupting_Intruding: Often interrupts or intrudes on others (e.g., butts into conversations, games, or activities).
+▸ Critical Diagnostic Criteria
+  - Duration: 11 months
+  - Additional: Onset prior to age 12 years
+
+[Behavioral Guidelines]
+- In the very first turn, only talk about your chief complaint. Do NOT reveal any other symptoms.
+- Chief complaint for the first turn: Listening_Difficulty
+- Answer only what the doctor asks. Do not list your symptoms unprompted.
+- Speak naturally and briefly, as a real patient would (2–3 sentences max).
+- Do not mention symptoms that the doctor has not asked about.
+- If asked about a symptom not in your profile, say you are not sure.
+- Respond in English.
+
+
+[This Turn: Profile Alignment Result — Follow Strictly]
+(Matched with profile)
+Related sections: hyperactivity_impulsivity > Quiet_Activity_Difficulty, hyperactivity_impulsivity > Interrupting_Intruding, inattention > Listening_Difficulty, inattention > Instruction_Follow through_Difficulty
+Answer strategy: Directly compare how much trouble the hyperactive/impulsive behaviors cause you versus the inattentive ones in your current adult life. Mention whether things like interrupting others, feeling restless, or being unable to do quiet activities are equal to, worse than, or clearly less of a problem than your difficulty listening and following through on tasks. Use concrete day‑to‑day examples if you can (work, relationships, chores), and keep the tone straightforward and honest about what feels most impairing now.
+
+[2. USER]
+Below is the full consultation dialogue so far. Reply naturally in English as the Patient to the last Doctor utterance.
+Answer only the question, in 2–3 sentences maximum.
+
+[Dialogue]
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+Doctor: Have you had similar problems with attention and seeming ‘spaced out’ since you were a child or teenager, for example in school, or is this a more recent change that started within the past few months to a year?
+
+Patient: It’s been going on pretty much as long as I can remember, definitely since I was a kid in school. Teachers used to say I didn’t listen or that I “zoned out” in class, and I’d miss parts of instructions even when I was trying to pay attention.
+
+Doctor: Over the past few weeks, have you been feeling noticeably down, sad, or losing interest or pleasure in things you usually enjoy most days, or has your mood been mostly okay despite the attention problems?
+
+Patient: My mood has been mostly okay; I wouldn’t say I’ve been feeling especially down or losing interest in things I usually like. I do get frustrated with myself about the attention issues, but overall I still enjoy my usual activities.
+
+Doctor: Besides feeling spaced out, do you also tend to be very fidgety, restless, or act on impulses quickly (like blurting things out or interrupting), or is it mainly the inattention and zoning out that causes you problems?
+
+Patient: It’s both, honestly. I’m often really fidgety and have a hard time sitting still or doing quiet things without tapping or moving around, and I catch myself interrupting people or jumping into conversations before they’ve finished talking.
+
+Doctor: Do these attention and fidgeting problems cause significant difficulties for you in at least two different areas of your life, like both at work and at home or in relationships, and have they been pretty consistent over the years rather than coming and going in short phases?
+
+Patient: Yeah, they cause problems both at work and at home. At work I miss parts of instructions, forget steps, and sometimes interrupt in meetings, and at home my partner gets annoyed because I zone out mid-conversation and cut people off without meaning to. It’s been like this pretty steadily for years, not just in short phases.
+
+Doctor: When you were a child or teenager, did these attention and fidgeting problems ever lead to things like needing special help at school, getting in trouble a lot, or struggling to keep up with homework and chores compared to other kids your age?
+
+Patient: Yeah, I definitely struggled more than other kids with homework and chores—I’d start but not finish, or forget what I was supposed to be doing. Teachers often said I didn’t follow directions or wasn’t listening, and I’d get in trouble for that and for blurting things out or talking over other kids in class.
+
+Doctor: Thinking about your current difficulties, would you say the trouble paying attention and zoning out causes you more problems overall than the fidgeting and impulsive behaviors, or are the hyperactive and impulsive behaviors just as big a problem as the inattention?
+
+Patient: I’d say the attention and zoning out causes me a bit more trouble overall, especially with missing instructions at work and spacing out during important conversations at home. The fidgeting and interrupting are definitely issues too, but the not-listening and losing track of what I’m supposed to be doing seem to get me into more serious problems.
+
+Doctor: Do you regularly use alcohol, cannabis, or any other drugs, or take any prescription medications that affect your thinking, and if so have your attention and fidgeting problems changed noticeably with their use?
+
+Patient: I drink socially maybe once or twice a week, but not heavily, and I haven’t noticed it really changing my attention or fidgeting, aside from feeling a bit sluggish if I overdo it. I don’t use cannabis or other drugs, and I’m not on any prescription medications that affect my thinking.
+
+Doctor: Right now in your adult life, do the fidgeting, restlessness, and impulsive behaviors (like interrupting or acting before thinking) cause you just as much difficulty as the inattention, or are they clearly less of a problem day to day?
+
+========== OUTPUT [patient] ==========
+They’re a problem, but definitely less than the inattention. The biggest issues day to day are still missing parts of conversations and not following through on tasks, whereas the fidgeting and interrupting mostly just annoy people or make me feel self‑conscious rather than completely derailing things.
+=====================================
+
+[call 40] doctor-clinical-inference
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
+
+[Important — Note Field Formatting]
+In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
+For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
+
+[When to End the Interview]
+Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
+
+Output Format (JSON only, no other text):
+{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}
+
+[2. USER]
+Previous Candidates:
+["F90.0", "F90.1"]
+
+Interview Transcript:
+
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+Doctor: Have you had similar problems with attention and seeming ‘spaced out’ since you were a child or teenager, for example in school, or is this a more recent change that started within the past few months to a year?
+
+Patient: It’s been going on pretty much as long as I can remember, definitely since I was a kid in school. Teachers used to say I didn’t listen or that I “zoned out” in class, and I’d miss parts of instructions even when I was trying to pay attention.
+
+Doctor: Over the past few weeks, have you been feeling noticeably down, sad, or losing interest or pleasure in things you usually enjoy most days, or has your mood been mostly okay despite the attention problems?
+
+Patient: My mood has been mostly okay; I wouldn’t say I’ve been feeling especially down or losing interest in things I usually like. I do get frustrated with myself about the attention issues, but overall I still enjoy my usual activities.
+
+Doctor: Besides feeling spaced out, do you also tend to be very fidgety, restless, or act on impulses quickly (like blurting things out or interrupting), or is it mainly the inattention and zoning out that causes you problems?
+
+Patient: It’s both, honestly. I’m often really fidgety and have a hard time sitting still or doing quiet things without tapping or moving around, and I catch myself interrupting people or jumping into conversations before they’ve finished talking.
+
+Doctor: Do these attention and fidgeting problems cause significant difficulties for you in at least two different areas of your life, like both at work and at home or in relationships, and have they been pretty consistent over the years rather than coming and going in short phases?
+
+Patient: Yeah, they cause problems both at work and at home. At work I miss parts of instructions, forget steps, and sometimes interrupt in meetings, and at home my partner gets annoyed because I zone out mid-conversation and cut people off without meaning to. It’s been like this pretty steadily for years, not just in short phases.
+
+Doctor: When you were a child or teenager, did these attention and fidgeting problems ever lead to things like needing special help at school, getting in trouble a lot, or struggling to keep up with homework and chores compared to other kids your age?
+
+Patient: Yeah, I definitely struggled more than other kids with homework and chores—I’d start but not finish, or forget what I was supposed to be doing. Teachers often said I didn’t follow directions or wasn’t listening, and I’d get in trouble for that and for blurting things out or talking over other kids in class.
+
+Doctor: Thinking about your current difficulties, would you say the trouble paying attention and zoning out causes you more problems overall than the fidgeting and impulsive behaviors, or are the hyperactive and impulsive behaviors just as big a problem as the inattention?
+
+Patient: I’d say the attention and zoning out causes me a bit more trouble overall, especially with missing instructions at work and spacing out during important conversations at home. The fidgeting and interrupting are definitely issues too, but the not-listening and losing track of what I’m supposed to be doing seem to get me into more serious problems.
+
+Doctor: Do you regularly use alcohol, cannabis, or any other drugs, or take any prescription medications that affect your thinking, and if so have your attention and fidgeting problems changed noticeably with their use?
+
+Patient: I drink socially maybe once or twice a week, but not heavily, and I haven’t noticed it really changing my attention or fidgeting, aside from feeling a bit sluggish if I overdo it. I don’t use cannabis or other drugs, and I’m not on any prescription medications that affect my thinking.
+
+Doctor: Right now in your adult life, do the fidgeting, restlessness, and impulsive behaviors (like interrupting or acting before thinking) cause you just as much difficulty as the inattention, or are they clearly less of a problem day to day?
+
+Patient: They’re a problem, but definitely less than the inattention. The biggest issues day to day are still missing parts of conversations and not following through on tasks, whereas the fidgeting and interrupting mostly just annoy people or make me feel self‑conscious rather than completely derailing things.
+
+========== OUTPUT [doctor] ==========
+{"candidates": ["F90.0"], "note": "Previously the candidates were [F90.0, F90.1]. Both were considered because the patient clearly has a history since childhood of inattention plus hyperactive/impulsive symptoms causing impairment in multiple settings, so an attention‑deficit/hyperactivity disorder picture is very likely. The remaining question was whether the current presentation fits a predominantly inattentive pattern versus a combined pattern. In this conversation, the patient reports that inattention and zoning out are the main source of impairment, while hyperactive/impulsive symptoms (fidgeting, interrupting) are present but cause relatively less day‑to‑day difficulty and are described as secondary. This pattern is more consistent with a predominantly inattentive presentation rather than a fully combined one, so F90.1 (the more balanced combined pattern) becomes less likely. Therefore the current candidate list is narrowed to [F90.0]. I do not yet have a full symptom count or detailed collateral information to be completely certain, so I will continue the interview.", "is_final": false}
+=====================================
+
+[call 41] doctor-final-diagnosis
+
+========== INPUT [doctor] ==========
+[1. SYSTEM]
+You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
+
+Based on the full interview transcript and the differential diagnosis candidates, write the final diagnosis report.
+
+Both the "diagnosis" and "candidates" MUST be ICD-10 codes.
+
+[Field Instructions]
+- diagnosis: The single diagnosis code of ICD-10.
+- candidates: Top 2–3 differential candidates of ICD-10 codes considered until the end.
+- reason: Brief diagnostic rationale.
+- diagnostic_checklist: Structured evidence summary organized by diagnostic criterion type.
+  List only symptom groups that are relevant to your diagnosis, with the symptoms the patient actually confirmed.
+
+Output Format (JSON only, no other text):
+{
+  "diagnosis": "Final Diagnosis ICD-10 code",
+  "candidates": ["Disease Code1", "Disease Code2"],
+  "reason": "Brief diagnostic rationale.",
+  "diagnostic_checklist": {
+    "symptom_groups": [
+      {
+        "group": "clinical group name (e.g., inattention, manic_episode, psychotic_symptoms)",
+        "confirmed_symptoms": ["natural language description of each confirmed symptom in this group"],
+        "count": <integer>
+      }
+    ],
+    "duration_verified": "Description of how the duration criterion was established (e.g., 'symptoms present for over 6 months since childhood'), or null if not assessed.",
+    "functional_impairment": <true if functional impairment was confirmed, false if denied, null if not assessed>,
+    "traumatic_stressor": <true if a qualifying traumatic stressor was confirmed, null if not applicable or not assessed>,
+    "psychosocial_stressor": <true if a qualifying psychosocial stressor was confirmed, null if not applicable or not assessed>,
+    "additional_requirements": ["Each additional criterion that was explicitly verified during the interview (e.g., 'Onset prior to age 12 confirmed')"]
+  }
+}
+
+[2. USER]
+Candidate Diseases: 
+["F90.0"]
+
+Interview Transcript: 
+Doctor: Hello, it’s good to meet you—please have a seat. What brings you in today, and what would you like help with?
+
+Patient: Lately I’ve been having a lot of trouble really listening when people talk to me, even when I’m trying to pay attention. My family and coworkers say I seem spaced out or like I’m not listening, and it’s starting to cause problems for me.
+
+Doctor: Do you also find yourself feeling tense or on edge and worrying a lot about different things most days, or is it more that your mind just drifts off or feels blank even when you’re not particularly worried?
+
+Patient: It’s more that my mind drifts off or just kind of blanks, even when I don’t feel especially worried. I can be in the middle of a conversation and suddenly realize I’ve missed a chunk of what was said, without really knowing where my thoughts went.
+
+Doctor: Have you had similar problems with attention and seeming ‘spaced out’ since you were a child or teenager, for example in school, or is this a more recent change that started within the past few months to a year?
+
+Patient: It’s been going on pretty much as long as I can remember, definitely since I was a kid in school. Teachers used to say I didn’t listen or that I “zoned out” in class, and I’d miss parts of instructions even when I was trying to pay attention.
+
+Doctor: Over the past few weeks, have you been feeling noticeably down, sad, or losing interest or pleasure in things you usually enjoy most days, or has your mood been mostly okay despite the attention problems?
+
+Patient: My mood has been mostly okay; I wouldn’t say I’ve been feeling especially down or losing interest in things I usually like. I do get frustrated with myself about the attention issues, but overall I still enjoy my usual activities.
+
+Doctor: Besides feeling spaced out, do you also tend to be very fidgety, restless, or act on impulses quickly (like blurting things out or interrupting), or is it mainly the inattention and zoning out that causes you problems?
+
+Patient: It’s both, honestly. I’m often really fidgety and have a hard time sitting still or doing quiet things without tapping or moving around, and I catch myself interrupting people or jumping into conversations before they’ve finished talking.
+
+Doctor: Do these attention and fidgeting problems cause significant difficulties for you in at least two different areas of your life, like both at work and at home or in relationships, and have they been pretty consistent over the years rather than coming and going in short phases?
+
+Patient: Yeah, they cause problems both at work and at home. At work I miss parts of instructions, forget steps, and sometimes interrupt in meetings, and at home my partner gets annoyed because I zone out mid-conversation and cut people off without meaning to. It’s been like this pretty steadily for years, not just in short phases.
+
+Doctor: When you were a child or teenager, did these attention and fidgeting problems ever lead to things like needing special help at school, getting in trouble a lot, or struggling to keep up with homework and chores compared to other kids your age?
+
+Patient: Yeah, I definitely struggled more than other kids with homework and chores—I’d start but not finish, or forget what I was supposed to be doing. Teachers often said I didn’t follow directions or wasn’t listening, and I’d get in trouble for that and for blurting things out or talking over other kids in class.
+
+Doctor: Thinking about your current difficulties, would you say the trouble paying attention and zoning out causes you more problems overall than the fidgeting and impulsive behaviors, or are the hyperactive and impulsive behaviors just as big a problem as the inattention?
+
+Patient: I’d say the attention and zoning out causes me a bit more trouble overall, especially with missing instructions at work and spacing out during important conversations at home. The fidgeting and interrupting are definitely issues too, but the not-listening and losing track of what I’m supposed to be doing seem to get me into more serious problems.
+
+Doctor: Do you regularly use alcohol, cannabis, or any other drugs, or take any prescription medications that affect your thinking, and if so have your attention and fidgeting problems changed noticeably with their use?
+
+Patient: I drink socially maybe once or twice a week, but not heavily, and I haven’t noticed it really changing my attention or fidgeting, aside from feeling a bit sluggish if I overdo it. I don’t use cannabis or other drugs, and I’m not on any prescription medications that affect my thinking.
+
+Doctor: Right now in your adult life, do the fidgeting, restlessness, and impulsive behaviors (like interrupting or acting before thinking) cause you just as much difficulty as the inattention, or are they clearly less of a problem day to day?
+
+Patient: They’re a problem, but definitely less than the inattention. The biggest issues day to day are still missing parts of conversations and not following through on tasks, whereas the fidgeting and interrupting mostly just annoy people or make me feel self‑conscious rather than completely derailing things.
+
+========== OUTPUT [doctor] ==========
+{
+  "diagnosis": "F90.0",
+  "candidates": ["F90.1", "F98.8"],
+  "reason": "The patient has a lifelong pattern beginning in childhood of prominent inattention (zoning out, missing instructions, difficulty following through on tasks) along with significant but comparatively less impairing hyperactive/impulsive symptoms (fidgeting, difficulty sitting still, interrupting others). Symptoms are present across multiple settings (school, work, home), have been stable over years, are not better explained by mood, anxiety, or substance use, and cause clear functional impairment. In adulthood, inattention is the primary source of impairment, consistent with ADHD predominantly inattentive presentation (F90.0).",
+  "diagnostic_checklist": {
+    "symptom_groups": [
+      {
+        "group": "inattention",
+        "confirmed_symptoms": [
+          "Frequently seems not to listen when spoken to directly, described by others as spaced out or zoning out",
+          "Mind drifts off or goes blank during conversations, leading to missing parts of what is said",
+          "Since childhood, teachers reported not listening, zoning out, and missing parts of instructions despite trying to pay attention",
+          "Often misses parts of instructions at work and forgets steps in tasks",
+          "Difficulty following through on homework and chores in childhood (starting but not finishing, forgetting what was supposed to be done)",
+          "Ongoing problems keeping track of what they are supposed to be doing, leading to functional problems at work and at home"
+        ],
+        "count": 6
+      },
+      {
+        "group": "hyperactivity_impulsivity",
+        "confirmed_symptoms": [
+          "Often very fidgety and has difficulty sitting still",
+          "Has trouble engaging in quiet activities without tapping or moving around",
+          "Frequently interrupts people or jumps into conversations before others have finished talking",
+          "History in school of blurting things out or talking over other kids, leading to getting in trouble",
+          "Current fidgeting and interrupting cause interpersonal annoyance and self‑consciousness"
+        ],
+        "count": 5
+      }
+    ],
+    "duration_verified": "Symptoms present consistently since childhood (school years) and continuing into current adult life, described as ongoing for as long as the patient can remember.",
+    "functional_impairment": true,
+    "traumatic_stressor": null,
+    "psychosocial_stressor": true,
+    "additional_requirements": [
+      "Onset of attention and hyperactivity/impulsivity symptoms in childhood confirmed",
+      "Symptoms present in multiple settings (school, work, home/relationships)",
+      "Mood symptoms (depression) denied as primary issue; mood mostly okay aside from frustration about attention problems",
+      "Excessive generalized anxiety denied; mind drifts off without particular worry",
+      "No significant substance use or medications explaining the symptoms"
+    ]
+  }
+}
+=====================================
+
