@@ -199,13 +199,14 @@ def plot_efficiency(groups: dict[str, list[dict]], out_path: Path) -> None:
     n_cols = 6
     n_rows = (n_dis + 1 + n_cols - 1) // n_cols
 
-    all_runs = [r for runs in groups.values() for r in runs]
-
-    # Build overall-per-run aggregates
+    # Build overall-per-run aggregates. Group by ordinal position within each
+    # disease's run list rather than parsing a trailing "_<N>" from the log
+    # filename — profile-based runs (e.g. "D001_S001_P001") don't carry a run
+    # index in that form, so ordinal position is the naming-agnostic stand-in.
     overall_by_run: dict[int, list[dict]] = defaultdict(list)
-    for r in all_runs:
-        run_num = int(re.search(r"_(\d+)$", r["log_file"]).group(1))
-        overall_by_run[run_num].append(r)
+    for runs in groups.values():
+        for run_num, r in enumerate(runs, start=1):
+            overall_by_run[run_num].append(r)
 
     overall_agg = []
     for run_num in sorted(overall_by_run.keys()):

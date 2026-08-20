@@ -39,9 +39,10 @@ import numpy as np
 BASE_DIR      = Path(__file__).resolve().parent.parent
 
 from utils.llm import get_run_dir as _get_run_dir
-from utils.paths import batch_artifact_dirs
-_RUN_DIR = _get_run_dir()
-RESULTS_DIR, LOGS_DIR, ANALYSIS_DIR = batch_artifact_dirs(_RUN_DIR)
+_RUN_DIR    = _get_run_dir()
+RESULTS_DIR  = BASE_DIR / "results"  / _RUN_DIR
+LOGS_DIR     = BASE_DIR / "logs"     / _RUN_DIR
+ANALYSIS_DIR = BASE_DIR / "analysis" / _RUN_DIR
 PLOTS_DIR    = ANALYSIS_DIR / "turn_eval"
 DENIAL_DIR   = RESULTS_DIR / "denials"
 CRITERIA_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "diagnostic_criteria.json"
@@ -70,7 +71,11 @@ def _code_to_id() -> dict[str, str]:
     """Return {icd10_code: disease_id} from disorder_icd10.json."""
     with open(DISORDER_ICD10_FILE, encoding="utf-8") as f:
         mapping = json.load(f)
-    return {v["icd10_code"].strip().upper(): k for k, v in mapping.items()}
+    code2id: dict[str, str] = {}
+    for k, v in mapping.items():
+        for code in v.get("icd10_accepted_codes") or [v["icd10_code"]]:
+            code2id[code.strip().upper()] = k
+    return code2id
 
 
 # ── Log parsing ──────────────────────────────────────────────────────────────
@@ -196,7 +201,7 @@ def extract_denials_for_log(
             {"role": "system", "content": "You are a clinical analyst. Output only valid JSON."},
             {"role": "user", "content": prompt},
         ],
-        max_new_tokens=3072,
+        max_new_tokens=4096,
         role="judge",
     ).strip()
     raw = _strip_fences(raw)
@@ -579,6 +584,9 @@ def plot(sample_turns: list[dict], criteria: dict) -> None:
 
     def plot_one(ax, turn_data, series, title):
         turns = sorted(turn_data.keys())
+        if not turns:
+            ax.set_title(title, fontsize=9)
+            return
         mean_acc  = [np.mean(turn_data[t]["acc"])    for t in turns]
         mean_prec = [np.mean(turn_data[t]["prec"])   for t in turns]
         mean_rec  = [np.mean(turn_data[t]["recall"]) for t in turns]

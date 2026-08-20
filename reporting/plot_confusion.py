@@ -291,6 +291,9 @@ def main():
     print(f"Loaded {len(entries)} turn entries")
 
     dids = sorted({e["ground_truth"] for e in entries}, key=lambda x: int(x[1:]))
+    if not dids:
+        print("[warn] No turn entries with a ground_truth — nothing to plot.")
+        return
     fp_at, n_at, max_turn = _build_fp_data(entries)
     print(f"GT diseases: {len(dids)},  max turn: {max_turn}")
 

@@ -49,7 +49,6 @@ from eval.question_score import (
     SAFETY_CRITICAL_IDS,
 )
 from utils.llm import get_run_dir as _get_run_dir
-from utils.paths import batch_artifact_dirs
 from utils.config import CONFIG
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -62,7 +61,11 @@ def _build_code_to_id() -> dict[str, str]:
     """Return {icd10_code: disease_id} from disorder_icd10.json."""
     with open(DISORDER_ICD10_FILE, encoding="utf-8") as f:
         mapping = json.load(f)
-    return {v["icd10_code"].strip().upper(): k for k, v in mapping.items()}
+    code2id: dict[str, str] = {}
+    for k, v in mapping.items():
+        for code in v.get("icd10_accepted_codes") or [v["icd10_code"]]:
+            code2id[code.strip().upper()] = k
+    return code2id
 
 
 def _parse_args() -> argparse.Namespace:
@@ -76,9 +79,8 @@ def _parse_args() -> argparse.Namespace:
 
 _args       = _parse_args()
 _RUN_DIR    = _get_run_dir()
-_DEFAULT_RESULTS_DIR, _DEFAULT_LOGS_DIR, _ = batch_artifact_dirs(_RUN_DIR)
-RESULTS_DIR = _args.results if _args.results else _DEFAULT_RESULTS_DIR
-LOGS_DIR    = _args.logs    if _args.logs    else _DEFAULT_LOGS_DIR
+RESULTS_DIR = _args.results if _args.results else BASE_DIR / "results" / _RUN_DIR
+LOGS_DIR    = _args.logs    if _args.logs    else BASE_DIR / "logs"    / _RUN_DIR
 
 
 # ── Log parsing ────────────────────────────────────────────────────────────────

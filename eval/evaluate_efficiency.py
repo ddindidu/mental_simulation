@@ -34,7 +34,6 @@ import numpy as np
 import argparse
 
 from utils.llm import get_run_dir as _get_run_dir
-from utils.paths import batch_artifact_dirs
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 KG_DIR   = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN"
@@ -49,9 +48,8 @@ def _parse_args():
 
 _args       = _parse_args()
 _RUN_DIR    = _get_run_dir()
-_DEFAULT_RESULTS_DIR, _DEFAULT_LOGS_DIR, _ = batch_artifact_dirs(_RUN_DIR)
-RESULTS_DIR = _args.results if _args.results else _DEFAULT_RESULTS_DIR
-LOGS_DIR    = _args.logs    if _args.logs    else _DEFAULT_LOGS_DIR
+RESULTS_DIR = _args.results if _args.results else BASE_DIR / "results" / _RUN_DIR
+LOGS_DIR    = _args.logs    if _args.logs    else BASE_DIR / "logs"    / _RUN_DIR
 
 
 def _load_id2name() -> dict[str, str]:
@@ -64,7 +62,11 @@ def _load_code2id() -> dict[str, str]:
     """Return {icd10_code: disease_id} from disorder_icd10.json."""
     icd10_path = KG_DIR / "disorder_icd10.json"
     data = json.loads(icd10_path.read_text(encoding="utf-8"))
-    return {v["icd10_code"].strip().upper(): k for k, v in data.items()}
+    code2id: dict[str, str] = {}
+    for k, v in data.items():
+        for code in v.get("icd10_accepted_codes") or [v["icd10_code"]]:
+            code2id[code.strip().upper()] = k
+    return code2id
 
 
 def _log_sort_key(name: str) -> tuple[int, int]:
@@ -79,11 +81,22 @@ def _extract_final_diagnosis(log_file: Path) -> str:
     )
     for b in reversed(blocks):
         b = b.strip()
+        # Strip markdown code fences if present (e.g. ```json ... ```)
+        b = re.sub(r"^```(?:json)?\s*", "", b)
+        b = re.sub(r"\s*```$", "", b).strip()
         try:
             p = json.loads(b)
             if isinstance(p, dict) and "diagnosis" in p:
                 return str(p["diagnosis"]).strip()
         except (json.JSONDecodeError, ValueError):
+            m = re.search(r"\{[\s\S]*\}", b)
+            if m:
+                try:
+                    p = json.loads(m.group())
+                    if isinstance(p, dict) and "diagnosis" in p:
+                        return str(p["diagnosis"]).strip()
+                except (json.JSONDecodeError, ValueError):
+                    pass
             continue
     return ""
 

@@ -10,10 +10,12 @@ Sources (analysis/<judge>/<judge>/comparison/):
   question_eval_comparison.json
   diagnostic_reasoning_comparison.json
 
-Each axis uses a fixed, hand-set [lo, hi] range (not min-max over the
-observed models) so absolute distances are comparable across re-runs and
-axis position reflects the metric's real scale, not just this batch's
-spread. Values are clipped into range before plotting.
+Each axis is z-scored across the compared models: z = (x - mean) / std,
+computed per metric over the models shown. 0 = the group mean on that
+metric, +1/-1 = one standard deviation above/below it. This makes axes
+with very different native scales (e.g. turn_count vs. a 0-1 rate)
+comparable by how unusual a model is on each metric, not by absolute
+magnitude.
 
 Usage:
   python plot_main_eval_radar.py [--judge JUDGE]
@@ -48,19 +50,16 @@ MODEL_COLORS = {
     "qwen3-235b-a22b-2507": "#56B4E9",
 }
 
-# (label, source table, field, lo, hi) — lo/hi are fixed axis bounds, not
-# derived from the observed data.
+# (label, source table, field)
 AXES = [
-    # ("Accuracy\n(Inference)", "inference", "accuracy", 0, 0.25),
-    # ("Jaccard\n(Inference)", "inference", "jaccard", 0, 0.5),
-    ("Precision\n(Inference)", "inference", "precision", 0.7, 0.9),
-    ("Recall\n(Inference)", "inference", "recall", 0.4, 0.6),
-    ("Cond. Composite Score\n(Question)", "question", "llm_judge_conditional_mean_composite", 0, 0.6),
-    ("Cond. Information Gain\n(Question)", "question", "llm_judge_conditional_mean_ig", 0, 0.1),
-    ("Turn Count\n(Efficiency)", "efficiency", "turn_count", 0, 10),
-    ("CSSR\n(Efficiency)", "efficiency", "cssr", 0, 0.3),
-    ("Final Accuracy", "efficiency", "final_accuracy", 0, 1),
-    ("Diagnostic Reasoning Score", "reasoning", "overall_score", 0, 0.8),
+    ("Precision\n(Inference)", "inference", "precision"),
+    ("Recall\n(Inference)", "inference", "recall"),
+    ("Cond. Composite Score\n(Question)", "question", "llm_judge_conditional_mean_composite"),
+    ("Cond. Information Gain\n(Question)", "question", "llm_judge_conditional_mean_ig"),
+    ("Turn Count\n(Efficiency)", "efficiency", "turn_count"),
+    ("CSSR\n(Efficiency)", "efficiency", "cssr"),
+    ("Final Accuracy", "efficiency", "final_accuracy"),
+    ("Diagnostic Reasoning Score", "reasoning", "overall_score"),
 ]
 
 
@@ -92,32 +91,40 @@ def main() -> None:
     # Raw value matrix: axes x models
     raw = np.array([
         [tables[dim][m][field] for m in models]
-        for _, dim, field, _lo, _hi in AXES
+        for _, dim, field in AXES
     ])
 
-    norm = np.zeros_like(raw)
-    for i, (_, _dim, _field, lo, hi) in enumerate(AXES):
-        norm[i] = np.clip((raw[i] - lo) / (hi - lo), 0.0, 1.0)
+    mean = raw.mean(axis=1, keepdims=True)
+    std = raw.std(axis=1, keepdims=True)
+    z = (raw - mean) / std
 
     n_axes = len(AXES)
     angles = np.linspace(0, 2 * np.pi, n_axes, endpoint=False).tolist()
     angles += angles[:1]
 
+    # Symmetric radial range so 0 (group mean) sits at the same fraction of
+    # every axis; round outward to the nearest 0.5 sigma for clean ticks.
+    zlim = max(0.5, np.ceil(np.abs(z).max() * 2) / 2)
+
     fig, ax = plt.subplots(figsize=(9, 9), subplot_kw=dict(polar=True))
     ax.set_theta_offset(np.pi / 2)
     ax.set_theta_direction(-1)
 
-    axis_labels = [f"{label}\n[{lo:g}–{hi:g}]" for label, _dim, _field, lo, hi in AXES]
     ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(axis_labels, fontsize=9.5)
-    ax.set_ylim(0, 1)
-    ax.set_yticks([0.25, 0.5, 0.75, 1.0])
-    ax.set_yticklabels([])  # per-axis scales differ; ranges are in axis labels instead
+    ax.set_xticklabels([label for label, _dim, _field in AXES], fontsize=9.5)
+    ax.set_ylim(-zlim, zlim)
+    yticks = np.linspace(-zlim, zlim, 5)
+    ax.set_yticks(yticks)
+    ax.set_yticklabels([f"{t:+.1f}σ" for t in yticks], fontsize=8, color="gray")
     ax.grid(color="lightgray", linewidth=0.7)
     ax.spines["polar"].set_color("lightgray")
 
+    # Highlight the 0 (group-mean) ring since it's the reference line, not
+    # an arbitrary gridline.
+    ax.plot(angles, [0] * len(angles), color="dimgray", linewidth=1.2, linestyle="--", zorder=2)
+
     for j, model in enumerate(models):
-        vals = norm[:, j].tolist()
+        vals = z[:, j].tolist()
         vals += vals[:1]
         color = MODEL_COLORS[model]
         ax.plot(angles, vals, color=color, linewidth=2, label=MODEL_LABELS[model])
@@ -126,7 +133,7 @@ def main() -> None:
 
     ax.set_title(
         "Main Evaluation — Cross-Model Comparison on Headline Metrics\n"
-        "(each axis on its own fixed [lo–hi] scale, shown in brackets)",
+        "(z-score per metric across models; 0 = group mean, dashed ring)",
         fontsize=12, pad=30,
     )
     ax.legend(loc="upper right", bbox_to_anchor=(1.35, 1.1), fontsize=9, frameon=False)

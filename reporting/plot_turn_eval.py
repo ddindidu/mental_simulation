@@ -44,7 +44,11 @@ def _build_code_to_id() -> dict[str, str]:
     """Return {icd10_code: disease_id} from disorder_icd10.json."""
     with open(DISORDER_ICD10_FILE, encoding="utf-8") as f:
         mapping = json.load(f)
-    return {v["icd10_code"].strip().upper(): k for k, v in mapping.items()}
+    code2id: dict[str, str] = {}
+    for k, v in mapping.items():
+        for code in v.get("icd10_accepted_codes") or [v["icd10_code"]]:
+            code2id[code.strip().upper()] = k
+    return code2id
 
 
 def _build_id_to_name() -> dict[str, str]:

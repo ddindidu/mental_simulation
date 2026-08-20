@@ -33,9 +33,9 @@ SYMPTOM_DIR   = BASE_DIR / "mentalbench/resources/knowledge_graph/EN/symptom"
 CRITERIA_FILE = BASE_DIR / "mentalbench/resources/knowledge_graph/EN/diagnostic_criteria.json"
 
 from utils.llm import get_run_dir as _get_run_dir
-from utils.paths import batch_artifact_dirs
-_RUN_DIR = _get_run_dir()
-OUTPUT_DIR, LOGS_DIR, _ = batch_artifact_dirs(_RUN_DIR)
+_RUN_DIR   = _get_run_dir()
+LOGS_DIR   = BASE_DIR / "logs"    / _RUN_DIR
+OUTPUT_DIR = BASE_DIR / "results" / _RUN_DIR
 
 from utils.llm import chat as _llm_chat
 
@@ -124,7 +124,6 @@ Reply ONLY with valid JSON (no markdown, no extra text):
 def identify_symptoms_turn(
     patient_utterance: str,
     all_symptoms: dict,
-    turn: int | None = None,
 ) -> tuple[list[str], list[str], dict]:
     """
     Extract confirmed and denied symptom IDs from a single patient utterance.
@@ -141,11 +140,8 @@ def identify_symptoms_turn(
             {"role": "system", "content": "You are a clinical psychiatrist. Output only valid JSON."},
             {"role": "user", "content": prompt},
         ],
-        max_new_tokens=2048,
+        max_new_tokens=4096,
         role="judge",
-        call_name="symptom-extraction",
-        turn=turn,
-        log_section="evaluation",
     ).strip()
 
     raw = re.sub(r"^```[a-z]*\n?", "", raw)
@@ -381,11 +377,7 @@ def process_log(log_file: Path, all_symptoms: dict, diagnostic_criteria: dict) -
         turn_num = turn_idx + 1
         print(f"  → Turn {turn_num}/{len(responses)}: calling LLM...")
 
-        new_confirmed, new_denied, reasoning = identify_symptoms_turn(
-            response,
-            all_symptoms,
-            turn=turn_num,
-        )
+        new_confirmed, new_denied, reasoning = identify_symptoms_turn(response, all_symptoms)
         print(f"     Confirmed: {new_confirmed}  Denied: {new_denied}")
 
         merge_symptom_status(

@@ -27,9 +27,8 @@ DISORDER_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN
 DISORDER_ICD10_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "disorder_icd10.json"
 
 from utils.llm import get_run_dir as _get_run_dir
-from utils.paths import batch_artifact_dirs
 _RUN_DIR = _get_run_dir()
-RUN_ROOT, LOGS_DIR, _ = batch_artifact_dirs(_RUN_DIR)
+LOGS_DIR = BASE_DIR / "logs" / _RUN_DIR
 
 
 def load_disorder_map() -> tuple[dict[str, str], dict[str, str]]:
@@ -41,7 +40,10 @@ def load_disorder_map() -> tuple[dict[str, str], dict[str, str]]:
     id2name = {k: v["name"] for k, v in data.items()}
     with open(DISORDER_ICD10_FILE, encoding="utf-8") as f:
         icd10_data = json.load(f)
-    code2id = {v["icd10_code"].strip().upper(): k for k, v in icd10_data.items()}
+    code2id: dict[str, str] = {}
+    for k, v in icd10_data.items():
+        for code in v.get("icd10_accepted_codes") or [v["icd10_code"]]:
+            code2id[code.strip().upper()] = k
     return id2name, code2id
 
 
@@ -161,7 +163,7 @@ def main():
         print(f"({no_diagnosis} log file(s) had no final diagnosis)")
 
     # ── Save TXT ──────────────────────────────────────────────────────────
-    out_path = RUN_ROOT / "final_diagnosis_eval.txt"
+    out_path = BASE_DIR / "results" / _RUN_DIR / "final_diagnosis_eval.txt"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(output, encoding="utf-8")
     print(f"Saved to {out_path}")

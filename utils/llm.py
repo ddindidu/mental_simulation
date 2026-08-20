@@ -12,11 +12,6 @@ _LLM = CONFIG.get("llm") or {}
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 _current_log_path: "Path | None" = None
-_current_log_call_index = 0
-_current_log_header_key: tuple[str, int | None] | None = None
-_log_write_lock = threading.Lock()
-_run_dir_prefix: str | None = None
-_run_dir_variant: str | None = None
 
 
 def rotate_log_file() -> "Path":
@@ -35,11 +30,9 @@ def set_log_path(path: "Path | str | None") -> None:
     """배치 평가 등에서 로그 파일 경로를 직접 지정한다.
 
     새 시뮬레이션마다 호출하면 기존 파일을 지우고 빈 파일로 시작한다.
-    path=None 이면 로그 경로를 해제한다 (이후 LLM 입출력 로그는 저장하지 않는다).
+    path=None 이면 로그 경로를 해제한다 (이후 호출은 logging.txt 로 폴백).
     """
-    global _current_log_path, _current_log_call_index, _current_log_header_key
-    _current_log_call_index = 0
-    _current_log_header_key = None
+    global _current_log_path
     if path is None:
         _current_log_path = None
         return
@@ -50,51 +43,16 @@ def set_log_path(path: "Path | str | None") -> None:
     _current_log_path.write_text("", encoding="utf-8")
 
 
-def _append_to_log(
-    role: str,
-    messages: list,
-    result: str,
-    *,
-    call_name: str | None = None,
-    turn: int | None = None,
-    log_section: str = "interview",
-) -> None:
-    """LLM 입출력을 turn/call 단위의 읽기 쉬운 형식으로 추가한다."""
-    global _current_log_call_index, _current_log_header_key
-    if _current_log_path is None:
-        return
-    section = log_section.strip().lower() or "interview"
-    header_key = (section, turn)
-    safe_call_name = re.sub(r"[^a-zA-Z0-9_-]+", "-", call_name or "call").strip("-")
-    call_label = f"{role}-{safe_call_name or 'call'}"
-
-    with _log_write_lock:
-        log_path = _current_log_path
-        if log_path is None:
-            return
-        _current_log_call_index += 1
-        with open(log_path, "a", encoding="utf-8") as f:
-            if header_key != _current_log_header_key:
-                if turn is None:
-                    f.write(f"--- {section} ---\n\n")
-                elif section == "interview":
-                    f.write(f"--- turn {turn:02d} ---\n\n")
-                else:
-                    f.write(f"--- {section} turn {turn:02d} ---\n\n")
-                _current_log_header_key = header_key
-
-            f.write(f"[call {_current_log_call_index:02d}] {call_label}\n\n")
-            # INPUT/OUTPUT 표식은 기존 평가 코드의 로그 파서 호환을 위해 유지한다.
-            f.write(f"========== INPUT [{role}] ==========\n")
-            for index, message in enumerate(messages, start=1):
-                message_role = str(message.get("role", "message")).upper()
-                content = message.get("content", "")
-                if not isinstance(content, str):
-                    content = json.dumps(content, ensure_ascii=False, indent=2)
-                f.write(f"[{index}. {message_role}]\n{content.rstrip()}\n\n")
-            f.write(f"========== OUTPUT [{role}] ==========\n")
-            f.write(result.rstrip() + "\n")
-            f.write("=====================================\n\n")
+def _append_to_log(role: str, messages: list, result: str) -> None:
+    """LLM 입출력을 현재 로그 파일에 추가한다."""
+    from .paths import PROJECT_ROOT
+    log_path = _current_log_path if _current_log_path is not None else (PROJECT_ROOT / "logging.txt")
+    with open(log_path, "a", encoding="utf-8") as f:
+        f.write(f"========== INPUT [{role}] ==========\n")
+        f.write(json.dumps(messages, ensure_ascii=False, indent=2) + "\n")
+        f.write(f"========== OUTPUT [{role}] ==========\n")
+        f.write(result + "\n")
+        f.write("=====================================\n\n")
 
 # ─────────────────────────────────────────────────────────────────────────────
 Role = Literal["patient", "doctor", "judge"]
@@ -253,42 +211,18 @@ def _model_slug(model: str) -> str:
     return re.sub(r"[^\w.\-]", "_", name)
 
 
-def set_run_dir_variant(variant: str | None) -> None:
-    """Select an optional batch-source subdirectory below the model hierarchy."""
-    global _run_dir_variant
-    if variant is None:
-        _run_dir_variant = None
-        return
-    parts = [
-        re.sub(r"[^\w.\-]", "_", part)
-        for part in str(variant).replace("\\", "/").split("/")
-        if part and part not in (".", "..")
-    ]
-    _run_dir_variant = "/".join(parts) or None
-
-def set_run_dir_prefix(prefix: str | None) -> None:
-    """Place the model hierarchy below an optional batch run prefix."""
-    global _run_dir_prefix
-    if prefix is None:
-        _run_dir_prefix = None
-        return
-    parts = [
-        re.sub(r"[^\w.\-]", "_", part)
-        for part in str(prefix).replace("\\", "/").split("/")
-        if part and part not in (".", "..")
-    ]
-    _run_dir_prefix = "/".join(parts) or None
-
-
-
 def get_run_dir() -> str:
-    """Optional run prefix followed by p_{patient}/d_{doctor}/j_{judge}/mode."""
+    """{patient}/{judge}/{doctor} 3단계 경로를 반환한다.
+
+    계층 설계 근거:
+      - patient : 변종 적음 (조건 고정) → 최상위
+      - judge   : 중간 변종              → 중간
+      - doctor  : 평가 대상, 종류 최다   → 최하위 leaf
+    """
     p = _model_slug(_patient_cfg["model"])
-    d = _model_slug(_doctor_cfg["model"])
     j = _model_slug(_judge_cfg["model"])
-    base = f"p_{p}/d_{d}/j_{j}"
-    relative = f"{base}/{_run_dir_variant}" if _run_dir_variant else base
-    return f"{_run_dir_prefix}/{relative}" if _run_dir_prefix else relative
+    d = _model_slug(_doctor_cfg["model"])
+    return f"{p}/{j}/{d}"
 
 
 def _cfg_for_role(role: Role) -> dict[str, Any]:
@@ -808,9 +742,6 @@ def chat(
     max_new_tokens: int | None = None,
     *,
     role: Role = "patient",
-    call_name: str | None = None,
-    turn: int | None = None,
-    log_section: str = "interview",
 ) -> str:
     if max_new_tokens is None:
         max_new_tokens = int(_gen_for_role(role)["default_max_new_tokens"])
@@ -850,14 +781,7 @@ def chat(
             "use 'vllm', 'openai', 'openrouter', 'gemini', or 'local'"
         )
 
-    _append_to_log(
-        role,
-        messages,
-        result,
-        call_name=call_name,
-        turn=turn,
-        log_section=log_section,
-    )
+    _append_to_log(role, messages, result)
     return result
 
 
