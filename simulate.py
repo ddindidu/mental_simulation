@@ -10,15 +10,19 @@ doctor_memory.json 과 transcript.json 을 저장한다.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
+
+# 단건 실행 산출물은 saved/run_single_<날짜>/ 로 간다 (MS_RUN 지정 시 그쪽 우선).
+os.environ.setdefault("MS_RUN_MODE", "single")
 
 import doctor
 import patient
 from simulation_core import run_interview_simulation
 from utils.config import CONFIG
 import utils.llm as llm
-from utils.paths import PROJECT_ROOT, RESULTS_DIR
+from utils.paths import PROJECT_ROOT, RESULTS_DIR, ensure_run_root
 from utils.llm import get_doctor_model_name
 from utils.llm import get_patient_model_name
 
@@ -97,6 +101,7 @@ def main() -> int:
     else:
         profile_path = None
 
+    ensure_run_root()
     out_dir = (args.output_dir or RESULTS_DIR).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 

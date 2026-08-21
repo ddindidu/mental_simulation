@@ -1118,14 +1118,8 @@
 
     <div id="batchProfileSettings" hidden>
       <label class="modal-label" for="batchProfileRoot">Profile directory</label>
-      <select class="modal-select" id="batchProfileRoot">
-        <option value="/home/dsail/migyeongk/proejct/mental_simulation/data/profiles/add_requirements">
-          data/profiles/add_requirements
-        </option>
-      </select>
-      <p class="batch-setting-note">
-        /home/dsail/migyeongk/proejct/mental_simulation/data/profiles/add_requirements
-      </p>
+      <select class="modal-select" id="batchProfileRoot"></select>
+      <p class="batch-setting-note" id="batchProfileRootNote"></p>
 
       <label class="modal-label" for="batchProfileRuns">Runs per profile</label>
       <input class="modal-select" id="batchProfileRuns" type="number" value="1" min="1" max="100" />
@@ -1329,6 +1323,7 @@ const batchDifficulty = document.getElementById('batchDifficulty');
 const batchRunsInput  = document.getElementById('batchRuns');
 const batchKgMaxTurnsInput = document.getElementById('batchKgMaxTurns');
 const batchProfileRoot = document.getElementById('batchProfileRoot');
+const batchProfileRootNote = document.getElementById('batchProfileRootNote');
 const batchProfileRunsInput = document.getElementById('batchProfileRuns');
 const batchProfileMaxTurnsInput = document.getElementById('batchProfileMaxTurns');
 const batchProgressWrap  = document.getElementById('batchProgressWrap');
@@ -1354,8 +1349,38 @@ function _updateBatchSourceSettings() {
   batchStatus.className = 'modal-status';
 }
 
+// Profile directory 드롭다운을 /api/simulation_profiles 카탈로그로 채운다.
+// (data/ 아래 v1_*, v2_* … 디렉터리. code/ 는 서버에서 제외된다.)
+function _loadBatchProfileRoots() {
+  return fetch('/api/simulation_profiles')
+    .then(r => r.json())
+    .then(data => {
+      const roots = data.roots || [];
+      batchProfileRoot.innerHTML = '';
+      roots.forEach(root => {
+        const option = document.createElement('option');
+        option.value = root.path;
+        const nFiles = (root.folders || []).reduce((n, f) => n + f.files.length, 0);
+        option.textContent = `${root.label} (${nFiles} profiles)`;
+        batchProfileRoot.appendChild(option);
+      });
+      _updateBatchProfileRootNote();
+      if (!roots.length && batchProfileRootNote) {
+        batchProfileRootNote.textContent = 'No profile directories found under data/.';
+      }
+    })
+    .catch(e => {
+      if (batchProfileRootNote) batchProfileRootNote.textContent = 'Failed to load profile roots: ' + e;
+    });
+}
+
+function _updateBatchProfileRootNote() {
+  if (batchProfileRootNote) batchProfileRootNote.textContent = batchProfileRoot.value || '';
+}
+
 function openBatchModal() {
   _updateBatchSourceSettings();
+  _loadBatchProfileRoots();
   batchModal.classList.add('open');
 }
 function closeBatchModal() { batchModal.classList.remove('open'); }
@@ -1364,6 +1389,7 @@ batchBtn.addEventListener('click', openBatchModal);
 batchCloseBtn.addEventListener('click', closeBatchModal);
 batchModal.addEventListener('click', e => { if (e.target === batchModal) closeBatchModal(); });
 batchSourceInputs.forEach(input => input.addEventListener('change', _updateBatchSourceSettings));
+batchProfileRoot.addEventListener('change', _updateBatchProfileRootNote);
 
 function _renderBatchResults(results) {
   const tbody = batchResultTable.querySelector('tbody');
@@ -1397,7 +1423,10 @@ function _renderBatchResults(results) {
       if (index === 0) {
         const targetCell = document.createElement('td');
         targetCell.rowSpan = runs.length;
-        targetCell.textContent = r.disease_name || '';
+        // 정답은 "질병명 (ICD-10 코드)" 로 표시한다. 정오 판정은 코드 기준(서버).
+        targetCell.textContent = r.icd10_code
+          ? `${r.disease_name || ''} (${r.icd10_code})`
+          : (r.disease_name || '');
         tr.appendChild(targetCell);
       }
 

@@ -36,6 +36,7 @@ import argparse
 from utils.llm import get_run_dir as _get_run_dir
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+from utils.paths import ANALYSIS_ROOT, LOGS_ROOT, RESULTS_ROOT
 KG_DIR   = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN"
 
 def _parse_args():
@@ -48,8 +49,8 @@ def _parse_args():
 
 _args       = _parse_args()
 _RUN_DIR    = _get_run_dir()
-RESULTS_DIR = _args.results if _args.results else BASE_DIR / "results" / _RUN_DIR
-LOGS_DIR    = _args.logs    if _args.logs    else BASE_DIR / "logs"    / _RUN_DIR
+RESULTS_DIR = _args.results if _args.results else RESULTS_ROOT / _RUN_DIR
+LOGS_DIR    = _args.logs    if _args.logs    else LOGS_ROOT    / _RUN_DIR
 
 
 def _load_id2name() -> dict[str, str]:

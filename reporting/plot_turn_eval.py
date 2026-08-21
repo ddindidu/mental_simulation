@@ -34,6 +34,7 @@ import matplotlib.gridspec as gridspec
 import numpy as np
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+from utils.paths import ANALYSIS_ROOT, LOGS_ROOT, RESULTS_ROOT
 CRITERIA_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "diagnostic_criteria.json"
 DISORDER_ICD10_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "disorder_icd10.json"
 
@@ -395,16 +396,16 @@ def main():
         from utils.llm import get_run_dir as _get_run_dir
         run_dir = _get_run_dir()
         if args.results is None:
-            args.results = BASE_DIR / "results" / run_dir
+            args.results = RESULTS_ROOT / run_dir
         if args.logs is None:
-            args.logs = BASE_DIR / "logs" / run_dir
+            args.logs = LOGS_ROOT / run_dir
 
     if args.output is None:
         try:
-            rel = args.results.resolve().relative_to((BASE_DIR / "results").resolve())
-            args.output = BASE_DIR / "analysis" / rel
+            rel = args.results.resolve().relative_to((RESULTS_ROOT).resolve())
+            args.output = ANALYSIS_ROOT / rel
         except ValueError:
-            args.output = BASE_DIR / "analysis" / args.results.name
+            args.output = ANALYSIS_ROOT / args.results.name
 
     args.output.mkdir(parents=True, exist_ok=True)
     print(f"Results dir : {args.results}")

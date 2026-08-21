@@ -37,12 +37,18 @@ from typing import Any
 
 import numpy as np
 
+import sys as _sys
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_REPO_ROOT))
+
 warnings.filterwarnings("ignore")
 
 BASE_DIR  = Path(__file__).resolve().parent.parent
+from utils.paths import ANALYSIS_ROOT, LOGS_ROOT, RESULTS_ROOT
 JUDGE     = "gemini-3.5-flash"
-RB        = BASE_DIR / "results"  / JUDGE / JUDGE   # results base
-AB        = BASE_DIR / "analysis" / JUDGE / JUDGE   # analysis base
+RB        = RESULTS_ROOT  / JUDGE / JUDGE   # results base
+AB        = ANALYSIS_ROOT / JUDGE / JUDGE   # analysis base
 OUT_DIR   = AB / "comparison" / "outcome_stratified"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 

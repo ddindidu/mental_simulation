@@ -23,12 +23,13 @@ if str(_REPO_ROOT) not in _sys.path:
     _sys.path.insert(0, str(_REPO_ROOT))
 
 BASE_DIR      = Path(__file__).resolve().parent.parent
+from utils.paths import ANALYSIS_ROOT, LOGS_ROOT, RESULTS_ROOT
 DISORDER_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "disorder.json"
 DISORDER_ICD10_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "disorder_icd10.json"
 
 from utils.llm import get_run_dir as _get_run_dir
 _RUN_DIR = _get_run_dir()
-LOGS_DIR = BASE_DIR / "logs" / _RUN_DIR
+LOGS_DIR = LOGS_ROOT / _RUN_DIR
 
 
 def load_disorder_map() -> tuple[dict[str, str], dict[str, str]]:
@@ -163,7 +164,7 @@ def main():
         print(f"({no_diagnosis} log file(s) had no final diagnosis)")
 
     # ── Save TXT ──────────────────────────────────────────────────────────
-    out_path = BASE_DIR / "results" / _RUN_DIR / "final_diagnosis_eval.txt"
+    out_path = RESULTS_ROOT / _RUN_DIR / "final_diagnosis_eval.txt"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(output, encoding="utf-8")
     print(f"Saved to {out_path}")

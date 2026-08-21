@@ -29,13 +29,14 @@ if str(_REPO_ROOT) not in _sys.path:
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 BASE_DIR      = Path(__file__).resolve().parent.parent
+from utils.paths import ANALYSIS_ROOT, LOGS_ROOT, RESULTS_ROOT
 SYMPTOM_DIR   = BASE_DIR / "mentalbench/resources/knowledge_graph/EN/symptom"
 CRITERIA_FILE = BASE_DIR / "mentalbench/resources/knowledge_graph/EN/diagnostic_criteria.json"
 
 from utils.llm import get_run_dir as _get_run_dir
 _RUN_DIR   = _get_run_dir()
-LOGS_DIR   = BASE_DIR / "logs"    / _RUN_DIR
-OUTPUT_DIR = BASE_DIR / "results" / _RUN_DIR
+LOGS_DIR   = LOGS_ROOT    / _RUN_DIR
+OUTPUT_DIR = RESULTS_ROOT / _RUN_DIR
 
 from utils.llm import chat as _llm_chat
 

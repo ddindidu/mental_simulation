@@ -29,7 +29,13 @@ from typing import Any
 
 import numpy as np
 
+import sys as _sys
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_REPO_ROOT))
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+from utils.paths import ANALYSIS_ROOT, LOGS_ROOT, RESULTS_ROOT
 
 MAPPERS = ("cosine", "llm_judge")
 
@@ -178,10 +184,10 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--doctor", default=None,
                    help="Single doctor model to process (default: all)")
     p.add_argument("--results-base", type=Path,
-                   default=BASE_DIR / "results",
+                   default=RESULTS_ROOT,
                    help="Base results directory")
     p.add_argument("--analysis-base", type=Path,
-                   default=BASE_DIR / "analysis",
+                   default=ANALYSIS_ROOT,
                    help="Base analysis directory")
     return p.parse_args()
 

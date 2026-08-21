@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Run one simulation per profile JSON under a profiles root, using whichever
-patient/judge/doctor models config.json currently specifies.
+patient/judge/doctor models config/config.json currently specifies.
 
 Intended to be invoked once per doctor model by script/run_all_doctors_profiles.py
-(which patches config.json's llm.doctor before each call), but can be run directly
-against whatever config.json already has.
+(which patches config/config.json's llm.doctor before each call), but can be run directly
+against whatever config/config.json already has.
 
 Parallelizes across profiles with a spawn-context ProcessPoolExecutor — see
 profile_batch_worker.py for why per-profile isolation is required.

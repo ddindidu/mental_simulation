@@ -37,12 +37,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 BASE_DIR      = Path(__file__).resolve().parent.parent
+from utils.paths import ANALYSIS_ROOT, LOGS_ROOT, RESULTS_ROOT
 
 from utils.llm import get_run_dir as _get_run_dir
 _RUN_DIR    = _get_run_dir()
-RESULTS_DIR  = BASE_DIR / "results"  / _RUN_DIR
-LOGS_DIR     = BASE_DIR / "logs"     / _RUN_DIR
-ANALYSIS_DIR = BASE_DIR / "analysis" / _RUN_DIR
+RESULTS_DIR  = RESULTS_ROOT  / _RUN_DIR
+LOGS_DIR     = LOGS_ROOT     / _RUN_DIR
+ANALYSIS_DIR = ANALYSIS_ROOT / _RUN_DIR
 PLOTS_DIR    = ANALYSIS_DIR / "turn_eval"
 DENIAL_DIR   = RESULTS_DIR / "denials"
 CRITERIA_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "diagnostic_criteria.json"

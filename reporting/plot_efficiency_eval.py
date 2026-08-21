@@ -37,6 +37,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 BASE_DIR       = Path(__file__).resolve().parent.parent
+from utils.paths import ANALYSIS_ROOT, LOGS_ROOT, RESULTS_ROOT
 CRITERIA_FILE  = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "diagnostic_criteria.json"
 
 N_COLS = 6
@@ -273,7 +274,7 @@ def main() -> None:
     if args.json is None:
         from utils.llm import get_run_dir as _get_run_dir
         run_dir = _get_run_dir()
-        args.json = BASE_DIR / "results" / run_dir / "efficiency_eval.json"
+        args.json = RESULTS_ROOT / run_dir / "efficiency_eval.json"
 
     if not args.json.exists():
         print(f"[error] File not found: {args.json}", file=sys.stderr)
@@ -281,8 +282,8 @@ def main() -> None:
 
     if args.output is None:
         try:
-            rel = args.json.resolve().parent.relative_to((BASE_DIR / "results").resolve())
-            args.output = BASE_DIR / "analysis" / rel
+            rel = args.json.resolve().parent.relative_to((RESULTS_ROOT).resolve())
+            args.output = ANALYSIS_ROOT / rel
         except ValueError:
             args.output = args.json.parent
 

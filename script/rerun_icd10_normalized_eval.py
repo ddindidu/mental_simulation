@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CONFIG_PATH = PROJECT_ROOT / "config.json"
+CONFIG_PATH = PROJECT_ROOT / "config" / "config.json"
 PYTHON_BIN = sys.executable
 
 DOCTOR_VARIANTS = [
@@ -64,7 +64,7 @@ def main():
                 _run([PYTHON_BIN, step], f"{doctor['key']}:{step}")
     finally:
         CONFIG_PATH.write_text(json.dumps(base_cfg, indent=4, ensure_ascii=False))
-        print("[rerun] config.json restored to original.", flush=True)
+        print("[rerun] config/config.json restored to original.", flush=True)
 
 
 if __name__ == "__main__":
