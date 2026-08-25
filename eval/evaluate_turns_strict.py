@@ -204,6 +204,8 @@ def extract_denials_for_log(
         ],
         max_new_tokens=4096,
         role="judge",
+        phase="denial_check",
+        source="evaluate_turns_strict.DENIAL_PROMPT",
     ).strip()
     raw = _strip_fences(raw)
     m = re.search(r"\{.*\}", raw, re.DOTALL)

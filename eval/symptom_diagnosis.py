@@ -125,6 +125,7 @@ Reply ONLY with valid JSON (no markdown, no extra text):
 def identify_symptoms_turn(
     patient_utterance: str,
     all_symptoms: dict,
+    turn: int | None = None,
 ) -> tuple[list[str], list[str], dict]:
     """
     Extract confirmed and denied symptom IDs from a single patient utterance.
@@ -143,6 +144,9 @@ def identify_symptoms_turn(
         ],
         max_new_tokens=4096,
         role="judge",
+        phase="symptom_extraction",
+        turn=turn,
+        source="symptom_diagnosis.identify_symptoms_turn",
     ).strip()
 
     raw = re.sub(r"^```[a-z]*\n?", "", raw)
@@ -378,7 +382,9 @@ def process_log(log_file: Path, all_symptoms: dict, diagnostic_criteria: dict) -
         turn_num = turn_idx + 1
         print(f"  → Turn {turn_num}/{len(responses)}: calling LLM...")
 
-        new_confirmed, new_denied, reasoning = identify_symptoms_turn(response, all_symptoms)
+        new_confirmed, new_denied, reasoning = identify_symptoms_turn(
+            response, all_symptoms, turn=turn_num
+        )
         print(f"     Confirmed: {new_confirmed}  Denied: {new_denied}")
 
         merge_symptom_status(

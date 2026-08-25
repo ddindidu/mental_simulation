@@ -40,6 +40,15 @@ def run_profile(
     if json_log_path.exists() and result_json_path.exists():
         return {"profile_id": profile_id, "status": "skipped"}
 
+    # KG 모드 차단. patient 는 import 시점에 프로필을 빌드하므로 그 전에 검사한다.
+    from utils.config import CONFIG
+    if bool((CONFIG.get("patient") or {}).get("use_knowledge_graph", False)):
+        raise RuntimeError(
+            "profile batch cannot run with patient.use_knowledge_graph=true "
+            "(KG builder pollutes sys.path and breaks eval.symptom_diagnosis); "
+            "set it to false in config/config.json"
+        )
+
     import patient
     from simulation_core import run_interview_simulation
     from utils.llm import set_log_path

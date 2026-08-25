@@ -236,7 +236,12 @@ def judge_checklist(
         {"role": "system", "content": _JUDGE_SYSTEM},
         {"role": "user",   "content": user_msg},
     ]
-    raw = llm_chat(messages=messages, role="judge")
+    raw = llm_chat(
+        messages=messages,
+        role="judge",
+        phase="reasoning_checklist",
+        source="score_diagnostic_reasoning.judge_checklist",
+    )
 
     m = re.search(r"\{[\s\S]*\}", raw or "")
     if not m:

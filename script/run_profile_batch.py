@@ -11,7 +11,7 @@ profile_batch_worker.py for why per-profile isolation is required.
 
 Usage:
   python3 script/run_profile_batch.py
-  python3 script/run_profile_batch.py --profiles-root data/profiles/add_requirements/low --workers 4
+  python3 script/run_profile_batch.py --profiles-root data/v1_only_manifestation --workers 4
   python3 script/run_profile_batch.py --limit 2   # smoke test
 """
 from __future__ import annotations
@@ -31,7 +31,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         "--profiles-root", type=Path,
-        default=PROJECT_ROOT / "data" / "profiles" / "add_requirements" / "low",
+        default=PROJECT_ROOT / "data" / "v1_only_manifestation",
         help="Root directory to recursively glob *.json profiles from.",
     )
     parser.add_argument("--workers", type=int, default=4, help="Parallel simulation processes.")
@@ -39,6 +39,18 @@ def main() -> int:
     args = parser.parse_args()
 
     from utils.config import CONFIG
+
+    # 프로필 배치는 KG 모드를 지원하지 않기 때문에 시뮬레이션 시작 전에 차단
+    if bool((CONFIG.get("patient") or {}).get("use_knowledge_graph", False)):
+        print(
+            "[run_profile_batch] ERROR: config 의 patient.use_knowledge_graph 가 true 입니다.\n"
+            "  프로필 배치는 KG 모드에서 실행할 수 없습니다 (symptom_diagnosis import 가 깨집니다).\n"
+            "  config/config.json 에서 patient.use_knowledge_graph 를 false 로 바꾼 뒤 다시 실행하세요.\n"
+            "  KG 환자로 배치를 돌리려면 웹 UI 의 batch(KG 모드) 또는 batch_worker.run_disorder 를 쓰세요.",
+            file=sys.stderr,
+        )
+        return 1
+
     from utils.llm import (
         get_run_dir,
         get_doctor_model_name,
@@ -47,9 +59,14 @@ def main() -> int:
     )
     from profile_batch_worker import run_profile
 
+    # 웹 UI 배치(app.py)와 같은 saved/run_batch_<날짜>/ 아래에 쓴다.
+    # eval/*.py 와 reporting/*.py 가 utils.paths 의 LOGS_ROOT/RESULTS_ROOT 로
+    # 같은 위치를 읽는다.
+    from utils.paths import artifact_dirs, ensure_run_root
+
     run_dir = get_run_dir()
-    logs_dir = PROJECT_ROOT / "logs" / run_dir
-    results_dir = PROJECT_ROOT / "results" / run_dir
+    ensure_run_root("batch")
+    results_dir, logs_dir, _ = artifact_dirs(run_dir, mode="batch")
     logs_dir.mkdir(parents=True, exist_ok=True)
     results_dir.mkdir(parents=True, exist_ok=True)
 

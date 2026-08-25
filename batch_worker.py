@@ -176,6 +176,8 @@ def _run_case_group(
         # ── Skip 조건: 대화가 완주된 흔적(json 로그)이나 결과가 이미 있으면 재실행하지 않는다
         if has_json_log or has_result:
             if has_json_log and not has_result:
+                # 증상추출 로그를 이 케이스 파일에 이어 붙인다 (기존 대화 로그 보존).
+                set_log_path(txt_log_path, truncate=False)
                 run_symptom_diagnosis(txt_log_path, result_json_path)
 
             final_diag_skip, is_correct_skip = "", False

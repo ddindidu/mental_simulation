@@ -10,14 +10,14 @@ For each doctor model:
   3. Run the eval/*.py + reporting/*.py pipeline for that doctor's run_dir
      (mirrors app.py's _run_eval_pipeline, plus the cross-analysis reporting plots).
 
-Patient and judge are fixed to gemini-3.5-flash; config/config.json is restored to its
+Patient and judge are fixed to gpt-5.4 (openai); config/config.json is restored to its
 original contents when the script exits (normally or via Ctrl-C).
 
 Usage:
-  python3 script/run_all_doctors_profiles.py
-  python3 script/run_all_doctors_profiles.py --limit 2 --skip-eval   # smoke test
-  python3 script/run_all_doctors_profiles.py --doctors gemini-3.5-flash qwen3-235b
-  python3 script/run_all_doctors_profiles.py --workers 6
+  python3 script/run_all_doctors_profiles_mgk.py
+  python3 script/run_all_doctors_profiles_mgk.py --limit 2 --skip-eval   # smoke test
+  python3 script/run_all_doctors_profiles_mgk.py --doctors gpt-5.4
+  python3 script/run_all_doctors_profiles_mgk.py --workers 6
 """
 from __future__ import annotations
 
@@ -33,16 +33,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = PROJECT_ROOT / "config" / "config.json"
 PYTHON_BIN = sys.executable
 
-PATIENT_MODEL = {"provider": "gemini", "model": "gemini-3.5-flash"}
-JUDGE_MODEL = {"provider": "gemini", "model": "gemini-3.5-flash"}
+PATIENT_MODEL = {"provider": "openai", "model": "gpt-5.4"}
+JUDGE_MODEL = {"provider": "openai", "model": "gpt-5.4"}
 
 DOCTOR_VARIANTS: list[dict] = [
-    {"key": "gemini-3.5-flash", "model": "gemini-3.5-flash", "provider": "gemini"},
-    {"key": "gemini-3.1-flash-lite", "model": "gemini-3.1-flash-lite", "provider": "gemini"},
     {"key": "gpt-5.4", "model": "gpt-5.4", "provider": "openai"},
     {"key": "gpt-5.4-mini", "model": "gpt-5.4-mini-2026-03-17", "provider": "openai"},
-    {"key": "llama-3.3-70b-instruct", "model": "meta-llama/llama-3.3-70b-instruct", "provider": "openrouter"},
-    {"key": "qwen3-235b", "model": "qwen/qwen3-235b-a22b-2507", "provider": "openrouter"},
 ]
 
 # Mirrors app.py's _run_eval_pipeline() order, plus the cross-analysis reporting
@@ -99,7 +95,7 @@ def main() -> int:
         default=PROJECT_ROOT / "data" / "v1_only_manifestation",
     )
     parser.add_argument("--doctors", nargs="*", default=None,
-                         help="Subset of doctor keys to run (default: all 6). "
+                         help="Subset of doctor keys to run (default: all). "
                               f"Choices: {[d['key'] for d in DOCTOR_VARIANTS]}")
     parser.add_argument("--workers", type=int, default=4, help="Parallel simulation processes per doctor.")
     parser.add_argument("--limit", type=int, default=None, help="Only the first N profiles per doctor (smoke test).")

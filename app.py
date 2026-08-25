@@ -793,7 +793,13 @@ def simulate(): # prompts loading
                 {"role": "user", "content": doctor.opening_user_message()},
             ]
             _log_llm_history("Doctor LLM (questioning)", "opening", opening_messages)
-            doctor_raw = llm_chat(opening_messages, role="doctor")
+            doctor_raw = llm_chat(
+                opening_messages,
+                role="doctor",
+                phase="opening",
+                turn=0,
+                source="doctor.opening_user_message",
+            )
             q_open = doctor.parse_questioning_result(doctor_raw)
             question_text = q_open["question"]
             doctor_memory["opening_question"] = {
@@ -839,6 +845,9 @@ def simulate(): # prompts loading
                     align_messages,
                     max_new_tokens=align_tokens,
                     role="patient",
+                    phase="alignment",
+                    turn=t,
+                    source="patient.build_alignment_messages",
                 )
                 parsed = patient.parse_alignment_result(align_raw)
                 strategy_text = patient.format_alignment_for_response(parsed)
@@ -855,7 +864,13 @@ def simulate(): # prompts loading
                     patient_hist, strategy_text
                 )
                 _log_llm_history("Patient LLM (response)", f"turn {t}", resp_messages)
-                patient_msg = llm_chat(resp_messages, role="patient")
+                patient_msg = llm_chat(
+                    resp_messages,
+                    role="patient",
+                    phase="response",
+                    turn=t,
+                    source="patient.build_response_messages",
+                )
                 patient_hist.append({"role": "assistant", "content": patient_msg})
                 transcript.append(("patient", patient_msg))
 
@@ -874,7 +889,14 @@ def simulate(): # prompts loading
                     {"role": "user", "content": doctor.inference_user_payload(tr_text, previous_candidates=prev_cands)},
                 ]
                 _log_llm_history("Doctor LLM (inference)", f"turn {t}", inf_messages)
-                inf_raw = llm_chat(inf_messages, max_new_tokens=inf_tokens, role="doctor")
+                inf_raw = llm_chat(
+                    inf_messages,
+                    max_new_tokens=inf_tokens,
+                    role="doctor",
+                    phase="inference",
+                    turn=t,
+                    source="doctor.inference_user_payload",
+                )
                 candidates, inf_note, is_final = doctor.parse_inference_result(inf_raw)
 
                 doctor.update_doctor_memory_after_inference(
@@ -910,7 +932,14 @@ def simulate(): # prompts loading
                         },
                     ]
                     _log_llm_history("Doctor LLM (final)", f"turn {t}", fin_messages)
-                    diagnosis_raw = llm_chat(fin_messages, max_new_tokens=diag_tokens, role="doctor")
+                    diagnosis_raw = llm_chat(
+                        fin_messages,
+                        max_new_tokens=diag_tokens,
+                        role="doctor",
+                        phase="final",
+                        turn=t,
+                        source="doctor.final_diagnosis_user_payload",
+                    )
                     yield emit(
                         {
                             "event": "diagnosis",
@@ -954,7 +983,13 @@ def simulate(): # prompts loading
                     f"follow-up after turn {t}",
                     questioning_messages,
                 )
-                doctor_raw = llm_chat(questioning_messages, role="doctor")
+                doctor_raw = llm_chat(
+                    questioning_messages,
+                    role="doctor",
+                    phase="followup",
+                    turn=t,
+                    source="doctor.questioning_followup_user_payload",
+                )
                 q_follow = doctor.parse_questioning_result(doctor_raw)
                 question_text = q_follow["question"]
 

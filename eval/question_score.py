@@ -313,6 +313,8 @@ class LLMJudgeMapper(QuestionSymptomMapper):
             ],
             max_new_tokens=self.max_tokens,
             role="judge",
+            phase="question_symptom_map",
+            source="question_score.map",
         ).strip()
         raw = re.sub(r"^```[a-z]*\n?", "", raw)
         raw = re.sub(r"\n?```$",       "", raw)
