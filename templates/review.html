@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interview Review — {{ run_name }}</title>
+<style>
+  :root{
+    --bg:#f6f8fa; --bg2:#ffffff; --bg3:#eef1f5; --border:#d0d7de;
+    --text:#1f2328; --text-muted:#57606a; --text-dim:#8c959f;
+    --doctor:#0969da; --doctor-bg:#e7f3ff; --patient:#1a7f37; --patient-bg:#e3f6e8;
+    --ok:#1a7f37; --bad:#cf222e; --warn:#9a6700; --accent:#6639ba;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font:14px/1.6 -apple-system,'Segoe UI','Noto Sans KR',sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+  code{font-family:ui-monospace,'SF Mono',Consolas,monospace}
+
+  /* ── header ── */
+  header{display:flex;align-items:center;gap:16px;padding:10px 18px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0}
+  .brand{font-weight:700;font-size:15px}
+  .brand small{color:var(--text-muted);font-weight:400;margin-left:8px}
+  .run-chip{font-size:12px;color:var(--text-muted);background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:2px 10px}
+  select{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:13px;max-width:420px}
+  .spacer{flex:1}
+  .toggle{display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;user-select:none;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:5px 12px}
+  .toggle input{accent-color:var(--accent)}
+  .toggle.busy{border-color:var(--accent)}
+
+  /* ── layout ── */
+  .wrap{display:flex;flex:1;min-height:0}
+  aside{width:300px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;min-height:0}
+  .side-tools{padding:10px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+  .side-tools input[type=text]{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;width:100%}
+  .chips{display:flex;gap:6px}
+  .chip{font-size:12px;padding:3px 10px;border-radius:999px;border:1px solid var(--border);color:var(--text-muted);cursor:pointer;background:var(--bg3)}
+  .chip.on{color:var(--accent);border-color:var(--accent);background:#f3eeff}
+  .ep-list{flex:1;overflow-y:auto;padding:6px}
+  .ep-group{margin-bottom:4px}
+  .ep-group-h{font-size:11px;color:var(--text-dim);padding:6px 8px 2px;letter-spacing:.4px}
+  .ep-item{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:13px}
+  .ep-item:hover{background:var(--bg3)}
+  .ep-item.sel{background:#dceafd}
+  .ep-item .mark{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .mark.ok{background:var(--ok)} .mark.bad{background:var(--bad)} .mark.na{background:var(--text-dim)}
+  .ep-item .eid{font-family:ui-monospace,Consolas,monospace;font-size:12px}
+  .ep-item .sub{margin-left:auto;color:var(--text-dim);font-size:11px}
+
+  /* ── main ── */
+  main{flex:1;overflow-y:auto;min-width:0;padding:18px 26px 60px}
+  .empty{color:var(--text-dim);text-align:center;margin-top:20vh;font-size:14px}
+
+  .ep-head{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+  .card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 16px;min-width:150px}
+  .card .k{font-size:11px;color:var(--text-muted);letter-spacing:.4px;margin-bottom:2px}
+  .card .v{font-size:14px;font-weight:600}
+  .card .v small{font-weight:400;color:var(--text-muted)}
+  .card.ok{border-color:#7cc894} .card.bad{border-color:#eba9a4}
+  .badge{display:inline-block;font-size:12px;font-weight:700;border-radius:6px;padding:1px 8px}
+  .badge.ok{color:var(--ok);background:#dafbe1} .badge.bad{color:var(--bad);background:#ffebe9}
+
+  /* ── transcript ── */
+  .turn-sep{display:flex;align-items:center;gap:10px;color:var(--text-dim);font-size:11px;letter-spacing:.6px;margin:20px 0 10px}
+  .turn-sep::before,.turn-sep::after{content:'';flex:1;height:1px;background:var(--border)}
+  .msg{margin:10px 0;border-radius:10px;border:1px solid var(--border);overflow:hidden;box-shadow:0 1px 2px rgba(31,35,40,.04)}
+  .msg-head{display:flex;align-items:center;gap:8px;padding:6px 14px;font-size:12px;font-weight:700;letter-spacing:.4px}
+  .msg.doctor{border-left:3px solid var(--doctor)} .msg.doctor .msg-head{color:var(--doctor);background:var(--doctor-bg)}
+  .msg.patient{border-left:3px solid var(--patient)} .msg.patient .msg-head{color:var(--patient);background:var(--patient-bg)}
+  .msg-body{display:grid;grid-template-columns:1fr;background:var(--bg2)}
+  body.tr-on .msg-body{grid-template-columns:1fr 1fr}
+  .msg-en,.msg-ko{padding:10px 14px;white-space:pre-wrap}
+  .msg-ko{display:none;border-left:1px dashed var(--border);color:#3d3564;background:#fbfaff}
+  body.tr-on .msg-ko{display:block}
+  .msg-ko.pending{color:var(--text-dim);font-style:italic}
+
+  /* inference collapsible */
+  details.inf{margin:6px 0 14px;border:1px dashed var(--border);border-radius:8px;background:#fafbfc}
+  details.inf summary{cursor:pointer;padding:6px 14px;font-size:12px;color:var(--text-muted);list-style:none;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  details.inf summary::before{content:'▸';color:var(--text-dim)}
+  details.inf[open] summary::before{content:'▾'}
+  .cand{font-family:ui-monospace,Consolas,monospace;font-size:11px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:0 6px;color:var(--accent)}
+  .cand.final-flag{color:var(--warn);border-color:var(--warn)}
+  .cand.gt{color:var(--ok);border-color:var(--ok);background:#eafaee}
+  .inf-map{padding:2px 16px 8px;display:flex;flex-direction:column;gap:3px}
+  .inf-map-row{font-size:12.5px;color:var(--text-muted);display:flex;align-items:baseline;gap:7px;flex-wrap:wrap}
+  .inf-map-row .dname{color:var(--text)}
+  .inf-map-row .icdname{color:var(--text-dim);font-size:11.5px}
+  .inf-map-row.unmapped .dname{color:var(--bad)}
+  .inf-note{padding:4px 16px 12px;font-size:13px;color:var(--text-muted);white-space:pre-wrap}
+
+  /* patient profile panel */
+  details.profile{margin:0 0 18px;border:1px solid var(--patient);border-radius:10px;background:var(--bg2);overflow:hidden}
+  details.profile summary{cursor:pointer;padding:9px 16px;font-size:13px;font-weight:700;color:var(--patient);background:var(--patient-bg);list-style:none;display:flex;align-items:center;gap:8px}
+  details.profile summary::before{content:'▸'}
+  details.profile[open] summary::before{content:'▾'}
+  details.profile summary small{font-weight:400;color:var(--text-muted)}
+  .prof-body{padding:6px 18px 14px}
+  .prof-sec{margin-top:12px}
+  .prof-sec-h{font-size:12px;font-weight:700;color:var(--text-muted);letter-spacing:.5px;text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:4px;margin-bottom:8px}
+  .prof-item{display:flex;gap:10px;margin:6px 0;font-size:13px}
+  .prof-label{flex-shrink:0;width:210px;font-weight:600;color:#24467a;font-size:12.5px;padding-top:1px;word-break:break-word}
+  .prof-label .scode{font-family:ui-monospace,Consolas,monospace;color:var(--accent);background:#f3eeff;border:1px solid #d8c9f5;border-radius:4px;padding:0 5px;margin-right:5px;font-size:11px}
+  .prof-text-wrap{flex:1;display:grid;grid-template-columns:1fr;min-width:0}
+  body.tr-on.tr-prof-on .prof-text-wrap{grid-template-columns:1fr 1fr}
+  .prof-text{white-space:pre-wrap;color:var(--text)}
+  .prof-ko{display:none;white-space:pre-wrap;color:#3d3564;background:#fbfaff;border-left:1px dashed var(--border);padding-left:10px;margin-left:10px}
+  body.tr-on.tr-prof-on .prof-ko{display:block}
+  .prof-ko.pending{color:var(--text-dim);font-style:italic}
+  .toggle.sub{font-size:12px;padding:4px 10px;color:var(--text-muted)}
+  .final-box{margin-top:26px;border:1px solid var(--warn);border-radius:10px;overflow:hidden}
+  .final-box .msg-head{color:var(--warn);background:#fff8c5}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:#c4ccd4;border-radius:5px}
+  ::-webkit-scrollbar-track{background:transparent}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">🩺 Interview Review<small>doctor–patient transcript viewer</small></div>
+  <div class="run-chip" title="{{ run_path }}">run: {{ run_name }}</div>
+  <select id="modelSel" title="doctor 모델 선택"></select>
+  <div class="spacer"></div>
+  <label class="toggle" id="trToggle"><input type="checkbox" id="trCheck"><span id="trLabel">한국어 번역</span></label>
+  <label class="toggle sub" title="환자 증상 프로필도 함께 번역"><input type="checkbox" id="trProfCheck"><span>프로필 포함</span></label>
+</header>
+
+<div class="wrap">
+  <aside>
+    <div class="side-tools">
+      <input type="text" id="filterInput" placeholder="에피소드 검색 (예: D004, S002)">
+      <div class="chips">
+        <span class="chip on" data-f="all">전체</span>
+        <span class="chip" data-f="ok">정답</span>
+        <span class="chip" data-f="bad">오답</span>
+      </div>
+    </div>
+    <div class="ep-list" id="epList"></div>
+  </aside>
+
+  <main id="main">
+    <div class="empty" id="emptyMsg">좌측에서 에피소드를 선택하세요</div>
+    <div id="epView" style="display:none">
+      <div class="ep-head" id="epHead"></div>
+      <div id="profileBox"></div>
+      <div id="feed"></div>
+    </div>
+  </main>
+</div>
+
+<script>
+const state = {
+  model: null, episodes: [], filter: '', corr: 'all',
+  current: null,          // 현재 에피소드 상세
+  translate: false, trProfile: false,
+  trCache: new Map(),     // `${model}::${id}` → translation payload
+  trInflight: null,
+};
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function jget(url){ const r = await fetch(url); if(!r.ok) throw new Error(await r.text()); return r.json(); }
+
+/* ── init ── */
+(async function init(){
+  const meta = await jget('/api/meta');
+  state.icd10 = meta.icd10_map || {};
+  const sel = $('#modelSel');
+  for (const m of meta.models){
+    const o = document.createElement('option');
+    o.value = m.key;
+    o.textContent = `${m.doctor}  (${m.episodes} eps · judge ${m.judge})`;
+    sel.appendChild(o);
+  }
+  sel.onchange = () => loadModel(sel.value);
+  if (meta.models.length) loadModel(meta.models[0].key);
+
+  $('#filterInput').oninput = e => { state.filter = e.target.value.trim().toLowerCase(); renderList(); };
+  document.querySelectorAll('.chip').forEach(c => c.onclick = () => {
+    document.querySelectorAll('.chip').forEach(x => x.classList.remove('on'));
+    c.classList.add('on'); state.corr = c.dataset.f; renderList();
+  });
+  $('#trCheck').onchange = e => setTranslate(e.target.checked);
+  $('#trProfCheck').onchange = e => {
+    state.trProfile = e.target.checked;
+    document.body.classList.toggle('tr-prof-on', e.target.checked);
+    if (state.translate && e.target.checked && state.current) ensureTranslation();
+  };
+})();
+
+async function loadModel(key){
+  state.model = key;
+  const d = await jget('/api/episodes?model=' + encodeURIComponent(key));
+  state.episodes = d.episodes;
+  renderList();
+}
+
+/* ── episode list ── */
+function renderList(){
+  const box = $('#epList'); box.innerHTML = '';
+  const eps = state.episodes.filter(e => {
+    if (state.corr === 'ok' && e.correct !== true) return false;
+    if (state.corr === 'bad' && e.correct !== false) return false;
+    if (state.filter && !(e.id.toLowerCase().includes(state.filter) || (e.gt_name||'').toLowerCase().includes(state.filter))) return false;
+    return true;
+  });
+  let lastGt = null, group = null;
+  for (const e of eps){
+    if (e.gt !== lastGt){
+      lastGt = e.gt;
+      group = document.createElement('div'); group.className = 'ep-group';
+      const h = document.createElement('div'); h.className = 'ep-group-h';
+      h.textContent = `${e.gt} · ${e.gt_name}`;
+      group.appendChild(h); box.appendChild(group);
+    }
+    const it = document.createElement('div');
+    it.className = 'ep-item' + (state.current && state.current.id === e.id ? ' sel' : '');
+    it.dataset.id = e.id;
+    const mark = e.correct === true ? 'ok' : e.correct === false ? 'bad' : 'na';
+    it.innerHTML = `<span class="mark ${mark}"></span><span class="eid">${esc(e.id.replace(e.gt + '_', ''))}</span>` +
+      `<span class="sub">${e.closed_at ?? '?'}t</span>`;
+    it.onclick = () => openEpisode(e.id);
+    group.appendChild(it);
+  }
+  if (!eps.length) box.innerHTML = '<div class="ep-group-h">일치하는 에피소드 없음</div>';
+}
+
+/* ── episode detail ── */
+async function openEpisode(id){
+  const d = await jget(`/api/episode?model=${encodeURIComponent(state.model)}&id=${encodeURIComponent(id)}`);
+  state.current = d;
+  document.querySelectorAll('.ep-item').forEach(x => x.classList.toggle('sel', x.dataset.id === id));
+  $('#emptyMsg').style.display = 'none';
+  $('#epView').style.display = 'block';
+  renderHead(d);
+  renderProfile(d);
+  renderFeed(d);
+  if (state.translate) ensureTranslation();
+  $('#main').scrollTop = 0;
+}
+
+function renderHead(d){
+  const ok = d.correct === true, bad = d.correct === false;
+  $('#epHead').innerHTML = `
+    <div class="card"><div class="k">EPISODE</div><div class="v"><code>${esc(d.id)}</code></div></div>
+    <div class="card"><div class="k">GROUND TRUTH</div><div class="v">${esc(d.gt)} <small>${esc(d.gt_name)}</small></div></div>
+    <div class="card ${ok?'ok':bad?'bad':''}"><div class="k">최종 진단</div>
+      <div class="v">${esc(d.final ?? '—')} <small>${esc(d.final_disease ? d.final_disease + ' · ' + d.final_disease_name : '매핑 없음')}</small>
+      ${ok?'<span class="badge ok">CORRECT</span>':bad?'<span class="badge bad">WRONG</span>':''}</div></div>
+    <div class="card"><div class="k">종료 턴</div><div class="v">${esc(d.closed_at ?? '?')} <small>/ ${Math.ceil(d.transcript.length/2)}턴 기록</small></div></div>`;
+}
+
+function icdInfo(code){ return state.icd10[String(code || '').toUpperCase()] || null; }
+
+function candChip(code, gt, extraCls){
+  const info = icdInfo(code);
+  const isGt = info && info.id === gt;
+  const title = info ? `${info.id} · ${info.name}` : 'KG 23종 질환에 매핑되지 않는 코드';
+  return `<span class="cand${isGt ? ' gt' : ''}${extraCls ? ' ' + extraCls : ''}" title="${esc(title)}">${esc(code)}</span>`;
+}
+
+function candMapRows(codes, gt){
+  if (!codes || !codes.length) return '';
+  const rows = codes.map(c => {
+    const info = icdInfo(c);
+    if (!info) return `<div class="inf-map-row unmapped">${candChip(c, gt)} → <span class="dname">KG 매핑 없음 (허용 23종 밖 코드)</span></div>`;
+    return `<div class="inf-map-row">${candChip(c, gt)} → <b>${esc(info.id)}</b> <span class="dname">${esc(info.name)}</span>` +
+      (info.icd10_name ? `<span class="icdname">· ICD-10: ${esc(info.icd10_name)}</span>` : '') + `</div>`;
+  }).join('');
+  return `<div class="inf-map">${rows}</div>`;
+}
+
+function renderProfile(d){
+  const box = $('#profileBox'); box.innerHTML = '';
+  const p = d.profile;
+  if (!p){ return; }
+  const nSym = (p.sections.find(s => s.title.includes('Symptom Manifestations'))?.items || []).length;
+  const det = document.createElement('details');
+  det.className = 'profile';
+  let html = `<summary>🧑 환자 증상 프로필 (시뮬레이션 입력)<small>· 증상 ${nSym}개 · txt 로그의 patient system prompt에서 추출</small></summary><div class="prof-body">`;
+  let pi = 0;
+  for (const sec of p.sections){
+    html += `<div class="prof-sec"><div class="prof-sec-h">${esc(sec.title)}</div>`;
+    for (const it of sec.items){
+      let label = '';
+      if (it.label){
+        const m = it.label.match(/^(S\d{3})\s*\((.+)\)$/);
+        label = m ? `<span class="scode">${esc(m[1])}</span>${esc(m[2])}` : esc(it.label);
+      }
+      html += `<div class="prof-item"><div class="prof-label">${label}</div>` +
+        `<div class="prof-text-wrap"><div class="prof-text">${esc(it.text)}</div>` +
+        `<div class="prof-ko pending" data-pi="${pi++}">번역 대기</div></div></div>`;
+    }
+    html += `</div>`;
+  }
+  html += `</div>`;
+  det.innerHTML = html;
+  box.appendChild(det);
+}
+
+function renderFeed(d){
+  const feed = $('#feed'); feed.innerHTML = '';
+  const infByTurn = {};
+  for (const h of d.inference_history || []) infByTurn[h.turn] = h;
+
+  let patientTurn = 0;
+  d.transcript.forEach((m, i) => {
+    const role = m.role === 'doctor' ? 'doctor' : 'patient';
+    if (role === 'doctor'){
+      const sep = document.createElement('div');
+      sep.className = 'turn-sep'; sep.textContent = `TURN ${patientTurn + 1}`;
+      feed.appendChild(sep);
+    }
+    const el = document.createElement('div');
+    el.className = `msg ${role}`;
+    el.innerHTML = `<div class="msg-head">${role === 'doctor' ? '👨‍⚕️ DOCTOR' : '🧑 PATIENT'}</div>
+      <div class="msg-body">
+        <div class="msg-en">${esc(m.content)}</div>
+        <div class="msg-ko pending" data-mi="${i}">번역 대기</div>
+      </div>`;
+    feed.appendChild(el);
+
+    if (role === 'patient'){
+      patientTurn += 1;
+      const h = infByTurn[patientTurn];
+      if (h){
+        const det = document.createElement('details');
+        det.className = 'inf';
+        const cands = (h.candidates || []).map(c => candChip(c, d.gt)).join(' ');
+        det.innerHTML = `<summary>의사 추론 · turn ${h.turn} ${cands} ${h.is_final ? '<span class="cand final-flag">FINAL</span>' : ''}</summary>
+          ${candMapRows(h.candidates, d.gt)}
+          <div class="inf-note">${esc(h.note || '')}</div>`;
+        feed.appendChild(det);
+      }
+    }
+  });
+
+  if (d.final_reason){
+    const fb = document.createElement('div');
+    fb.className = 'msg final-box';
+    fb.innerHTML = `<div class="msg-head">🏁 FINAL DIAGNOSIS — ${esc(d.final ?? '')} ${
+        (d.final_candidates||[]).map(c=>candChip(c, d.gt)).join(' ')}</div>
+      ${candMapRows([...new Set([d.final, ...(d.final_candidates||[])].filter(Boolean))], d.gt)}
+      <div class="msg-body">
+        <div class="msg-en">${esc(d.final_reason)}</div>
+        <div class="msg-ko pending" data-mi="final">번역 대기</div>
+      </div>`;
+    $('#feed').appendChild(fb);
+  }
+}
+
+/* ── translation ── */
+function setTranslate(on){
+  state.translate = on;
+  document.body.classList.toggle('tr-on', on);
+  if (on && state.current) ensureTranslation();
+}
+
+async function ensureTranslation(){
+  const d = state.current;
+  if (!d) return;
+  const key = `${state.model}::${d.id}`;
+  const cached = state.trCache.get(key);
+  if (cached && (!state.trProfile || cached.profile)) return applyTranslation(cached);
+
+  document.querySelectorAll('.msg-ko, .prof-ko').forEach(el => { el.textContent = '번역 중…'; el.classList.add('pending'); });
+  const label = $('#trLabel'); const toggle = $('#trToggle');
+  label.textContent = d.translation_cached ? '번역 로딩…' : '번역 중… (API 호출)';
+  toggle.classList.add('busy');
+  try {
+    const r = await fetch('/api/translate', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({model: state.model, id: d.id, include_profile: state.trProfile}),
+    });
+    const payload = await r.json();
+    if (!r.ok) throw new Error(payload.error || r.statusText);
+    if (!payload.partial && !payload.partial_profile) state.trCache.set(key, payload);
+    if (state.current && state.current.id === d.id) applyTranslation(payload);
+  } catch (e) {
+    document.querySelectorAll('.msg-ko, .prof-ko').forEach(el => { el.textContent = '번역 실패: ' + e.message; });
+  } finally {
+    label.textContent = '한국어 번역'; toggle.classList.remove('busy');
+  }
+}
+
+function applyTranslation(p){
+  document.querySelectorAll('.msg-ko').forEach(el => {
+    const mi = el.dataset.mi;
+    const t = mi === 'final' ? p.final_reason : (p.messages || [])[Number(mi)];
+    if (t){ el.textContent = t; el.classList.remove('pending'); }
+    else { el.textContent = '(번역 없음)'; }
+  });
+  document.querySelectorAll('.prof-ko').forEach(el => {
+    const t = (p.profile || [])[Number(el.dataset.pi)];
+    if (t){ el.textContent = t; el.classList.remove('pending'); }
+    else { el.textContent = p.profile ? '(번역 없음)' : '번역 대기 — "프로필 포함" 체크 후 로드됩니다'; }
+  });
+}
+</script>
+</body>
+</html>
