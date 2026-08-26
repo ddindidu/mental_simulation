@@ -52,6 +52,7 @@ from utils.llm import get_run_dir as _get_run_dir
 from utils.config import CONFIG
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+from utils.paths import ANALYSIS_ROOT, LOGS_ROOT, RESULTS_ROOT
 DISORDER_ICD10_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "disorder_icd10.json"
 
 _SAFETY_HORIZON = (CONFIG.get("evaluation") or {}).get("safety_screening_horizon")
@@ -79,8 +80,8 @@ def _parse_args() -> argparse.Namespace:
 
 _args       = _parse_args()
 _RUN_DIR    = _get_run_dir()
-RESULTS_DIR = _args.results if _args.results else BASE_DIR / "results" / _RUN_DIR
-LOGS_DIR    = _args.logs    if _args.logs    else BASE_DIR / "logs"    / _RUN_DIR
+RESULTS_DIR = _args.results if _args.results else RESULTS_ROOT / _RUN_DIR
+LOGS_DIR    = _args.logs    if _args.logs    else LOGS_ROOT    / _RUN_DIR
 
 
 # ── Log parsing ────────────────────────────────────────────────────────────────

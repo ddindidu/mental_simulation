@@ -467,6 +467,8 @@ def persist_doctor_memory_json(
     path: Path | None = None,
 ) -> None:
     p = path or DOCTOR_MEMORY_FILE
+    if p is None:
+        return  # 경로 없음 = 별도 파일로 남기지 않음 (전사 로그에 이미 포함)
     try:
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(
@@ -513,6 +515,8 @@ def persist_interview_transcript_json(
     path: Path | None = None,
 ) -> None:
     p = path or TRANSCRIPT_FILE
+    if p is None:
+        return  # 경로 없음 = 별도 파일로 남기지 않음 (전사 로그에 이미 포함)
     try:
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(

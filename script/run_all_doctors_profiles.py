@@ -2,15 +2,15 @@
 """Run the fixed-profile simulation + evaluation pipeline for several doctor models.
 
 For each doctor model:
-  1. Patch config.json's llm.patient / llm.judge / llm.doctor.
+  1. Patch config/config.json's llm.patient / llm.judge / llm.doctor.
   2. Run script/run_profile_batch.py — one simulation per profile JSON under
-     --profiles-root (default: data/profiles/add_requirements/low), skipping any
+     --profiles-root (default: data/v1_only_manifestation), skipping any
      profile that already has both a log and a result JSON so the batch is safely
      resumable.
   3. Run the eval/*.py + reporting/*.py pipeline for that doctor's run_dir
      (mirrors app.py's _run_eval_pipeline, plus the cross-analysis reporting plots).
 
-Patient and judge are fixed to gemini-3.5-flash; config.json is restored to its
+Patient and judge are fixed to gemini-3.5-flash; config/config.json is restored to its
 original contents when the script exits (normally or via Ctrl-C).
 
 Usage:
@@ -30,7 +30,7 @@ import time
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CONFIG_PATH = PROJECT_ROOT / "config.json"
+CONFIG_PATH = PROJECT_ROOT / "config" / "config.json"
 PYTHON_BIN = sys.executable
 
 PATIENT_MODEL = {"provider": "gemini", "model": "gemini-3.5-flash"}
@@ -48,7 +48,7 @@ DOCTOR_VARIANTS: list[dict] = [
 # Mirrors app.py's _run_eval_pipeline() order, plus the cross-analysis reporting
 # scripts described in analysis/README.md. Each runs with no CLI args — every
 # script resolves logs/results/analysis paths itself via get_run_dir(), which
-# reads the just-patched config.json fresh (each step is its own subprocess).
+# reads the just-patched config/config.json fresh (each step is its own subprocess).
 EVAL_PIPELINE: list[list[str]] = [
     ["eval/symptom_diagnosis.py"],
     ["eval/evaluate_final_diagnosis.py"],
@@ -96,7 +96,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         "--profiles-root", type=Path,
-        default=PROJECT_ROOT / "data" / "profiles" / "add_requirements" / "low",
+        default=PROJECT_ROOT / "data" / "v1_only_manifestation",
     )
     parser.add_argument("--doctors", nargs="*", default=None,
                          help="Subset of doctor keys to run (default: all 6). "
@@ -152,7 +152,7 @@ def main() -> int:
         print("\n[orchestrator] Interrupted by user.", flush=True)
     finally:
         _save_config(base_cfg)
-        print("[orchestrator] config.json restored to original.", flush=True)
+        print("[orchestrator] config/config.json restored to original.", flush=True)
 
     print(f"\n{'='*70}\n[orchestrator] Summary\n{'='*70}", flush=True)
     for s in summary:

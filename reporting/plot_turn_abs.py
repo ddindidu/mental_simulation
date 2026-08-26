@@ -42,6 +42,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 BASE_DIR      = Path(__file__).resolve().parent.parent
+from utils.paths import ANALYSIS_ROOT, LOGS_ROOT, RESULTS_ROOT
 CRITERIA_FILE = BASE_DIR / "mentalbench/resources/knowledge_graph/EN/diagnostic_criteria.json"
 N_COLS        = 6
 
@@ -281,7 +282,7 @@ def main():
 
     if args.input is None:
         from utils.llm import get_run_dir as _grd
-        args.input = BASE_DIR / "analysis" / _grd()
+        args.input = ANALYSIS_ROOT / _grd()
     if args.output is None:
         args.output = args.input
     args.output = args.output / "turn_abs"

@@ -12,6 +12,7 @@ _LLM = CONFIG.get("llm") or {}
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 _current_log_path: "Path | None" = None
+_warned_log_fallback = False
 
 
 def rotate_log_file() -> "Path":
@@ -26,10 +27,12 @@ def rotate_log_file() -> "Path":
     return _current_log_path
 
 
-def set_log_path(path: "Path | str | None") -> None:
+def set_log_path(path: "Path | str | None", *, truncate: bool = True) -> None:
     """배치 평가 등에서 로그 파일 경로를 직접 지정한다.
 
-    새 시뮬레이션마다 호출하면 기존 파일을 지우고 빈 파일로 시작한다.
+    truncate=True(기본)면 새 시뮬레이션으로 보고 기존 파일을 지우고 빈 파일로
+    시작한다. 이미 끝난 케이스의 로그에 후속 LLM 호출(증상추출 등)만 덧붙일
+    때는 truncate=False 로 호출해 기존 내용을 보존한다.
     path=None 이면 로그 경로를 해제한다 (이후 호출은 logging.txt 로 폴백).
     """
     global _current_log_path
@@ -39,15 +42,55 @@ def set_log_path(path: "Path | str | None") -> None:
     from pathlib import Path as _Path
     _current_log_path = _Path(path)
     _current_log_path.parent.mkdir(parents=True, exist_ok=True)
-    # 새 시뮬레이션이므로 이전 실행의 잔여 내용을 지우고 새 파일로 시작
-    _current_log_path.write_text("", encoding="utf-8")
+    if truncate:
+        _current_log_path.write_text("", encoding="utf-8")
 
 
-def _append_to_log(role: str, messages: list, result: str) -> None:
+def _log_meta_line(
+    role: str,
+    phase: str | None,
+    turn: int | None,
+    source: str | None,
+    model: str,
+) -> str | None:
+    """로그 블록 앞에 붙일 한 줄 요약(턴/단계/생성 함수/모델)을 만든다."""
+    if phase is None and turn is None and source is None:
+        return None
+    parts = [f"turn {turn}" if turn is not None else "turn -"]
+    parts.append(f"{role}:{phase}" if phase else role)
+    if source:
+        parts.append(f"{source}()")
+    if model:
+        parts.append(f"model={model}")
+    return "-" * 10 + " " + " | ".join(parts) + " " + "-" * 10
+
+
+def _append_to_log(
+    role: str,
+    messages: list,
+    result: str,
+    *,
+    phase: str | None = None,
+    turn: int | None = None,
+    source: str | None = None,
+) -> None:
     """LLM 입출력을 현재 로그 파일에 추가한다."""
+    global _warned_log_fallback
     from .paths import PROJECT_ROOT
-    log_path = _current_log_path if _current_log_path is not None else (PROJECT_ROOT / "logging.txt")
+    log_path = _current_log_path
+    if log_path is None:
+        # 로그 경로가 지정되지 않았으면 프로젝트 루트 logging.txt 로 폴백한다.
+        log_path = PROJECT_ROOT / "logging.txt"
+        if not _warned_log_fallback:
+            _warned_log_fallback = True
+            print(
+                f"[llm] WARNING: set_log_path() 미설정 상태의 LLM 호출 → {log_path} 로 폴백",
+                flush=True,
+            )
+    meta = _log_meta_line(role, phase, turn, source, str(_cfg_for_role(role)["model"]))
     with open(log_path, "a", encoding="utf-8") as f:
+        if meta:
+            f.write(meta + "\n")
         f.write(f"========== INPUT [{role}] ==========\n")
         f.write(json.dumps(messages, ensure_ascii=False, indent=2) + "\n")
         f.write(f"========== OUTPUT [{role}] ==========\n")
@@ -742,7 +785,11 @@ def chat(
     max_new_tokens: int | None = None,
     *,
     role: Role = "patient",
+    phase: str | None = None,
+    turn: int | None = None,
+    source: str | None = None,
 ) -> str:
+    """phase/turn/source 는 로그 표시용 메타데이터로 호출 동작에는 영향이 없다."""
     if max_new_tokens is None:
         max_new_tokens = int(_gen_for_role(role)["default_max_new_tokens"])
 
@@ -781,7 +828,7 @@ def chat(
             "use 'vllm', 'openai', 'openrouter', 'gemini', or 'local'"
         )
 
-    _append_to_log(role, messages, result)
+    _append_to_log(role, messages, result, phase=phase, turn=turn, source=source)
     return result
 
 

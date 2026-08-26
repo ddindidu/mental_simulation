@@ -30,7 +30,13 @@ import json
 from pathlib import Path
 from typing import Any
 
+import sys as _sys
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_REPO_ROOT))
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+from utils.paths import ANALYSIS_ROOT, LOGS_ROOT, RESULTS_ROOT
 
 
 def _mean(vals) -> float | None:
@@ -129,8 +135,8 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
-    results_root = BASE_DIR / "results" / args.judge / args.judge
-    analysis_root = BASE_DIR / "analysis" / args.judge / args.judge
+    results_root = RESULTS_ROOT / args.judge / args.judge
+    analysis_root = ANALYSIS_ROOT / args.judge / args.judge
     cmp_dir = analysis_root / "comparison"
 
     models = _discover_models(results_root)

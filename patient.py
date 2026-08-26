@@ -627,10 +627,11 @@ def set_symptom_profile_path(path: "Path | str") -> None:
     KG 모드와 무관하게 JSON 파일 기반 프롬프트로 재생성한다.
     """
     from pathlib import Path as _Path
-    global _PROFILE_PATH, SYSTEM_PROMPT
+    global _PROFILE_PATH, _USE_KG, SYSTEM_PROMPT
     resolved = _Path(path).resolve()
     if not resolved.is_file():
         raise FileNotFoundError(f"symptom profile not found: {resolved}")
+    _USE_KG = False
     _PROFILE_PATH = resolved
     SYSTEM_PROMPT = _build_system_prompt_from_json()
 

@@ -31,9 +31,15 @@ from typing import Any
 
 import numpy as np
 
+import sys as _sys
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_REPO_ROOT))
+
 warnings.filterwarnings("ignore")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+from utils.paths import ANALYSIS_ROOT, LOGS_ROOT, RESULTS_ROOT
 
 MODEL_ORDER = [
     "gemini-3.1-flash-lite",
@@ -76,7 +82,7 @@ def main() -> None:
     p.add_argument("--judge", default="gemini-3.5-flash")
     args = p.parse_args()
 
-    cmp_dir = BASE_DIR / "analysis" / args.judge / args.judge / "comparison"
+    cmp_dir = ANALYSIS_ROOT / args.judge / args.judge / "comparison"
 
     inf = _index_by_model(_load(cmp_dir / "inference_eval_comparison.json"))
     eff = _index_by_model(_load(cmp_dir / "efficiency_eval_comparison.json"))

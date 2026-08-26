@@ -1,4 +1,5 @@
 import json
+import re
 import os
 import threading
 from pathlib import Path
@@ -18,7 +19,6 @@ from utils.llm import get_patient_alignment_max_tokens
 from utils.llm import get_patient_model_name
 from utils.llm import get_run_dir
 from utils.llm import get_status
-from utils.llm import rotate_log_file
 from utils.llm import set_log_path
 from utils.prompt_display import system_prompt_to_html
 
@@ -123,7 +123,174 @@ def patient_system_html():
     return jsonify({"html": system_prompt_to_html(patient.SYSTEM_PROMPT)})
 
 
+# ── Simulation profile catalog ────────────────────────────────────────────────
+#
+# data/ 아래의 프로필 버전 디렉터리(v1_..., v2_... 등)를 훑어 UI 드롭다운에 채운다.
+# data/code/ 는 프로필 생성 스크립트 모음이므로 카탈로그에서 제외한다.
+
+_PROFILE_ROOT_EXCLUDE = {"code"}
+
+
+def _profile_roots() -> list[Path]:
+    from utils.paths import DATA_DIR
+    if not DATA_DIR.is_dir():
+        return []
+    return sorted(
+        d for d in DATA_DIR.iterdir()
+        if d.is_dir() and not d.name.startswith(".") and d.name not in _PROFILE_ROOT_EXCLUDE
+    )
+
+
+def _scan_profile_root(root: Path) -> dict:
+    """하나의 프로필 루트를 {id, label, path, folders:[{path, files:[...]}]} 로 만든다.
+
+    루트 바로 아래에 있는 JSON은 folder path "." 로 묶는다.
+    """
+    folders: dict[str, list[dict]] = {}
+    for jf in sorted(root.rglob("*.json")):
+        rel = jf.relative_to(root)
+        folder = rel.parent.as_posix()  # 루트 직속이면 "."
+        folders.setdefault(folder, []).append(
+            {"name": jf.name, "relative_path": rel.as_posix()}
+        )
+    return {
+        "id": root.name,
+        "label": root.name,
+        "path": str(root),
+        "folders": [{"path": k, "files": v} for k, v in sorted(folders.items())],
+    }
+
+
+def _current_profile_selection(catalog: list[dict]) -> dict | None:
+    """현재 patient가 물고 있는 프로필을 카탈로그 좌표(root_id/folder/relative_path)로 환산."""
+    current_path = patient.current_config().get("symptom_profile_path")
+    if not current_path:
+        return None
+    cur = Path(current_path).resolve()
+    for root in catalog:
+        root_path = Path(root["path"]).resolve()
+        try:
+            rel = cur.relative_to(root_path)
+        except ValueError:
+            continue
+        return {
+            "root_id": root["id"],
+            "folder": rel.parent.as_posix(),
+            "relative_path": rel.as_posix(),
+        }
+    return None
+
+
+@app.route("/api/simulation_profiles")  # 프로필 카탈로그 조회
+def simulation_profiles():
+    try:
+        catalog = [_scan_profile_root(r) for r in _profile_roots()]
+        catalog = [r for r in catalog if r["folders"]]  # JSON이 하나도 없는 루트는 숨김
+        return jsonify({"roots": catalog, "current": _current_profile_selection(catalog)})
+    except Exception as e:
+        return jsonify({"roots": [], "current": None, "error": str(e)}), 500
+
+
+@app.route("/api/simulation_profile", methods=["POST"])  # 프로필 선택 → patient 재빌드
+def set_simulation_profile():
+    body = request.get_json(force=True) or {}
+    root_id = str(body.get("root_id", "")).strip()
+    relative_path = str(body.get("relative_path", "")).strip()
+    if not root_id or not relative_path:
+        return jsonify({"ok": False, "error": "root_id and relative_path are required"}), 400
+
+    root = next((r for r in _profile_roots() if r.name == root_id), None)
+    if root is None:
+        return jsonify({"ok": False, "error": f"Unknown profile root: {root_id}"}), 400
+
+    target = (root / relative_path).resolve()
+    # 경로 탈출 방지 (../ 등)
+    if not str(target).startswith(str(root.resolve())):
+        return jsonify({"ok": False, "error": "Invalid relative_path"}), 400
+    if not target.is_file():
+        return jsonify({"ok": False, "error": f"Profile not found: {relative_path}"}), 404
+
+    try:
+        patient.set_symptom_profile_path(target)
+        return jsonify({
+            "ok": True,
+            "profile_path": str(target),
+            "patient_system_html": system_prompt_to_html(patient.SYSTEM_PROMPT),
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 # ── Batch Evaluation ──────────────────────────────────────────────────────────
+
+_PROFILE_ID_RE = re.compile(r"^(D\d+)")
+
+
+def _collect_profiles(profile_root: Path) -> list[Path]:
+    """프로필 루트 아래 *.json 을 재귀 수집 (파일명 정렬)."""
+    root = Path(profile_root).expanduser()
+    if not root.is_dir():
+        raise ValueError(f"Profile root not found: {root}")
+    return sorted(root.rglob("*.json"))
+
+
+def _disease_code_from_profile(profile_path: Path) -> str:
+    """프로필 파일명에서 정답 질환 코드를 얻는다 (D001_S001_P001.json → D001).
+
+    프로필 JSON에는 질환 코드 필드가 없으므로 파일명 규약에 의존한다.
+    """
+    m = _PROFILE_ID_RE.match(profile_path.stem)
+    return m.group(1) if m else ""
+
+
+def _persist_single_artifacts(
+    case_id: str,
+    json_log_path: Path,
+    txt_log_path: Path,
+    result_json_path: Path,
+    transcript: list,
+    doctor_memory: dict,
+) -> None:
+    """단건 실행 산출물을 배치와 같은 형식으로 저장한다.
+
+    실패해도 화면 스트리밍에는 영향을 주지 않도록 예외를 삼킨다.
+    """
+    fd = (doctor_memory.get("final_diagnosis") or {})
+    try:
+        json_log_path.write_text(
+            json.dumps({
+                "case_id": case_id,
+                "closed_at_patient_turn": doctor_memory.get("closed_at_patient_turn"),
+                "final_diagnosis": fd.get("diagnosis", ""),
+                "transcript": [{"role": r, "content": c} for r, c in transcript],
+                "doctor_memory": doctor_memory,
+            }, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        print(f"[simulate] log saved → {json_log_path}", flush=True)
+    except Exception as e:
+        print(f"[simulate] json log save failed: {e}", flush=True)
+
+    # 증상 추출 + KG 후보군. batch_worker와 같은 로더를 써서 import 충돌을 피한다.
+    try:
+        from batch_worker import _make_symptom_diagnosis_runner
+        _make_symptom_diagnosis_runner(case_id)(txt_log_path, result_json_path)
+    except Exception as e:
+        print(f"[simulate] symptom_diagnosis failed: {e}", flush=True)
+
+
+def _single_case_id() -> str:
+    """단건 실행의 케이스 이름. 배치의 D001_1 / D001_S001_P001 자리에 대응한다.
+
+    프로필 모드면 프로필 파일명(D005_S001_P001), KG 모드면 '<질환코드>_kg'.
+    같은 날 같은 대상을 다시 돌리면 덮어쓴다 (배치와 동일한 규칙).
+    """
+    cfg = patient.current_config()
+    if cfg.get("use_knowledge_graph"):
+        return f"{cfg.get('disease_code') or 'unknown'}_kg"
+    profile_path = cfg.get("symptom_profile_path") or ""
+    return Path(profile_path).stem or "single"
+
 
 def _load_disorder_map() -> dict[str, str]:
     """disorder.json → {code: name}"""
@@ -146,15 +313,15 @@ def _run_eval_pipeline() -> None:
       4. evaluate_turns_strict → turn_eval_strict.json + PNG (LLM 호출)
     """
     import traceback as _tb
-    from utils.paths import PROJECT_ROOT
+    from utils.paths import LOGS_ROOT, RESULTS_ROOT
 
     # 파이프라인 LLM 호출(symptom_diagnosis judge 호출 등)이
     # 마지막 시뮬레이션 로그 파일에 섞이지 않도록 별도 로그로 분리
-    set_log_path(PROJECT_ROOT / "results" / get_run_dir() / "_pipeline_llm.log")
+    set_log_path(RESULTS_ROOT / get_run_dir() / "_pipeline_llm.log")
 
     print("[pipeline] Starting post-batch evaluation pipeline...", flush=True)
-    print(f"[pipeline] logs dir  : {PROJECT_ROOT / 'logs' / get_run_dir()}", flush=True)
-    print(f"[pipeline] results dir: {PROJECT_ROOT / 'results' / get_run_dir()}", flush=True)
+    print(f"[pipeline] logs dir  : {LOGS_ROOT / get_run_dir()}", flush=True)
+    print(f"[pipeline] results dir: {RESULTS_ROOT / get_run_dir()}", flush=True)
 
     import importlib
 
@@ -249,30 +416,29 @@ def _run_eval_pipeline() -> None:
 
 
 def _run_batch_evaluation(
-    disorder_map: dict[str, str],
-    runs_per_disorder: int,
+    tasks: list[dict],
     difficulty: str,
     logs_dir: Path,
     acc_path: Path,
     parallel_disorders: int = 4,
+    max_turns: int | None = None,
+    mode: str = "kg",
 ) -> None:
-    """백그라운드 스레드에서 전체 disorder × N회 시뮬레이션 실행.
+    """백그라운드 스레드에서 배치 시뮬레이션을 실행한다.
 
-    disorder 단위로 최대 parallel_disorders개의 별도 프로세스(ProcessPoolExecutor,
-    spawn)를 동시에 띄운다. patient.py / utils/llm.py는 SYSTEM_PROMPT나 현재 로그
-    경로 등을 모듈 전역 변수로 관리하기 때문에, 여러 disorder를 같은 프로세스
-    안에서 스레드로 병렬 실행하면 서로의 상태를 덮어쓰는 레이스 컨디션이 생긴다.
-    프로세스를 분리하면 disorder마다 독립된 전역 상태 사본을 가지므로 안전하다.
-    실제 시뮬레이션 로직은 batch_worker.run_disorder()에 있다.
+    tasks의 각 항목이 병렬 단위다 — KG 모드는 disorder 하나, 프로필 모드는
+    프로필 JSON 파일 하나. 각 항목을 별도 프로세스(ProcessPoolExecutor, spawn)에서
+    실행하며 동시 실행 수는 parallel_disorders로 제한한다. patient.py / utils/llm.py는
+    SYSTEM_PROMPT나 현재 로그 경로 등을 모듈 전역 변수로 관리하기 때문에, 같은
+    프로세스 안에서 스레드로 병렬 실행하면 서로의 상태를 덮어쓰는 레이스 컨디션이
+    생긴다. 프로세스를 분리하면 각자 독립된 전역 상태 사본을 가지므로 안전하다.
+    실제 시뮬레이션 로직은 batch_worker.run_disorder() / run_profile()에 있다.
     """
     import queue as _queue
     import multiprocessing as mp
     from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 
-    from batch_worker import run_disorder
-
-    codes = sorted(disorder_map.keys())
-    total = len(codes) * runs_per_disorder
+    total = sum(t["n_runs"] for t in tasks)
 
     with _batch_lock:
         _batch_state["running"] = True
@@ -283,16 +449,17 @@ def _run_batch_evaluation(
         _batch_state["format_failures"] = 0
 
     try:
-        max_workers = max(1, min(int(parallel_disorders), len(codes)))
+        max_workers = max(1, min(int(parallel_disorders), len(tasks)))
         print(
-            f"[batch] parallel_disorders={max_workers} (of {len(codes)} disorders)",
+            f"[batch] mode={mode} parallel={max_workers} "
+            f"(of {len(tasks)} {'disorders' if mode == 'kg' else 'profiles'}), total_runs={total}",
             flush=True,
         )
 
         ctx = mp.get_context("spawn")
         manager = ctx.Manager()
         progress_queue = manager.Queue()
-        received_per_code: dict[str, int] = {code: 0 for code in codes}
+        received_per_key: dict[str, int] = {t["key"]: 0 for t in tasks}
 
         def _drain_progress() -> None:
             while True:
@@ -303,23 +470,14 @@ def _run_batch_evaluation(
                 with _batch_lock:
                     _batch_state["done"] += 1
                     _batch_state["current"] = f"{msg['code']} run {msg['run']}/{msg['total_runs']}"
-                received_per_code[msg["code"]] = received_per_code.get(msg["code"], 0) + 1
+                received_per_key[msg["code"]] = received_per_key.get(msg["code"], 0) + 1
 
         with ProcessPoolExecutor(max_workers=max_workers, mp_context=ctx) as executor:
             futures = {
-                executor.submit(
-                    run_disorder,
-                    code,
-                    disorder_map[code],
-                    runs_per_disorder,
-                    difficulty,
-                    MAX_TURNS,
-                    str(logs_dir),
-                    str(acc_path.parent),
-                    progress_queue,
-                ): code
-                for code in codes
+                executor.submit(task["target"], *task["args"], progress_queue): task["key"]
+                for task in tasks
             }
+            task_by_key = {t["key"]: t for t in tasks}
             pending = set(futures)
 
             while pending:
@@ -327,19 +485,23 @@ def _run_batch_evaluation(
                 finished, pending = wait(pending, timeout=0.2, return_when=FIRST_COMPLETED)
                 for fut in finished:
                     code = futures[fut]
+                    task = task_by_key[code]
                     try:
                         result = fut.result()
                     except Exception as e:
-                        print(f"[batch] disorder {code} failed: {e}", flush=True)
+                        print(f"[batch] task {code} failed: {e}", flush=True)
+                        from batch_worker import _true_icd10_code
                         result = {
-                            "disease_name": disorder_map[code],
+                            "disease_name": task["disease_name"],
+                            "disease_code": task["disease_code"],
+                            "icd10_code": _true_icd10_code(task["disease_code"]),
                             "correct": 0,
-                            "total": runs_per_disorder,
+                            "total": task["n_runs"],
                             "accuracy": 0.0,
                             "runs": [],
                         }
                         # 프로세스가 통째로 죽어 progress 메시지가 덜 도착한 만큼 done을 보정
-                        missing = runs_per_disorder - received_per_code.get(code, 0)
+                        missing = task["n_runs"] - received_per_key.get(code, 0)
                         if missing > 0:
                             with _batch_lock:
                                 _batch_state["done"] += missing
@@ -363,14 +525,18 @@ def _run_batch_evaluation(
             if total_simulations > 0 else 1.0
         )
 
+        runs_each = max((t["n_runs"] for t in tasks), default=0)
+        source = f"difficulty={difficulty}" if mode == "kg" else "source=profiles"
+        key_header = "Code" if mode == "kg" else "Profile"
         lines: list[str] = [
-            "=" * 60,
-            f"Batch Evaluation Results  (difficulty={difficulty}, runs={runs_per_disorder})",
+            "=" * 72,
+            f"Batch Evaluation Results  (mode={mode}, {source}, runs={runs_each}, "
+            f"max_turns={max_turns})",
             f"Format compliance rate: {fmt_compliance:.2%}  "
             f"({batch_format_failures} format failures / {total_simulations} simulations)",
-            "=" * 60,
-            f"{'Code':<8} {'Accuracy':>10}  {'Correct':>8}  Disease Name",
-            "-" * 60,
+            "=" * 72,
+            f"{key_header:<22} {'Accuracy':>10}  {'Correct':>8}  Disease Name (ICD-10)",
+            "-" * 72,
         ]
         overall_correct = 0
         overall_total = 0
@@ -378,10 +544,12 @@ def _run_batch_evaluation(
             r = results_snapshot[code]
             overall_correct += r["correct"]
             overall_total += r["total"]
+            icd = r.get("icd10_code")
+            target = f"{r['disease_name']} ({icd})" if icd else r["disease_name"]
             lines.append(
-                f"{code:<8} {r['accuracy']:>10.2%}  {r['correct']:>3}/{r['total']:<3}  {r['disease_name']}"
+                f"{code:<22} {r['accuracy']:>10.2%}  {r['correct']:>3}/{r['total']:<3}  {target}"
             )
-        lines.append("-" * 60)
+        lines.append("-" * 72)
         if overall_total:
             overall_acc = overall_correct / overall_total
             lines.append(
@@ -409,7 +577,9 @@ def _run_batch_evaluation(
 def batch_eval():
     """배치 평가 시작 엔드포인트.
     Body (JSON, optional):
-      { "runs_per_disorder": 10, "difficulty": "medium", "parallel_disorders": 4 }
+      { "runs_per_disorder": 10, "difficulty": "medium",
+        "max_turns": 10, "parallel_disorders": 4 }
+    max_turns: 생략 시 config의 simulation.max_turns.
     parallel_disorders: 동시에 실행할 disorder(프로세스) 개수. 생략 시
     config.json의 batch.parallel_disorders(기본 4)를 사용한다.
     """
@@ -422,6 +592,22 @@ def batch_eval():
     difficulty = str(body.get("difficulty", "medium")).strip()
     default_parallel = int((CONFIG.get("batch") or {}).get("parallel_disorders", 4))
     parallel_disorders = int(body.get("parallel_disorders", default_parallel))
+
+    try:
+        max_turns = int(body.get("max_turns", MAX_TURNS))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "max_turns must be an integer"}), 400
+    if max_turns < 1:
+        return jsonify({"ok": False, "error": "max_turns must be >= 1"}), 400
+
+    # 환자 소스: True = KnowledgeGraph에서 즉석 생성, False = 미리 만든 프로필 JSON 순회
+    use_kg = bool(body.get("use_knowledge_graph", True))
+    runs_per_profile = int(body.get("runs_per_profile", 1))
+    if runs_per_profile < 1:
+        return jsonify({"ok": False, "error": "runs_per_profile must be >= 1"}), 400
+    profile_root = Path(str(body.get("profile_root", "")).strip()) if not use_kg else None
+    if not use_kg and not str(profile_root):
+        return jsonify({"ok": False, "error": "profile_root is required when use_knowledge_graph is false"}), 400
 
     try:
         disorder_map = _load_disorder_map()
@@ -441,26 +627,78 @@ def batch_eval():
             }), 400
         print(f"[batch] disease filter → {sorted(disorder_map.keys())}", flush=True)
 
-    from utils.paths import PROJECT_ROOT
+    from utils.paths import artifact_dirs, ensure_run_root
     run_dir = get_run_dir()
-    logs_dir = PROJECT_ROOT / "logs" / run_dir
+    ensure_run_root("batch")
+    results_dir, logs_dir, _ = artifact_dirs(run_dir, mode="batch")
     logs_dir.mkdir(parents=True, exist_ok=True)
-    acc_path = PROJECT_ROOT / "results" / run_dir / "acc.txt"
+    results_dir.mkdir(parents=True, exist_ok=True)
+    acc_path = results_dir / "acc.txt"
 
-    print(f"[batch] run_dir = {run_dir}", flush=True)
+    # ── 실행 단위(task) 구성 ──────────────────────────────────────────────
+    # KG 모드   : disorder 하나 = task 하나 (질환마다 runs_per_disorder회)
+    # 프로필 모드: 프로필 JSON 하나 = task 하나 (파일마다 runs_per_profile회)
+    from batch_worker import run_disorder, run_profile
+
+    tasks: list[dict] = []
+    if use_kg:
+        for code in sorted(disorder_map.keys()):
+            tasks.append({
+                "key": code,
+                "disease_name": disorder_map[code],
+                "disease_code": code,
+                "n_runs": runs,
+                "target": run_disorder,
+                "args": (code, disorder_map[code], runs, difficulty, max_turns,
+                         str(logs_dir), str(results_dir)),
+            })
+    else:
+        try:
+            profiles = _collect_profiles(profile_root)
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 400
+        if not profiles:
+            return jsonify({
+                "ok": False,
+                "error": f"No profile JSON found under {profile_root}",
+            }), 400
+        for p in profiles:
+            code = _disease_code_from_profile(p)
+            name = disorder_map.get(code, code or p.stem)
+            tasks.append({
+                "key": p.stem,
+                "disease_name": name,
+                "disease_code": code,
+                "n_runs": runs_per_profile,
+                "target": run_profile,
+                "args": (str(p), name, code, runs_per_profile, max_turns,
+                         str(logs_dir), str(results_dir)),
+            })
+
+    print(
+        f"[batch] run_dir = {run_dir} | mode={'kg' if use_kg else 'profile'} | "
+        f"tasks={len(tasks)}",
+        flush=True,
+    )
 
     t = threading.Thread(
         target=_run_batch_evaluation,
-        args=(disorder_map, runs, difficulty, logs_dir, acc_path, parallel_disorders),
+        args=(tasks, difficulty, logs_dir, acc_path, parallel_disorders, max_turns,
+              "kg" if use_kg else "profile"),
         daemon=True,
     )
     t.start()
 
     return jsonify({
         "ok": True,
-        "disorders": len(disorder_map),
+        "mode": "kg" if use_kg else "profile",
+        "disorders": len(tasks),
+        "total_simulations": sum(t_["n_runs"] for t_ in tasks),
         "runs_per_disorder": runs,
+        "runs_per_profile": runs_per_profile,
+        "profile_root": str(profile_root) if not use_kg else None,
         "difficulty": difficulty,
+        "max_turns": max_turns,
         "parallel_disorders": parallel_disorders,
         "run_dir": run_dir,
         "logs_dir": str(logs_dir),
@@ -483,8 +721,17 @@ def batch_status():
             "results_count": len(_batch_state["results"]),
             "format_failures": ff,
             "format_compliance_rate": round(1.0 - ff / total_sims, 4) if total_sims else 1.0,
+            # UI(batch 결과 표)는 run 단위로 Pred/Match를 그리므로 runs를 함께 내려준다.
+            # 다만 reason/candidates 같은 긴 필드는 표에서 쓰지 않으므로 제외해 응답을 가볍게 유지한다.
             "results": {
-                code: {k: v for k, v in info.items() if k != "runs"}
+                code: {
+                    **{k: v for k, v in info.items() if k != "runs"},
+                    "runs": [
+                        {k: run.get(k) for k in ("run", "final_diagnosis", "correct", "error")
+                         if k in run}
+                        for run in (info.get("runs") or [])
+                    ],
+                }
                 for code, info in _batch_state["results"].items()
             },
         }
@@ -493,7 +740,30 @@ def batch_status():
 
 @app.route("/simulate") # start simulation
 def simulate(): # prompts loading
-    rotate_log_file()  # 시뮬레이션마다 새 loggingN.txt 생성
+    # 단건 실행도 배치와 같은 run 폴더 규칙을 따른다:
+    #   saved/run_single_<날짜>/{logs,results,analysis}/<patient>/<judge>/<doctor>/
+    # analysis는 폴더만 만들어 두고 비워 둔다 — 단건은 화면에서 바로 확인하는 용도이고,
+    # 필요하면 나중에 single 결과를 모아 eval/reporting을 따로 돌린다.
+    from utils.paths import artifact_dirs, ensure_run_root
+
+    ensure_run_root("single")
+    single_run_dir = get_run_dir()
+    single_results_dir, single_logs_dir, _ = artifact_dirs(single_run_dir, mode="single")
+    single_logs_dir.mkdir(parents=True, exist_ok=True)
+    single_results_dir.mkdir(parents=True, exist_ok=True)
+
+    case_id = _single_case_id()
+    txt_log_path = single_logs_dir / f"{case_id}.txt"
+    json_log_path = single_logs_dir / f"{case_id}.json"
+    result_json_path = single_results_dir / f"{case_id}_result.json"
+    set_log_path(txt_log_path)
+
+    # doctor.py의 저장 경로는 모듈 로드 시점(배치 기준)에 고정되어 있다. None으로 두어
+    # 단건이 doctor_memory.json/transcript.json을 따로 남기지 않게 한다 — 두 정보 모두
+    # logs/<case>.json 에 이미 들어가고, 배치도 별도 파일을 만들지 않는다.
+    doctor.DOCTOR_MEMORY_FILE = None
+    doctor.TRANSCRIPT_FILE = None
+    print(f"[simulate] case={case_id} → {txt_log_path}", flush=True)
     patient_system = patient.SYSTEM_PROMPT
     doctor_model = get_doctor_model_name()
     inference_system = doctor.get_inference_system_prompt(doctor_model)
@@ -523,7 +793,13 @@ def simulate(): # prompts loading
                 {"role": "user", "content": doctor.opening_user_message()},
             ]
             _log_llm_history("Doctor LLM (questioning)", "opening", opening_messages)
-            doctor_raw = llm_chat(opening_messages, role="doctor")
+            doctor_raw = llm_chat(
+                opening_messages,
+                role="doctor",
+                phase="opening",
+                turn=0,
+                source="doctor.opening_user_message",
+            )
             q_open = doctor.parse_questioning_result(doctor_raw)
             question_text = q_open["question"]
             doctor_memory["opening_question"] = {
@@ -569,6 +845,9 @@ def simulate(): # prompts loading
                     align_messages,
                     max_new_tokens=align_tokens,
                     role="patient",
+                    phase="alignment",
+                    turn=t,
+                    source="patient.build_alignment_messages",
                 )
                 parsed = patient.parse_alignment_result(align_raw)
                 strategy_text = patient.format_alignment_for_response(parsed)
@@ -585,7 +864,13 @@ def simulate(): # prompts loading
                     patient_hist, strategy_text
                 )
                 _log_llm_history("Patient LLM (response)", f"turn {t}", resp_messages)
-                patient_msg = llm_chat(resp_messages, role="patient")
+                patient_msg = llm_chat(
+                    resp_messages,
+                    role="patient",
+                    phase="response",
+                    turn=t,
+                    source="patient.build_response_messages",
+                )
                 patient_hist.append({"role": "assistant", "content": patient_msg})
                 transcript.append(("patient", patient_msg))
 
@@ -604,7 +889,14 @@ def simulate(): # prompts loading
                     {"role": "user", "content": doctor.inference_user_payload(tr_text, previous_candidates=prev_cands)},
                 ]
                 _log_llm_history("Doctor LLM (inference)", f"turn {t}", inf_messages)
-                inf_raw = llm_chat(inf_messages, max_new_tokens=inf_tokens, role="doctor")
+                inf_raw = llm_chat(
+                    inf_messages,
+                    max_new_tokens=inf_tokens,
+                    role="doctor",
+                    phase="inference",
+                    turn=t,
+                    source="doctor.inference_user_payload",
+                )
                 candidates, inf_note, is_final = doctor.parse_inference_result(inf_raw)
 
                 doctor.update_doctor_memory_after_inference(
@@ -640,7 +932,14 @@ def simulate(): # prompts loading
                         },
                     ]
                     _log_llm_history("Doctor LLM (final)", f"turn {t}", fin_messages)
-                    diagnosis_raw = llm_chat(fin_messages, max_new_tokens=diag_tokens, role="doctor")
+                    diagnosis_raw = llm_chat(
+                        fin_messages,
+                        max_new_tokens=diag_tokens,
+                        role="doctor",
+                        phase="final",
+                        turn=t,
+                        source="doctor.final_diagnosis_user_payload",
+                    )
                     yield emit(
                         {
                             "event": "diagnosis",
@@ -684,7 +983,13 @@ def simulate(): # prompts loading
                     f"follow-up after turn {t}",
                     questioning_messages,
                 )
-                doctor_raw = llm_chat(questioning_messages, role="doctor")
+                doctor_raw = llm_chat(
+                    questioning_messages,
+                    role="doctor",
+                    phase="followup",
+                    turn=t,
+                    source="doctor.questioning_followup_user_payload",
+                )
                 q_follow = doctor.parse_questioning_result(doctor_raw)
                 question_text = q_follow["question"]
 
@@ -721,6 +1026,12 @@ def simulate(): # prompts loading
             doctor.persist_doctor_memory_json(doctor_memory)
             yield emit({"event": "doctor_memory", "state": doctor_memory})
             yield emit({"event": "error", "message": str(e)})
+
+        # 배치와 동일한 산출물을 남긴다: <case>.json(전사) + <case>_result.json(증상/후보군)
+        _persist_single_artifacts(
+            case_id, json_log_path, txt_log_path, result_json_path,
+            transcript, doctor_memory,
+        )
 
         yield emit({"event": "done"})
 

@@ -29,7 +29,13 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
+import sys as _sys
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_REPO_ROOT))
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+from utils.paths import ANALYSIS_ROOT, LOGS_ROOT, RESULTS_ROOT
 
 MODEL_LABELS = {
     "gemini-3.1-flash-lite": "Gemini 3.1 Flash-Lite",
@@ -77,7 +83,7 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
-    cmp_dir = BASE_DIR / "analysis" / args.judge / args.judge / "comparison"
+    cmp_dir = ANALYSIS_ROOT / args.judge / args.judge / "comparison"
 
     tables = {
         "inference": _load(cmp_dir / "inference_eval_comparison.json"),

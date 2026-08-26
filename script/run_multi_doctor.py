@@ -3,7 +3,7 @@
 Multi-doctor batch evaluation orchestrator.
 
 For each doctor configuration:
-  1. Patch config.json with the new doctor model + provider
+  1. Patch config/config.json with the new doctor model + provider
   2. Start Flask server (app.py)
   3. Wait until /api/status reports loaded
   4. POST /api/batch_eval  (10 runs per disorder, all diseases)
@@ -33,7 +33,7 @@ import requests
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).parent.parent
-CONFIG_PATH  = PROJECT_ROOT / "config.json"
+CONFIG_PATH  = PROJECT_ROOT / "config" / "config.json"
 SERVER_PORT  = 5001
 BASE_URL     = f"http://localhost:{SERVER_PORT}"
 RUNS_PER_DISORDER = 10
@@ -182,7 +182,7 @@ def main() -> None:
         cfg = copy.deepcopy(base_cfg)
         cfg["llm"]["doctor"] = {"provider": provider, "model": model}
         _save_config(cfg)
-        print(f"[orchestrator] config.json updated → doctor: {model}", flush=True)
+        print(f"[orchestrator] config/config.json updated → doctor: {model}", flush=True)
 
         # 2. Start Flask
         proc = _start_server()

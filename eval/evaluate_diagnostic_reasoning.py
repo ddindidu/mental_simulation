@@ -31,6 +31,7 @@ if str(_REPO_ROOT) not in _sys.path:
 import numpy as np
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+from utils.paths import ANALYSIS_ROOT, LOGS_ROOT, RESULTS_ROOT
 KG_DIR   = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN"
 
 
@@ -159,8 +160,8 @@ def main() -> None:
         judge_checklist, compute_score, score_episode = _setup()
 
     run_dir     = _get_run_dir()
-    results_dir = args.results if args.results else BASE_DIR / "results" / run_dir
-    logs_dir    = args.logs    if args.logs    else BASE_DIR / "logs"    / run_dir
+    results_dir = args.results if args.results else RESULTS_ROOT / run_dir
+    logs_dir    = args.logs    if args.logs    else LOGS_ROOT    / run_dir
 
     # Load KG
     criteria   = json.loads((KG_DIR / "diagnostic_criteria.json").read_text(encoding="utf-8"))
