@@ -84,7 +84,7 @@ def run_interview_simulation(
 
     for t in range(1, max_turns + 1):
         doctor_last = patient_hist[-1]["content"]
-        align_messages = patient.build_alignment_messages(doctor_last, t)
+        align_messages = patient.build_alignment_messages(doctor_last, t, patient_hist)
         _log(verbose, "Patient LLM (alignment)", f"turn {t}", align_messages)
         align_raw = llm_chat(
             align_messages,

@@ -103,7 +103,10 @@ def set_patient_config():
     disease_code     = body.get("disease_code")
     difficulty_level = body.get("difficulty_level")
     use_kg           = body.get("use_knowledge_graph")
+    conversation_style = body.get("conversation_style")
     try:
+        if conversation_style:
+            patient.set_conversation_style(conversation_style)
         patient.reinitialize(
             disease_code=disease_code,
             difficulty_level=difficulty_level,
@@ -186,9 +189,14 @@ def simulation_profiles():
     try:
         catalog = [_scan_profile_root(r) for r in _profile_roots()]
         catalog = [r for r in catalog if r["folders"]]  # JSON이 하나도 없는 루트는 숨김
-        return jsonify({"roots": catalog, "current": _current_profile_selection(catalog)})
+        return jsonify({
+            "roots": catalog,
+            "current": _current_profile_selection(catalog),
+            "styles": patient.conversation_style_names(),
+            "current_style": patient.current_conversation_style(),
+        })
     except Exception as e:
-        return jsonify({"roots": [], "current": None, "error": str(e)}), 500
+        return jsonify({"roots": [], "current": None, "styles": [], "error": str(e)}), 500
 
 
 @app.route("/api/simulation_profile", methods=["POST"])  # 프로필 선택 → patient 재빌드
@@ -196,6 +204,7 @@ def set_simulation_profile():
     body = request.get_json(force=True) or {}
     root_id = str(body.get("root_id", "")).strip()
     relative_path = str(body.get("relative_path", "")).strip()
+    conversation_style = body.get("conversation_style")
     if not root_id or not relative_path:
         return jsonify({"ok": False, "error": "root_id and relative_path are required"}), 400
 
@@ -211,10 +220,14 @@ def set_simulation_profile():
         return jsonify({"ok": False, "error": f"Profile not found: {relative_path}"}), 404
 
     try:
+        # 프로필을 먼저 물린 뒤 스타일을 적용한다 (스타일 적용이 SYSTEM_PROMPT를 다시 굽는다).
         patient.set_symptom_profile_path(target)
+        if conversation_style:
+            patient.set_conversation_style(conversation_style)
         return jsonify({
             "ok": True,
             "profile_path": str(target),
+            "conversation_style": patient.current_conversation_style(),
             "patient_system_html": system_prompt_to_html(patient.SYSTEM_PROMPT),
         })
     except Exception as e:
@@ -250,6 +263,8 @@ def _persist_single_artifacts(
     result_json_path: Path,
     transcript: list,
     doctor_memory: dict,
+    conversation_style: str = "",
+    profile_path: str = "",
 ) -> None:
     """단건 실행 산출물을 배치와 같은 형식으로 저장한다.
 
@@ -260,6 +275,8 @@ def _persist_single_artifacts(
         json_log_path.write_text(
             json.dumps({
                 "case_id": case_id,
+                "profile_path": profile_path,
+                "conversation_style": conversation_style,
                 "closed_at_patient_turn": doctor_memory.get("closed_at_patient_turn"),
                 "final_diagnosis": fd.get("diagnosis", ""),
                 "transcript": [{"role": r, "content": c} for r, c in transcript],
@@ -283,13 +300,18 @@ def _single_case_id() -> str:
     """단건 실행의 케이스 이름. 배치의 D001_1 / D001_S001_P001 자리에 대응한다.
 
     프로필 모드면 프로필 파일명(D005_S001_P001), KG 모드면 '<질환코드>_kg'.
-    같은 날 같은 대상을 다시 돌리면 덮어쓴다 (배치와 동일한 규칙).
+    뒤에 conversation style을 붙여(D005_S001_P001_verbose) 같은 프로필을 스타일만
+    바꿔 돌려도 서로 덮어쓰지 않게 한다. eval 쪽 정답 매칭은 앞머리의 D코드만
+    보므로(^(D\d+)) 접미사를 붙여도 안전하다.
+    같은 날 같은 대상+같은 스타일을 다시 돌리면 덮어쓴다 (배치와 동일한 규칙).
     """
     cfg = patient.current_config()
+    style = cfg.get("conversation_style") or ""
+    suffix = f"_{style}" if style else ""
     if cfg.get("use_knowledge_graph"):
-        return f"{cfg.get('disease_code') or 'unknown'}_kg"
+        return f"{cfg.get('disease_code') or 'unknown'}_kg{suffix}"
     profile_path = cfg.get("symptom_profile_path") or ""
-    return Path(profile_path).stem or "single"
+    return (Path(profile_path).stem or "single") + suffix
 
 
 def _load_disorder_map() -> dict[str, str]:
@@ -763,7 +785,12 @@ def simulate(): # prompts loading
     # logs/<case>.json 에 이미 들어가고, 배치도 별도 파일을 만들지 않는다.
     doctor.DOCTOR_MEMORY_FILE = None
     doctor.TRANSCRIPT_FILE = None
-    print(f"[simulate] case={case_id} → {txt_log_path}", flush=True)
+    conversation_style = patient.current_conversation_style()
+    profile_path = str(patient.current_config().get("symptom_profile_path") or "")
+    print(
+        f"[simulate] case={case_id} | style={conversation_style} → {txt_log_path}",
+        flush=True,
+    )
     patient_system = patient.SYSTEM_PROMPT
     doctor_model = get_doctor_model_name()
     inference_system = doctor.get_inference_system_prompt(doctor_model)
@@ -839,7 +866,7 @@ def simulate(): # prompts loading
 
             for t in range(1, MAX_TURNS + 1):
                 doctor_last = patient_hist[-1]["content"]
-                align_messages = patient.build_alignment_messages(doctor_last, t)
+                align_messages = patient.build_alignment_messages(doctor_last, t, patient_hist)
                 _log_llm_history("Patient LLM (alignment)", f"turn {t}", align_messages)
                 align_raw = llm_chat(
                     align_messages,
@@ -1031,6 +1058,8 @@ def simulate(): # prompts loading
         _persist_single_artifacts(
             case_id, json_log_path, txt_log_path, result_json_path,
             transcript, doctor_memory,
+            conversation_style=conversation_style,
+            profile_path=profile_path,
         )
 
         yield emit({"event": "done"})

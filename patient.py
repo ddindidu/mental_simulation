@@ -19,6 +19,11 @@ _KG_BASE_DIR: str = str(
     _PATIENT_CFG.get("kg_base_dir", "/home/mlp/hgyoo/mentals/simulation_new/mentalbench")
 )
 
+# 두 프롬프트가 되돌아보는 대화 길이 — 의사-환자 교환 쌍의 수. 3이면 지난 세 번의
+# 주고받음을 보고 이번 질문에 답한다. 0 이하면 전체 대화를 넘긴다.
+DEFAULT_CONTEXT_WINDOW = 3
+_CONTEXT_WINDOW: int = int(_PATIENT_CFG.get("context_window", DEFAULT_CONTEXT_WINDOW))
+
 
 def _resolve_profile_path(path: str | Path) -> Path:
     """Resolve a configured profile path relative to the project root."""
@@ -428,8 +433,8 @@ def format_selectable_items(index: dict[str, tuple[str, str]] | None = None) -> 
 
 
 ALIGNMENT_PROMPT = """/no_think
-You are an assistant analyst. Pick the ONE item of the [Symptom Profile] that the doctor's
-**last question** is asking about.
+You are an assistant analyst. Looking at the recent dialogue and the patient's symptom
+profile, pick the ONE item to answer the doctor's **last utterance** with.
 
 [Symptom Profile]
 {symptom_profile}
@@ -468,18 +473,26 @@ def build_alignment_system_prompt() -> str:
 def build_alignment_messages(
     doctor_last_message: str,
     patient_turn_index: int,
+    patient_hist: list[dict[str, Any]] | None = None,
+    context_window: int | None = None,
 ) -> list[dict[str, str]]:
-    """Profile alignment only: system(profile) + user(last doctor utterance)."""
+    """Profile alignment only: system(profile) + user(recent dialogue + last question).
+
+    The recent turns are there so a follow-up question resolves — "how long has that been
+    going on?" only names an item once you can see what was just said.
+    """
+    parts = [
+        f"patient_turn_index: {patient_turn_index}",
+        "(If 1, this is the patient's first reply — choose chief_complaint.)",
+    ]
+    recent = _recent_messages(patient_hist or [], context_window)
+    if len(recent) > 1:
+        dialogue = format_full_dialogue_for_response(recent[:-1], context_window=0)
+        parts.append(f"\n[Recent dialogue]\n{dialogue}")
+    parts.append(f"\nDoctor's last question:\n{doctor_last_message.strip()}")
     return [
         {"role": "system", "content": build_alignment_system_prompt()},
-        {
-            "role": "user",
-            "content": (
-                f"patient_turn_index: {patient_turn_index}\n"
-                f"(If 1, this is the patient's first reply — choose chief_complaint.)\n\n"
-                f"Doctor's question:\n{doctor_last_message.strip()}"
-            ),
-        },
+        {"role": "user", "content": "\n".join(parts)},
     ]
 
 
@@ -581,10 +594,31 @@ def format_alignment_for_response(parsed: dict[str, Any]) -> str:
 
 # ── 2) Response generation ────────────────────────────────────────────────────
 
-def format_full_dialogue_for_response(patient_hist: list[dict[str, Any]]) -> str:
-    """Convert patient_hist (excluding system) to Doctor / Patient labeled text."""
+def _recent_messages(
+    patient_hist: list[dict[str, Any]],
+    context_window: int | None = None,
+) -> list[dict[str, Any]]:
+    """The last `context_window` doctor-patient exchanges, oldest first.
+
+    A patient recalls the last few exchanges, not the whole consultation, and a shorter
+    window also keeps the two prompts from growing with every turn. Counted in exchanges
+    rather than messages so a window never starts mid-way through one.
+    """
+    window = _CONTEXT_WINDOW if context_window is None else int(context_window)
+    messages = [m for m in patient_hist if m.get("role") != "system"]
+    if window > 0:
+        # 마지막 메시지는 이번 의사 질문이므로 그것을 뺀 나머지에서 쌍 단위로 센다.
+        messages = messages[-(2 * window + 1):]
+    return messages
+
+
+def format_full_dialogue_for_response(
+    patient_hist: list[dict[str, Any]],
+    context_window: int | None = None,
+) -> str:
+    """Convert the recent part of patient_hist to Doctor / Patient labeled text."""
     lines: list[str] = []
-    for msg in patient_hist:
+    for msg in _recent_messages(patient_hist, context_window):
         role = msg.get("role")
         if role == "system":
             continue
@@ -599,19 +633,20 @@ def format_full_dialogue_for_response(patient_hist: list[dict[str, Any]]) -> str
 def build_response_messages(
     patient_hist: list[dict[str, Any]],
     alignment_strategy_text: str,
+    context_window: int | None = None,
 ) -> list[dict[str, str]]:
     """
     Response generation: system(patient guidelines + alignment result) + user(full dialogue).
     patient_hist includes the doctor's user turn; patient assistant turn not yet appended.
     """
-    dialogue = format_full_dialogue_for_response(patient_hist)
+    dialogue = format_full_dialogue_for_response(patient_hist, context_window)
     system = (
         SYSTEM_PROMPT
         + "\n\n[This Turn: Profile Item to Talk About]\n"
         + alignment_strategy_text
     )
     user = (
-        "Below is the full consultation dialogue so far. "
+        "Below is the recent part of the consultation dialogue. "
         "Reply in English as the Patient to the last Doctor utterance.\n"
         "Say what [This Turn: Profile Item to Talk About] holds, told in your "
         "[Conversation Style].\n\n"
@@ -975,6 +1010,13 @@ def reinitialize(
     return SYSTEM_PROMPT
 
 
+def set_context_window(window: int) -> int:
+    """Change how many recent messages the two patient prompts see."""
+    global _CONTEXT_WINDOW
+    _CONTEXT_WINDOW = int(window)
+    return _CONTEXT_WINDOW
+
+
 def current_config() -> dict:
     """현재 환자 설정을 딕셔너리로 반환한다."""
     return {
@@ -984,4 +1026,5 @@ def current_config() -> dict:
         "difficulty_level": _DIFFICULTY,
         "kg_base_dir": _KG_BASE_DIR,
         "symptom_profile_path": str(_PROFILE_PATH),
+        "context_window": _CONTEXT_WINDOW,
     }
