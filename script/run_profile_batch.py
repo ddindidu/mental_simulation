@@ -31,8 +31,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         "--profiles-root", type=Path,
-        default=PROJECT_ROOT / "data" / "v1_only_manifestation",
+        default=PROJECT_ROOT / "data" / "v2_final_profiles",
         help="Root directory to recursively glob *.json profiles from.",
+    )
+    parser.add_argument(
+        "--styles", nargs="*", default=None,
+        help="Conversation styles to run each profile under (default: the config's single "
+             "style). Every style of one profile is queued before the next profile.",
     )
     parser.add_argument("--workers", type=int, default=4, help="Parallel simulation processes.")
     parser.add_argument("--limit", type=int, default=None, help="Only process the first N profiles (smoke test).")
@@ -79,10 +84,15 @@ def main() -> int:
     if args.limit:
         profiles = profiles[: args.limit]
 
+    # 프로필 하나를 모든 스타일로 끝내고 다음 프로필로 넘어가도록 profile-major 로 세운다.
+    styles = args.styles or [None]
+    jobs = [(p, st) for p in profiles for st in styles]
+
     print(
         f"[run_profile_batch] patient={get_patient_model_name()} "
         f"judge={get_judge_model_name()} doctor={get_doctor_model_name()} "
-        f"run_dir={run_dir} profiles={len(profiles)} workers={args.workers} max_turns={max_turns}",
+        f"run_dir={run_dir} profiles={len(profiles)} styles={styles} "
+        f"runs={len(profiles) * len(styles)} workers={args.workers} max_turns={max_turns}",
         flush=True,
     )
 
@@ -93,8 +103,8 @@ def main() -> int:
     errors: list[str] = []
     with ProcessPoolExecutor(max_workers=max(1, args.workers), mp_context=ctx) as executor:
         futures = {
-            executor.submit(run_profile, str(p), str(logs_dir), str(results_dir), max_turns): p
-            for p in profiles
+            executor.submit(run_profile, str(p), str(logs_dir), str(results_dir), max_turns, st): p
+            for p, st in jobs
         }
         for fut in as_completed(futures):
             p = futures[fut]
@@ -111,8 +121,11 @@ def main() -> int:
                 n_skipped += 1
             elif status == "done":
                 n_ok += 1
+            case = res.get("profile_id")
+            if res.get("style"):
+                case = f"{case}_{res['style']}"
             print(
-                f"[{done}/{len(profiles)}] {res.get('profile_id')}: {marker}"
+                f"[{done}/{len(jobs)}] {case}: {marker}"
                 + (f" ({res.get('final_diagnosis')})" if res.get("final_diagnosis") else "")
                 + (f"  !! {res.get('error')}" if res.get("error") else ""),
                 flush=True,
@@ -121,7 +134,7 @@ def main() -> int:
                 errors.append(f"{res.get('profile_id')}: {res.get('error')}")
 
     print(
-        f"[run_profile_batch] Done. {len(profiles)} total, {n_ok} ran, "
+        f"[run_profile_batch] Done. {len(jobs)} runs ({len(profiles)} profiles x {len(styles)} styles), {n_ok} ran, "
         f"{n_skipped} skipped, {len(errors)} errors.",
         flush=True,
     )

@@ -22,8 +22,12 @@ def run_profile(
     logs_dir: str,
     results_dir: str,
     max_turns: int,
+    style: str | None = None,
 ) -> dict[str, Any]:
     """Run one simulation for a single profile JSON. Returns a status dict.
+
+    `style` overrides the conversation style for this run only; with it the same profile
+    can be run once per style, each landing in its own <profile>_<style> files.
 
     Skips (status="skipped") if both the json log and result JSON already exist,
     so a batch can be safely re-run to pick up where it left off.
@@ -32,13 +36,6 @@ def run_profile(
     profile_id = profile_p.stem
     logs_path = Path(logs_dir)
     results_path = Path(results_dir)
-
-    txt_log_path = logs_path / f"{profile_id}.txt"
-    json_log_path = logs_path / f"{profile_id}.json"
-    result_json_path = results_path / f"{profile_id}_result.json"
-
-    if json_log_path.exists() and result_json_path.exists():
-        return {"profile_id": profile_id, "status": "skipped"}
 
     # KG 모드 차단. patient 는 import 시점에 프로필을 빌드하므로 그 전에 검사한다.
     from utils.config import CONFIG
@@ -52,6 +49,20 @@ def run_profile(
     import patient
     from simulation_core import run_interview_simulation
     from utils.llm import set_log_path
+
+    # 스타일을 파일명에 붙여 같은 프로필을 스타일만 바꿔 돌려도 덮어쓰지 않게 한다.
+    # (eval 은 파일명 앞머리의 D코드만 보므로 접미사는 안전하다.)
+    if style:
+        patient.set_conversation_style(style)
+    style = patient.current_conversation_style()
+    case_id = f"{profile_id}_{style}" if style else profile_id
+
+    txt_log_path = logs_path / f"{case_id}.txt"
+    json_log_path = logs_path / f"{case_id}.json"
+    result_json_path = results_path / f"{case_id}_result.json"
+
+    if json_log_path.exists() and result_json_path.exists():
+        return {"profile_id": profile_id, "style": style, "status": "skipped"}
 
     set_log_path(txt_log_path)
 
@@ -75,6 +86,7 @@ def run_profile(
     json_log_data = {
         "profile_id": profile_id,
         "profile_path": str(profile_p),
+        "conversation_style": style,
         "closed_at_patient_turn": result.get("closed_at_patient_turn"),
         "final_diagnosis": fd.get("diagnosis", ""),
         "transcript": [
@@ -101,9 +113,15 @@ def run_profile(
     except Exception as e:
         return {
             "profile_id": profile_id,
+            "style": style,
             "status": "sim_ok_sd_failed",
             "final_diagnosis": fd.get("diagnosis", ""),
             "error": f"symptom_diagnosis failed: {e}",
         }
 
-    return {"profile_id": profile_id, "status": "done", "final_diagnosis": fd.get("diagnosis", "")}
+    return {
+        "profile_id": profile_id,
+        "style": style,
+        "status": "done",
+        "final_diagnosis": fd.get("diagnosis", ""),
+    }
