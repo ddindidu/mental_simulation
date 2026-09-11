@@ -68,7 +68,7 @@ def _extract_questions_and_candidates(log_file: Path) -> list[tuple[str, list[st
         b = b.strip()
         try:
             p = json.loads(b)
-            if isinstance(p, dict) and "question" in p and "category" in p:
+            if isinstance(p, dict) and "question" in p:
                 questions.append(p["question"])
             elif isinstance(p, dict) and "candidates" in p and "note" in p and "diagnosis" not in p:
                 cands_per_turn.append(p.get("candidates", []))

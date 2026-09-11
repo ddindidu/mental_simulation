@@ -101,7 +101,7 @@ def parse_dialogue(log_file: Path) -> tuple[list[tuple[str, str]], list[list[str
         b = b.strip()
         try:
             p = json.loads(b)
-            if isinstance(p, dict) and "question" in p and "category" in p:
+            if isinstance(p, dict) and "question" in p:
                 questions.append(p["question"])
             elif (
                 isinstance(p, dict)
@@ -115,7 +115,7 @@ def parse_dialogue(log_file: Path) -> tuple[list[tuple[str, str]], list[list[str
 
     # Extract patient natural-language responses (skip analyst JSON blobs)
     responses: list[str] = []
-    ANALYST = {"matched", "matched_sections", "answer_strategy"}
+    ANALYST = {"matched", "matched_section", "matched_sections", "answer_strategy"}
     for b in pat_blocks:
         b = b.strip()
         if not b:
