@@ -335,16 +335,50 @@ def format_symptom_block_for_alignment(data: dict) -> str:
     return "\n".join(out).strip() or "(No symptom profile)"
 
 
+def _rebuilt_manifestation(data: dict) -> dict | None:
+    """The rebuilt `manifestation` block, if this profile came through step 10.
+
+    There every selectable item — symptoms, diagnostic requirements, duration — already
+    carries name/description/manifestation under a settled key, so the index is a direct
+    read. Older pipeline files still need the block-by-block assembly below.
+    """
+    manifestation = data.get("manifestation")
+    if not isinstance(manifestation, dict) or not manifestation:
+        return None
+    if "clinical_profiles" not in data and "add_requirements" in data:
+        return None
+    if not all(isinstance(entry, dict) and "manifestation" in entry for entry in manifestation.values()):
+        return None
+    return manifestation
+
+
+def _resolve_chief_complaint_key(data: dict, index: dict) -> str:
+    info = data.get("patient_info")
+    if not isinstance(info, dict):
+        info = data.get("patient") if isinstance(data.get("patient"), dict) else {}
+    code = str(info.get("chief_complaint_symptom_code") or "").strip()
+    if code in index:
+        return code
+    return next(iter(index), "")
+
+
 def _build_alignment_index(data: dict) -> dict[str, tuple[str, str]]:
     """Selectable items for alignment: {key: (label, verbatim text for the reply)}.
 
-    Keys come from the `symptom` block only — the sampled symptom codes plus the
-    diagnostic-criteria items (additional_requirement_N / functional_impairment /
-    duration). The stored text is the patient-specific wording (manifestation /
-    add_requirements) so the response stage still speaks in the patient's words.
+    The stored text is the patient's own wording, so the response stage speaks in the
+    patient's words and never has to paraphrase.
     """
     global _CHIEF_COMPLAINT_KEY
     _CHIEF_COMPLAINT_KEY = ""
+
+    index: dict[str, tuple[str, str]] = {}
+
+    rebuilt = _rebuilt_manifestation(data)
+    if rebuilt is not None:
+        for key, entry in rebuilt.items():
+            _add_section(index, key, entry.get("name") or key, entry.get("manifestation"))
+        _CHIEF_COMPLAINT_KEY = _resolve_chief_complaint_key(data, index)
+        return index
 
     sampled = _sampled_features(data)
     if not sampled:
@@ -357,8 +391,6 @@ def _build_alignment_index(data: dict) -> dict[str, tuple[str, str]]:
     manifestations = manifestations if isinstance(manifestations, dict) else {}
     requirements = data.get("add_requirements")
     requirements = requirements if isinstance(requirements, dict) else {}
-
-    index: dict[str, tuple[str, str]] = {}
 
     codes = sampled.get("sampled_symptoms")
     if not isinstance(codes, list) or not codes:
@@ -411,17 +443,7 @@ def _build_alignment_index(data: dict) -> dict[str, tuple[str, str]]:
                 used.add(match)
             _add_section(index, f"{_REQ_KEY_PREFIX}{i}", req_text, patient_text)
 
-    patient_block = data.get("patient")
-    if isinstance(patient_block, dict):
-        cc_code = str(patient_block.get("chief_complaint_symptom_code") or "").strip()
-        if cc_code in index:
-            _CHIEF_COMPLAINT_KEY = cc_code
-    if not _CHIEF_COMPLAINT_KEY:
-        for code in codes:
-            if str(code) in index:
-                _CHIEF_COMPLAINT_KEY = str(code)
-                break
-
+    _CHIEF_COMPLAINT_KEY = _resolve_chief_complaint_key(data, index)
     return index
 
 
@@ -433,41 +455,137 @@ def format_selectable_items(index: dict[str, tuple[str, str]] | None = None) -> 
 
 
 ALIGNMENT_PROMPT = """/no_think
-You are an assistant analyst. Looking at the recent dialogue and the patient's symptom
-profile, pick the ONE item to answer the doctor's **last utterance** with.
+You are a patient who has come to a psychiatric clinic with {disease_name}. You are about
+to talk with the doctor.
 
-[Symptom Profile]
-{symptom_profile}
+Looking at the dialogue so far and the doctor's last question, work out what it is asking
+about, and pick the item of your symptom profile to answer it with.
 
-[Selectable Items]
-{selectable_items}
+[Symptom Profiles]
+{manifestation}
+
+[Patient Info]
+{patient_info}
+
+[Dialogue History]
+{dialogue_history}
+
+[Last Question]
+{last_question}
 
 Rules:
-- Choose exactly ONE key from [Selectable Items] — the single item closest to what the doctor
-  just asked. Never choose more than one, even if the question touches several topics; pick the
-  one the question is most directly about.
-- Copy the key exactly as written in [Selectable Items].
-- If the profile does not cover what the doctor asked, set matched=false and leave
-  matched_section empty. Do NOT force an unrelated item.
-- If patient_turn_index is 1 (patient's first reply), always choose chief_complaint.
-- Do not write an answer, a strategy, or any other text.
+- Return exactly ONE item. If the question touches several topics, return the one it is
+  most directly about — never more than one.
+- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].
+- If your profile does not cover what the doctor asked, return the text "None" for `key`,
+  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.
+- On your first reply of the consultation, always return the item whose key is your
+  chief_complaint_symptom_code, whatever the doctor opened with.
+- Do not answer the doctor, and do not write anything outside the JSON.
 
 [Output Format — JSON only, no other text]
-{"matched": true|false, "matched_section": "<one key from the list, or empty>"}
+{"key": "<key>", "name": "<name>", "description": "<description>", "reason": "<why this item>"}
 """
 
 
-def build_alignment_system_prompt() -> str:
-    # 프로필의 `symptom` 블록만 넣는다 — patient / manifestation / add_requirements는
-    # 환자 개인 정보라 alignment 단계에 노출하지 않는다.
-    symptom_block = _kg_symptom_block_cache.get("alignment_block", "")
-    if not symptom_block:
-        symptom_block = format_symptom_block_for_alignment(_load_profile())
+# 항목을 고르는 데 실제로 쓰이는 것만 넣는다. severity는 "얼마나 심한가"라 어느 항목인지와
+# 무관하고, stressor는 [Symptom Profiles]에 대응하는 항목이 없어 없는 선택지를 만들어낸다.
+ALIGNMENT_PATIENT_FIELDS = ("demographics", "chief_complaint_symptom_code")
+
+
+def format_patient_info_for_alignment(data: dict) -> str:
+    """Who this patient is — including which item they open the consultation with."""
+    info = data.get("patient_info")
+    if not isinstance(info, dict):
+        info = data.get("patient") if isinstance(data.get("patient"), dict) else {}
+    lines = [
+        f"- {key}: {info[key]}"
+        for key in ALIGNMENT_PATIENT_FIELDS
+        if key in info and not _skip_value(info[key])
+    ]
+    return "\n".join(lines) if lines else "(No patient info)"
+
+
+def format_manifestation_for_alignment(data: dict) -> str:
+    """The patient's own profile items, as the alignment stage sees them."""
+    manifestation = data.get("manifestation")
+    if not isinstance(manifestation, dict) or not manifestation:
+        return "(No profile items)"
+
+    blocks: list[str] = []
+    for key, entry in manifestation.items():
+        if not isinstance(entry, dict):
+            blocks.append(f"- key: {key}\n  description: {entry}")
+            continue
+        lines = [f"- key: {key}", f"  name: {entry.get('name') or key}"]
+        description = entry.get("description")
+        if not _skip_value(description):
+            lines.append(f"  description: {description}")
+        text = entry.get("manifestation")
+        if not _skip_value(text):
+            lines.append(f"  manifestation: {text}")
+        blocks.append("\n".join(lines))
+    return "\n".join(blocks)
+
+
+def diagnosis_name(data: dict) -> str:
+    """The disorder this patient has, from either the rebuilt or the pipeline schema."""
+    clinical = data.get("clinical_profiles")
+    if not isinstance(clinical, dict):
+        clinical = data.get("symptom") if isinstance(data.get("symptom"), dict) else {}
+    name = str(clinical.get("disease_name") or "").strip()
+    if not name:
+        sampled = clinical.get("sampled_features")
+        if isinstance(sampled, dict):
+            name = str(sampled.get("disease_name") or "").strip()
+    return name or "a psychiatric disorder"
+
+
+def build_alignment_prompt(
+    dialogue_history: str,
+    last_question: str,
+    manifestation_block: str | None = None,
+    patient_info_block: str | None = None,
+    diagnosis: str | None = None,
+) -> str:
+    profile = None
+    block = manifestation_block
+    if block is None:
+        block = _kg_symptom_block_cache.get("alignment_block")
+        if not block:
+            profile = _load_profile()
+            block = format_manifestation_for_alignment(profile)
+    info = patient_info_block
+    if info is None:
+        info = _kg_symptom_block_cache.get("patient_info_block")
+        if not info:
+            if profile is None:
+                profile = _load_profile()
+            info = format_patient_info_for_alignment(profile)
+    name = diagnosis
+    if name is None:
+        name = _kg_symptom_block_cache.get("diagnosis")
+        if not name:
+            if profile is None:
+                profile = _load_profile()
+            name = diagnosis_name(profile)
     return (
         ALIGNMENT_PROMPT
-        .replace("{symptom_profile}", symptom_block)
-        .replace("{selectable_items}", format_selectable_items())
+        .replace("{disease_name}", name)
+        .replace("{dialogue_history}", dialogue_history or "(this is the start of the consultation)")
+        .replace("{last_question}", last_question.strip())
+        .replace("{patient_info}", info)
+        .replace("{manifestation}", block)
     )
+
+
+def build_alignment_preview() -> str:
+    """The alignment prompt with the profile filled in and the per-turn slots left visible.
+
+    What the UI shows next to the response prompt: the patient runs on two system prompts,
+    and only seeing one of them hides half of how a turn is decided.
+    """
+    return build_alignment_prompt("{dialogue_history}", "{last_question}")
 
 
 def build_alignment_messages(
@@ -476,23 +594,26 @@ def build_alignment_messages(
     patient_hist: list[dict[str, Any]] | None = None,
     context_window: int | None = None,
 ) -> list[dict[str, str]]:
-    """Profile alignment only: system(profile) + user(recent dialogue + last question).
+    """Profile alignment: the recent exchanges, the question, and the patient's own items.
 
     The recent turns are there so a follow-up question resolves — "how long has that been
-    going on?" only names an item once you can see what was just said.
+    going on?" names no item on its own.
     """
-    parts = [
-        f"patient_turn_index: {patient_turn_index}",
-        "(If 1, this is the patient's first reply — choose chief_complaint.)",
-    ]
     recent = _recent_messages(patient_hist or [], context_window)
-    if len(recent) > 1:
-        dialogue = format_full_dialogue_for_response(recent[:-1], context_window=0)
-        parts.append(f"\n[Recent dialogue]\n{dialogue}")
-    parts.append(f"\nDoctor's last question:\n{doctor_last_message.strip()}")
+    history = format_full_dialogue_for_response(recent[:-1], context_window=0) if len(recent) > 1 else ""
     return [
-        {"role": "system", "content": build_alignment_system_prompt()},
-        {"role": "user", "content": "\n".join(parts)},
+        {
+            "role": "system",
+            "content": build_alignment_prompt(history, doctor_last_message),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"patient_turn_index: {patient_turn_index}\n"
+                f"(If 1, this is your first reply — return your chief complaint.)\n"
+                f"Return the JSON now."
+            ),
+        },
     ]
 
 
@@ -535,6 +656,7 @@ def _no_match(reason: str = "") -> dict[str, Any]:
         "matched_section": "",
         "section_label": "",
         "section_text": "",
+        "reason": reason,
         "note": reason,
     }
 
@@ -542,9 +664,10 @@ def _no_match(reason: str = "") -> dict[str, Any]:
 def parse_alignment_result(raw: str) -> dict[str, Any]:
     """Parse alignment output and attach the profile text verbatim.
 
-    Returns {matched, matched_section, section_label, section_text}. The text is
-    read from the profile index, never from the LLM output, so nothing can be
-    paraphrased or invented at this stage.
+    Returns {matched, matched_section, section_label, section_text, reason}. The text is
+    read from the profile index, never from the LLM output, so nothing can be paraphrased
+    or invented at this stage — the returned name/description are only there to show what
+    the model thought it picked.
     """
     text = (raw or "").strip()
     if not text:
@@ -559,14 +682,18 @@ def parse_alignment_result(raw: str) -> dict[str, Any]:
     if not isinstance(data, dict):
         return _no_match("alignment output is not an object")
 
-    key = data.get("matched_section")
+    reason = str(data.get("reason") or "").strip()
+    key = data.get("key", data.get("matched_section"))
     if isinstance(key, list):  # 여러 개를 돌려주면 첫 번째만 쓴다
         key = key[0] if key else ""
+    if str(key or "").strip().lower() in ("", "none", "null"):
+        return _no_match(reason or "profile does not cover the question")
+
     resolved = _lookup_section(key)
     if resolved is None:
-        return _no_match("no selectable item matched")
-    if not bool(data.get("matched", True)):
-        return _no_match("analyst reported no match")
+        return _no_match(reason or "no selectable item matched")
+    if "matched" in data and not bool(data.get("matched")):
+        return _no_match(reason or "analyst reported no match")
 
     resolved_key, label, section_text = resolved
     return {
@@ -574,22 +701,39 @@ def parse_alignment_result(raw: str) -> dict[str, Any]:
         "matched_section": resolved_key,
         "section_label": label,
         "section_text": section_text,
+        "reason": reason,
         "note": "",
     }
 
 
-def format_alignment_for_response(parsed: dict[str, Any]) -> str:
-    """Content handed to the response stage: the profile item for this turn.
+def alignment_target_item(parsed: dict[str, Any]) -> dict[str, Any]:
+    """The alignment result in the shape a turn log keeps it.
 
-    Data only — how the patient says it is decided by the behavioral guidelines and
-    the [Conversation Style] block of the system prompt.
+    Same content as the response prompt's [Targeted Info] block, plus the key and the
+    reason, so a saved turn says which profile item the answer came from and why.
     """
-    if parsed.get("matched"):
-        return (
-            f"{parsed.get('section_label', '')}:\n"
-            f"\"{parsed.get('section_text', '')}\""
-        )
-    return "(none — your profile has nothing about what the doctor just asked)"
+    return {
+        "matched": bool(parsed.get("matched")),
+        "key": parsed.get("matched_section", ""),
+        "name": parsed.get("section_label", ""),
+        "manifestation": parsed.get("section_text", ""),
+        "reason": parsed.get("reason", "") or parsed.get("note", ""),
+    }
+
+
+def format_alignment_for_response(parsed: dict[str, Any]) -> str:
+    """The one profile item this turn is answered from.
+
+    Data only — how the patient says it is decided by the rules and the [Conversation
+    Style] block. The description is deliberately left out: it is the clinical definition,
+    and a patient reading it tends to borrow its wording.
+    """
+    if not parsed.get("matched"):
+        return "None"
+    return (
+        f"name: {parsed.get('section_label', '')}\n"
+        f"manifestation: \"{parsed.get('section_text', '')}\""
+    )
 
 
 # ── 2) Response generation ────────────────────────────────────────────────────
@@ -635,24 +779,25 @@ def build_response_messages(
     alignment_strategy_text: str,
     context_window: int | None = None,
 ) -> list[dict[str, str]]:
+    """Response generation: the recent exchanges, the question, and this turn's item.
+
+    SYSTEM_PROMPT already holds the parts that do not change within a consultation —
+    the diagnosis, patient info and conversation style — so only the three per-turn
+    blocks are filled in here.
     """
-    Response generation: system(patient guidelines + alignment result) + user(full dialogue).
-    patient_hist includes the doctor's user turn; patient assistant turn not yet appended.
-    """
-    dialogue = format_full_dialogue_for_response(patient_hist, context_window)
+    recent = _recent_messages(patient_hist, context_window)
+    history = format_full_dialogue_for_response(recent[:-1], context_window=0) if len(recent) > 1 else ""
+    last_question = (recent[-1].get("content") or "").strip() if recent else ""
     system = (
         SYSTEM_PROMPT
-        + "\n\n[This Turn: Profile Item to Talk About]\n"
-        + alignment_strategy_text
+        .replace("{dialogue_history}", history or "(this is the start of the consultation)")
+        .replace("{last_question}", last_question)
+        .replace("{targeted_info}", alignment_strategy_text)
     )
-    user = (
-        "Below is the recent part of the consultation dialogue. "
-        "Reply in English as the Patient to the last Doctor utterance.\n"
-        "Say what [This Turn: Profile Item to Talk About] holds, told in your "
-        "[Conversation Style].\n\n"
-        f"[Dialogue]\n{dialogue}"
-    )
-    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+    return [
+        {"role": "system", "content": system},
+        {"role": "user", "content": "Reply to the doctor's last question now, as the patient."},
+    ]
 
 
 # ─── 프롬프트 템플릿 ──────────────────────────────────────────────────────────
@@ -722,10 +867,15 @@ def build_conversation_style_block(style: str) -> str:
             f"unknown conversation style: {style!r} "
             f"(available: {', '.join(conversation_style_names())})"
         )
+    block = f"You are a {key.capitalize()} patient.\n{CONVERSATION_STYLES[key]}"
+    if key == DEFAULT_CONVERSATION_STYLE:
+        # plain은 대조군이라 일관되게 명료해야 한다. "때로는 덜 드러난다"를 붙이면
+        # 그 일관성이 흔들린다.
+        return block
     return (
-        f"You are a {key.capitalize()} patient.\n"
-        f"{CONVERSATION_STYLES[key]}\n"
-        "Speak this way in every reply, whatever the doctor asks."
+        f"{block}\n"
+        "This is how you are, not a performance you put on in every reply — let it show as "
+        "much or as little as the moment calls for."
     )
 
 
@@ -759,29 +909,67 @@ _CONVERSATION_STYLE: str = _resolve_conversation_style(
 CONVERSATION_STYLE: str = build_conversation_style_block(_CONVERSATION_STYLE)
 
 
+# 응답 단계는 "무엇을 말하는가"가 아니라 "어떻게 말하는가"에 이 정보를 쓴다. 학력·나이는
+# 어휘를, 중증도는 표현의 강도를 정한다.
+RESPONSE_PATIENT_FIELDS = ("demographics", "severity")
+
+
+def format_patient_info_for_response(data: dict) -> str:
+    info = data.get("patient_info")
+    if not isinstance(info, dict):
+        info = data.get("patient") if isinstance(data.get("patient"), dict) else {}
+    lines = [
+        f"- {key}: {info[key]}"
+        for key in RESPONSE_PATIENT_FIELDS
+        if key in info and not _skip_value(info[key])
+    ]
+    return "\n".join(lines) if lines else "(No patient info)"
+
+
 PROMPT = """/no_think
-You are a patient experiencing {most_likely_diagnosis}.
-Respond to the doctor's questions based on the symptom profile provided below.
+You are a patient experiencing {disease_name}, in a diagnostic interview with a
+psychiatrist. Your goal is to answer the doctor's question naturally, using the
+information you are given.
 
-[Symptom Profile]
-{symptom_profile}
+Answer with the [Targeted Info], told in the way [Conversation Style] describes.
 
-[Behavioral Guidelines]
-- In the very first turn, only talk about the item you are given. Do NOT reveal any other symptoms.
-- Each turn you are given [This Turn: Profile Item to Talk About] — the one profile item the
-  doctor's question is about. Answer from that item only; do not bring in other symptoms or
-  profile items the doctor has not asked about.
-- If that item is "(none ...)", tell the doctor you are not sure or that it has not been an
-  issue for you.
-- Never state a clinical fact that is not in your profile — no other symptoms, substances,
-  medications, test results, dates, or events. Your style shapes how you tell it, never what
-  happened to you.
-- Respond in English.
-- The guidelines above decide WHAT you say. The [Conversation Style] below decides HOW you say
-  it — tone, wording, and length. Follow both.
+[Dialogue History]
+{dialogue_history}
+
+[Last Question]
+{last_question}
+
+[Patient Info]
+{patient_info}
+
+[Targeted Info]
+{targeted_info}
 
 [Conversation Style]
 {conversation_style}
+
+What to do:
+- Answer the doctor's last question with what [Targeted Info] holds, in your own words.
+- You are speaking out loud, not reading a line you prepared. People restart sentences, pause
+  to think, trail off, and come at the point sideways — let yours do that where it would.
+- Let [Conversation Style] shape how much you say, how you word it, and how readily you
+  disclose it.
+- Speak in the first person, and let how you feel about what you are saying come through.
+- If you are handed the same item again, say a different part of it, or answer as someone who
+  knows they have already said this — not the same sentence twice.
+- If [Targeted Info] is "None", answer as a person who simply does not have that to give: say
+  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do
+  know and stop there. Do not fall back on the same phrase every time.
+
+What not to do:
+- Don't bring up symptoms the doctor did not ask about, even ones you have.
+- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,
+  test results, dates, or events.
+- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer
+  about what you were given instead.
+- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.
+- Don't use diagnostic terms or name your disorder.
+- Don't write anything but your reply, in English — no labels, quotation marks, or narration.
 """
 
 
@@ -890,8 +1078,8 @@ def _build_system_prompt_from_kg() -> str:
     )
 
     return (
-        PROMPT.replace("{symptom_profile}", symptom_block)
-        .replace("{most_likely_diagnosis}", disease_name)
+        PROMPT.replace("{disease_name}", disease_name)
+        .replace("{patient_info}", "(No patient info)")
         .replace("{conversation_style}", CONVERSATION_STYLE)
     )
 
@@ -902,28 +1090,16 @@ def _build_system_prompt_from_json() -> str:
     """Generate the patient prompt from a configured profile JSON."""
     data = _load_profile()
     block = format_symptom_profile(data)
-    diagnosis = ""
-    symptom = data.get("symptom")
-    if isinstance(symptom, dict):
-        diagnosis = str(symptom.get("disease_name") or "").strip()
-        sampled = symptom.get("sampled_features")
-        if not diagnosis and isinstance(sampled, dict):
-            diagnosis = str(sampled.get("disease_name") or "").strip()
-    if not diagnosis:
-        diagnosis = str(data.get("most_likely_diagnosis") or "").strip()
-    if not diagnosis:
-        cand = data.get("candidate_diagnosis")
-        if isinstance(cand, list) and cand:
-            diagnosis = str(cand[0]).strip()
-    if not diagnosis:
-        diagnosis = "Major Depressive Disorder"
+    diagnosis = diagnosis_name(data)
     _kg_symptom_block_cache["block"] = block
-    _kg_symptom_block_cache["alignment_block"] = format_symptom_block_for_alignment(data)
+    _kg_symptom_block_cache["alignment_block"] = format_manifestation_for_alignment(data)
+    _kg_symptom_block_cache["patient_info_block"] = format_patient_info_for_alignment(data)
+    _kg_symptom_block_cache["diagnosis"] = diagnosis
     global _SECTION_INDEX
     _SECTION_INDEX = _build_alignment_index(data)
     return (
-        PROMPT.replace("{symptom_profile}", block)
-        .replace("{most_likely_diagnosis}", diagnosis)
+        PROMPT.replace("{disease_name}", diagnosis)
+        .replace("{patient_info}", format_patient_info_for_response(data))
         .replace("{conversation_style}", CONVERSATION_STYLE)
     )
 

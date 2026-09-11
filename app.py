@@ -20,6 +20,7 @@ from utils.llm import get_patient_model_name
 from utils.llm import get_run_dir
 from utils.llm import get_status
 from utils.llm import set_log_path
+from utils.run_artifacts import persist_single_artifacts, single_case_id
 from utils.prompt_display import system_prompt_to_html
 
 app = Flask(__name__)
@@ -59,6 +60,7 @@ def index(): # prompt 불러와서 html 화면에 출력
     return render_template(
         "index.html",
         patient_system_html=system_prompt_to_html(patient.SYSTEM_PROMPT),
+        patient_alignment_html=system_prompt_to_html(patient.build_alignment_preview()),
         doctor_inference_html=system_prompt_to_html(
             doctor.get_inference_system_prompt(get_doctor_model_name())
         ),
@@ -123,7 +125,10 @@ def set_patient_config():
 
 @app.route("/api/patient_system_html")  # config 변경 후 patient 패널 HTML 반환
 def patient_system_html():
-    return jsonify({"html": system_prompt_to_html(patient.SYSTEM_PROMPT)})
+    return jsonify({
+        "html": system_prompt_to_html(patient.SYSTEM_PROMPT),
+        "alignment_html": system_prompt_to_html(patient.build_alignment_preview()),
+    })
 
 
 # ── Simulation profile catalog ────────────────────────────────────────────────
@@ -229,6 +234,7 @@ def set_simulation_profile():
             "profile_path": str(target),
             "conversation_style": patient.current_conversation_style(),
             "patient_system_html": system_prompt_to_html(patient.SYSTEM_PROMPT),
+            "patient_alignment_html": system_prompt_to_html(patient.build_alignment_preview()),
         })
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
@@ -266,52 +272,15 @@ def _persist_single_artifacts(
     conversation_style: str = "",
     profile_path: str = "",
 ) -> None:
-    """단건 실행 산출물을 배치와 같은 형식으로 저장한다.
-
-    실패해도 화면 스트리밍에는 영향을 주지 않도록 예외를 삼킨다.
-    """
-    fd = (doctor_memory.get("final_diagnosis") or {})
-    try:
-        json_log_path.write_text(
-            json.dumps({
-                "case_id": case_id,
-                "profile_path": profile_path,
-                "conversation_style": conversation_style,
-                "closed_at_patient_turn": doctor_memory.get("closed_at_patient_turn"),
-                "final_diagnosis": fd.get("diagnosis", ""),
-                "transcript": [{"role": r, "content": c} for r, c in transcript],
-                "doctor_memory": doctor_memory,
-            }, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        print(f"[simulate] log saved → {json_log_path}", flush=True)
-    except Exception as e:
-        print(f"[simulate] json log save failed: {e}", flush=True)
-
-    # 증상 추출 + KG 후보군. batch_worker와 같은 로더를 써서 import 충돌을 피한다.
-    try:
-        from batch_worker import _make_symptom_diagnosis_runner
-        _make_symptom_diagnosis_runner(case_id)(txt_log_path, result_json_path)
-    except Exception as e:
-        print(f"[simulate] symptom_diagnosis failed: {e}", flush=True)
+    persist_single_artifacts(
+        case_id, json_log_path, txt_log_path, result_json_path,
+        transcript, doctor_memory,
+        conversation_style=conversation_style, profile_path=profile_path,
+    )
 
 
 def _single_case_id() -> str:
-    """단건 실행의 케이스 이름. 배치의 D001_1 / D001_S001_P001 자리에 대응한다.
-
-    프로필 모드면 프로필 파일명(D005_S001_P001), KG 모드면 '<질환코드>_kg'.
-    뒤에 conversation style을 붙여(D005_S001_P001_verbose) 같은 프로필을 스타일만
-    바꿔 돌려도 서로 덮어쓰지 않게 한다. eval 쪽 정답 매칭은 앞머리의 D코드만
-    보므로(^(D\d+)) 접미사를 붙여도 안전하다.
-    같은 날 같은 대상+같은 스타일을 다시 돌리면 덮어쓴다 (배치와 동일한 규칙).
-    """
-    cfg = patient.current_config()
-    style = cfg.get("conversation_style") or ""
-    suffix = f"_{style}" if style else ""
-    if cfg.get("use_knowledge_graph"):
-        return f"{cfg.get('disease_code') or 'unknown'}_kg{suffix}"
-    profile_path = cfg.get("symptom_profile_path") or ""
-    return (Path(profile_path).stem or "single") + suffix
+    return single_case_id(patient.current_config())
 
 
 def _load_disorder_map() -> dict[str, str]:
@@ -793,7 +762,7 @@ def simulate(): # prompts loading
     )
     patient_system = patient.SYSTEM_PROMPT
     doctor_model = get_doctor_model_name()
-    inference_system = doctor.get_inference_system_prompt(doctor_model)
+    max_turns = MAX_TURNS
     final_system = doctor.get_final_diagnosis_system_prompt(doctor_model)
     diag_tokens = get_doctor_diagnosis_max_tokens()
     inf_tokens = get_doctor_inference_max_tokens()
@@ -815,7 +784,9 @@ def simulate(): # prompts loading
             opening_messages = [
                 {
                     "role": "system",
-                    "content": doctor.get_questioning_system_prompt(MAX_TURNS, [], doctor_model),
+                    "content": doctor.build_questioning_prompt(
+                        "", [], turn_index=1, max_turns=max_turns, doctor_model=doctor_model
+                    ),
                 },
                 {"role": "user", "content": doctor.opening_user_message()},
             ]
@@ -830,10 +801,12 @@ def simulate(): # prompts loading
             q_open = doctor.parse_questioning_result(doctor_raw)
             question_text = q_open["question"]
             doctor_memory["opening_question"] = {
-                "category": q_open["category"],
-                "subcategory": q_open["subcategory"],
+                "intent": q_open["intent"],
                 "question": question_text,
             }
+            doctor.record_doctor_question(
+                doctor_memory, turn=1, intent=q_open["intent"], question=question_text
+            )
             doctor.persist_doctor_memory_json(doctor_memory)
             yield emit({"event": "doctor_memory", "state": doctor_memory})
 
@@ -845,8 +818,7 @@ def simulate(): # prompts loading
                     "turn": 0,
                     "role": "doctor",
                     "content": question_text,
-                    "category": q_open.get("category", ""),
-                    "subcategory": q_open.get("subcategory"),
+                    "intent": q_open.get("intent", ""),
                     "raw": doctor_raw,
                 }
             )
@@ -856,15 +828,14 @@ def simulate(): # prompts loading
                     "turn": 0,
                     "phase": "questioning",
                     "content": question_text,
-                    "category": q_open["category"],
-                    "subcategory": q_open["subcategory"],
+                    "intent": q_open["intent"],
                     "raw": doctor_raw,
                 }
             )
 
             patient_hist.append({"role": "user", "content": question_text})
 
-            for t in range(1, MAX_TURNS + 1):
+            for t in range(1, max_turns + 1):
                 doctor_last = patient_hist[-1]["content"]
                 align_messages = patient.build_alignment_messages(doctor_last, t, patient_hist)
                 _log_llm_history("Patient LLM (alignment)", f"turn {t}", align_messages)
@@ -900,6 +871,12 @@ def simulate(): # prompts loading
                 )
                 patient_hist.append({"role": "assistant", "content": patient_msg})
                 transcript.append(("patient", patient_msg))
+                doctor.record_patient_turn(
+                    doctor_memory,
+                    turn=t,
+                    target_item=patient.alignment_target_item(parsed),
+                    answer=patient_msg,
+                )
 
                 yield emit({"event": "turn", "turn": t, "role": "patient", "content": patient_msg})
 
@@ -912,8 +889,17 @@ def simulate(): # prompts loading
                     else []
                 )
                 inf_messages = [
-                    {"role": "system", "content": inference_system},
-                    {"role": "user", "content": doctor.inference_user_payload(tr_text, previous_candidates=prev_cands)},
+                    {
+                        "role": "system",
+                        "content": doctor.build_inference_prompt(
+                            tr_text,
+                            previous_candidates=prev_cands,
+                            turn_index=t,
+                            max_turns=max_turns,
+                            doctor_model=doctor_model,
+                        ),
+                    },
+                    {"role": "user", "content": "Return the JSON now."},
                 ]
                 _log_llm_history("Doctor LLM (inference)", f"turn {t}", inf_messages)
                 inf_raw = llm_chat(
@@ -922,7 +908,7 @@ def simulate(): # prompts loading
                     role="doctor",
                     phase="inference",
                     turn=t,
-                    source="doctor.inference_user_payload",
+                    source="doctor.build_inference_prompt",
                 )
                 candidates, inf_note, is_final = doctor.parse_inference_result(inf_raw)
 
@@ -948,7 +934,7 @@ def simulate(): # prompts loading
                     }
                 )
 
-                if doctor.should_finish_interview(is_final, t, MAX_TURNS):
+                if doctor.should_finish_interview(is_final, t, max_turns):
                     fin_messages = [
                         {"role": "system", "content": final_system},
                         {
@@ -986,7 +972,7 @@ def simulate(): # prompts loading
                     yield emit({"event": "doctor_memory", "state": doctor_memory})
                     tx_payload = doctor.build_interview_transcript_payload(
                         transcript,
-                        max_turns_config=MAX_TURNS,
+                        max_turns_config=max_turns,
                         closed_at_patient_turn=t,
                         patient_model=get_patient_model_name(),
                         doctor_model=get_doctor_model_name(),
@@ -998,12 +984,15 @@ def simulate(): # prompts loading
                 questioning_messages = [
                     {
                         "role": "system",
-                        "content": doctor.get_questioning_system_prompt(MAX_TURNS, candidates, doctor_model),
+                        "content": doctor.build_questioning_prompt(
+                            tr_text,
+                            candidates,
+                            turn_index=t + 1,
+                            max_turns=max_turns,
+                            doctor_model=doctor_model,
+                        ),
                     },
-                    {
-                        "role": "user",
-                        "content": doctor.questioning_followup_user_payload(tr_text, candidates),
-                    },
+                    {"role": "user", "content": "Return the JSON now."},
                 ]
                 _log_llm_history(
                     "Doctor LLM (questioning)",
@@ -1015,10 +1004,13 @@ def simulate(): # prompts loading
                     role="doctor",
                     phase="followup",
                     turn=t,
-                    source="doctor.questioning_followup_user_payload",
+                    source="doctor.build_questioning_prompt",
                 )
                 q_follow = doctor.parse_questioning_result(doctor_raw)
                 question_text = q_follow["question"]
+                doctor.record_doctor_question(
+                    doctor_memory, turn=t + 1, intent=q_follow["intent"], question=question_text
+                )
 
                 transcript.append(("doctor", question_text))
 
@@ -1028,8 +1020,7 @@ def simulate(): # prompts loading
                         "turn": t,
                         "role": "doctor",
                         "content": question_text,
-                        "category": q_follow["category"],
-                        "subcategory": q_follow["subcategory"],
+                        "intent": q_follow["intent"],
                         "raw": doctor_raw,
                     }
                 )
@@ -1039,8 +1030,7 @@ def simulate(): # prompts loading
                         "turn": t,
                         "phase": "questioning",
                         "content": question_text,
-                        "category": q_follow["category"],
-                        "subcategory": q_follow["subcategory"],
+                        "intent": q_follow["intent"],
                         "raw": doctor_raw,
                     }
                 )
