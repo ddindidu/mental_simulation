@@ -9,10 +9,10 @@ run 폴더 구조 (app.py/batch_worker.py 산출물 그대로):
     <run>/logs/<patient>/<judge>/<doctor>/<profile_id>.json   ← transcript + doctor_memory
 
 한국어 번역:
-  - UI에서 체크 시 /api/translate 호출 → judge LLM(config.json llm.judge)으로
-    transcript 전체를 한 번에 직역 위주로 번역.
-  - 결과는 <run>/translations/<doctor>/<profile_id>.ko.json 에 캐시되어
-    같은 에피소드는 다시 API를 부르지 않는다.
+  - UI에서 체크 시 /api/translate 호출 → 번역 provider로 transcript 전체를
+    한 번에 직역 위주로 번역.
+  - 캐시하지 않는다. 요청할 때마다 그 시점의 로그를 읽어 새로 번역하므로,
+    시뮬레이션을 다시 돌려 로그가 바뀌어도 항상 현재 대화가 번역된다.
 """
 from __future__ import annotations
 
@@ -124,14 +124,11 @@ def _is_correct(gt: str | None, final_icd: str | None) -> bool | None:
     return final_icd.strip().upper() in ID2CODES[gt]
 
 
-_index_lock = threading.Lock()
-_index_cache: dict[str, list[dict]] = {}   # model key → episode summaries
-
-
 def _episode_index(key: str) -> list[dict]:
-    with _index_lock:
-        if key in _index_cache:
-            return _index_cache[key]
+    """매 요청마다 로그를 다시 읽는다 (캐시 없음).
+
+    서버를 켜 둔 채 시뮬레이션을 다시 돌려도 목록이 옛 값으로 남지 않게 한다.
+    """
     d = _model_dir(key)
     rows = []
     for fp in sorted(d.glob("*.json")):
@@ -154,8 +151,6 @@ def _episode_index(key: str) -> list[dict]:
             "closed_at": data.get("closed_at_patient_turn"),
             "n_messages": len(transcript),
         })
-    with _index_lock:
-        _index_cache[key] = rows
     return rows
 
 
@@ -166,6 +161,151 @@ def _episode_path(key: str, ep_id: str) -> Path:
     if not fp.is_file():
         abort(404, "episode not found")
     return fp
+
+
+# ── 턴별 profile alignment 결과 (txt 로그에서 추출) ────────────────────────
+_META_RE = re.compile(r"^-{10} turn (\d+) \| patient:(alignment|response) \|", re.M)
+
+
+def _alignment_from_turns(dm: dict) -> dict[str, dict]:
+    """doctor_memory/v6부터는 턴별 산출물이 로그 안에 그대로 들어 있다.
+
+    {turn: {key, name, manifestation, reason, intent}} — 프롬프트 텍스트를 되짚을 필요가
+    없는 새 실행용 경로이고, 그 이전 실행은 _extract_alignment_history가 받아준다.
+    """
+    out: dict[str, dict] = {}
+    for slot in dm.get("turns") or []:
+        pt = slot.get("patient") or {}
+        item = pt.get("target_item") or {}
+        entry: dict[str, str] = {}
+        if item.get("matched"):
+            for src, dst in (("key", "key"), ("name", "name"),
+                             ("manifestation", "manifestation"), ("reason", "reason")):
+                if item.get(src):
+                    entry[dst] = str(item[src])
+        elif pt:
+            entry["key"] = "None"
+            if item.get("reason"):
+                entry["reason"] = str(item["reason"])
+        intent = ((slot.get("doctor") or {}).get("intent") or "").strip()
+        if intent:
+            entry["intent"] = intent
+        if entry:
+            out[str(slot.get("turn"))] = entry
+    return out
+
+
+_DOCTOR_OUT_RE = re.compile(r"={10} OUTPUT \[doctor\] ={10}\n(.*?)\n={37}", re.DOTALL)
+
+
+def _extract_question_intents(key: str, ep_id: str) -> dict[str, str]:
+    """{turn: intent} — 의사가 그 턴에 무엇을 알아내려 했는지.
+
+    doctor_memory/v6 이전 실행은 이 값을 따로 저장하지 않으므로 프롬프트 로그의
+    doctor 출력 블록에서 순서대로 되읽는다. n번째 질문이 n번째 턴이고, 그때의 필드
+    이름은 실행 시기에 따라 intent 또는 category(+subcategory)다.
+    """
+    txt_path = _model_dir(key) / f"{ep_id}.txt"
+    if not txt_path.is_file():
+        return {}
+    try:
+        text = txt_path.read_text(encoding="utf-8")
+    except OSError:
+        return {}
+
+    out: dict[str, str] = {}
+    turn = 0
+    for block in _DOCTOR_OUT_RE.findall(text):
+        try:
+            parsed = json.loads(block.strip())
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if not isinstance(parsed, dict) or "question" not in parsed:
+            continue
+        turn += 1
+        intent = str(parsed.get("intent") or parsed.get("category") or "").strip()
+        sub = str(parsed.get("subcategory") or "").strip()
+        if sub and sub.lower() != "null":
+            intent = f"{intent} · {sub}" if intent else sub
+        if intent:
+            out[str(turn)] = intent
+    return out
+
+
+def _extract_alignment_history(key: str, ep_id: str) -> dict[str, dict]:
+    """{turn: {key, name, description, reason, manifestation}} for each patient turn.
+
+    Which profile item the patient answered from is the one thing a transcript cannot
+    show — the reply is in the patient's words either way — so it is read back out of
+    the run log: the key from the alignment stage's own output, and the wording it was
+    handed from the [Targeted Info] block of the response prompt.
+    """
+    txt_path = _model_dir(key) / f"{ep_id}.txt"
+    if not txt_path.is_file():
+        return {}
+    try:
+        text = txt_path.read_text(encoding="utf-8")
+    except OSError:
+        return {}
+
+    out: dict[str, dict] = {}
+    marks = list(_META_RE.finditer(text))
+    for i, m in enumerate(marks):
+        turn, phase = m.group(1), m.group(2)
+        block = text[m.end(): marks[i + 1].start() if i + 1 < len(marks) else len(text)]
+        entry = out.setdefault(turn, {})
+
+        if phase == "alignment":
+            tail = block.split("========== OUTPUT", 1)
+            if len(tail) < 2:
+                continue
+            body = tail[1].split("=====================")[0]
+            found = re.search(r"\{[\s\S]*\}", body)
+            if not found:
+                continue
+            try:
+                picked = json.loads(found.group())
+            except json.JSONDecodeError:
+                continue
+            for field in ("key", "name", "description", "reason"):
+                value = picked.get(field, picked.get("matched_section") if field == "key" else None)
+                if value not in (None, ""):
+                    entry[field] = str(value)
+            continue
+
+        # response 프롬프트의 [Targeted Info]에는 환자가 실제로 건네받은 문장이 들어 있다.
+        head = block.split("========== OUTPUT", 1)[0]
+        payload = head.split("==========\n", 1)
+        if len(payload) < 2:
+            continue
+        try:
+            msgs = json.JSONDecoder().raw_decode(payload[1].strip())[0]
+        except (json.JSONDecodeError, ValueError):
+            continue
+        content = next((m.get("content", "") for m in msgs if m.get("role") == "system"), "")
+        # 프롬프트 서두 문장에도 "[Targeted Info]"가 나오므로 섹션 헤더로 잘라야 한다.
+        # 오래된 실행은 같은 내용을 "[This Turn: ...]" 아래 label/"text" 형태로 담고 있다.
+        if "\n[Targeted Info]\n" in content:
+            targeted = content.split("\n[Targeted Info]\n", 1)[1].split("\n\n[", 1)[0].strip()
+        elif "\n[This Turn: Profile Item to Talk About]\n" in content:
+            targeted = content.rsplit("\n[This Turn: Profile Item to Talk About]\n", 1)[1].strip()
+            if targeted.startswith("(none"):
+                targeted = "None"
+            else:
+                label, _, said = targeted.partition("\n")
+                targeted = f"name: {label.rstrip(':')}\nmanifestation: {said.strip()}"
+        else:
+            continue
+        if targeted == "None":
+            entry.setdefault("key", "None")
+            continue
+        for line in targeted.splitlines():
+            line = line.strip()
+            if line.startswith("manifestation:"):
+                entry["manifestation"] = line.split(":", 1)[1].strip().strip('"')
+            elif line.startswith("name:") and not entry.get("name"):
+                entry["name"] = line.split(":", 1)[1].strip()
+    return out
 
 
 # ── 환자 증상 프로필 (txt 로그의 patient system prompt에서 추출) ────────────
@@ -189,6 +329,9 @@ def _extract_patient_profile(key: str, ep_id: str) -> dict | None:
             continue
         for msg in msgs:
             c = msg.get("content", "")
+            if "\n[Symptom Profiles]\n" in c:
+                seg = c.split("\n[Symptom Profiles]\n", 1)[1].split("\n\n[", 1)[0].strip()
+                break
             if "[Symptom Profile]" in c:
                 seg = c.split("[Symptom Profile]", 1)[1]
                 for stop in ("\nRules:", "\n[Behavioral Guidelines]"):
@@ -229,7 +372,45 @@ def _extract_patient_profile(key: str, ep_id: str) -> dict | None:
                 cur["items"][-1]["text"] += "\n" + line.strip()
             else:
                 cur["items"].append({"label": None, "text": line.strip()})
+    for sec in sections:
+        sec["items"] = _fold_profile_records(sec["items"])
+        if not sec["title"]:
+            sec["title"] = "Symptom Manifestations"
     return {"raw": seg, "sections": sections}
+
+
+def _fold_profile_records(items: list[dict]) -> list[dict]:
+    """"- key: S030" + 들여쓴 name/description/manifestation 줄을 한 항목으로 접는다.
+
+    현재 프롬프트의 [Symptom Profiles]는 증상 하나를 네 줄짜리 레코드로 적는다. 줄
+    단위로 읽으면 label이 전부 "key"가 되어버리므로, 레코드를 다시 모아 라벨은
+    "S030 (Worthlessness_Guilt)", 본문은 환자가 실제로 말하게 될 manifestation으로
+    바꾼다. 이 형식이 아닌 오래된 로그는 그대로 통과시킨다.
+    """
+    out: list[dict] = []
+    for it in items:
+        if (it.get("label") or "").strip() != "key":
+            out.append(it)
+            continue
+        fields: dict[str, str] = {}
+        current = "key"
+        for line in str(it.get("text") or "").split("\n"):
+            head, sep, rest = line.partition(":")
+            if sep and head.strip() in ("name", "description", "manifestation"):
+                current = head.strip()
+                fields[current] = rest.strip()
+            elif current in fields:
+                fields[current] += " " + line.strip()
+            else:
+                fields.setdefault(current, line.strip())
+        code = fields.get("key", "").strip()
+        name = fields.get("name", "").strip()
+        out.append({
+            "label": f"{code} ({name})" if code and name else (code or name or None),
+            "text": fields.get("manifestation", "").strip() or fields.get("description", "").strip(),
+            "desc": fields.get("description", "").strip(),
+        })
+    return out
 
 
 # ── 번역 ─────────────────────────────────────────────────────────────────────
@@ -356,11 +537,6 @@ def _translate_batch(items: list[str]) -> list[str | None]:
     return out
 
 
-def _translation_cache_path(key: str, ep_id: str) -> Path:
-    doctor = key.split("/")[-1]
-    return RUN_ROOT / "translations" / doctor / f"{ep_id}.ko.json"
-
-
 # ── routes ───────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
@@ -384,6 +560,21 @@ def api_episodes():
     return jsonify({"episodes": _episode_index(key)})
 
 
+def _episode_alignment(dm: dict, key: str, ep_id: str) -> dict[str, dict]:
+    """턴별 {환자가 고른 항목 + 의사의 질문 의도}.
+
+    새 실행은 로그 안의 turns가 전부 들고 있고, 그 이전 실행은 프롬프트 로그에서
+    두 조각을 따로 긁어 합친다.
+    """
+    from_turns = _alignment_from_turns(dm)
+    if from_turns:
+        return from_turns
+    merged = _extract_alignment_history(key, ep_id)
+    for turn, intent in _extract_question_intents(key, ep_id).items():
+        merged.setdefault(turn, {})["intent"] = intent
+    return merged
+
+
 @app.route("/api/episode")
 def api_episode():
     key = request.args.get("model", "")
@@ -395,7 +586,6 @@ def api_episode():
     gt = _gt_code(data.get("profile_id") or ep_id)
     final = (data.get("final_diagnosis") or "").strip() or None
     fd = dm.get("final_diagnosis") or {}
-    cache = _translation_cache_path(key, ep_id)
     return jsonify({
         "id": ep_id,
         "gt": gt,
@@ -410,14 +600,8 @@ def api_episode():
         "transcript": data.get("transcript") or [],
         "inference_history": dm.get("inference_history") or [],
         "profile": _extract_patient_profile(key, ep_id),
-        "translation_cached": cache.is_file(),
+        "alignment": _episode_alignment(dm, key, ep_id),
     })
-
-
-def _save_translation_cache(cache: Path, payload: dict) -> None:
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    with open(cache, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
 
 
 @app.route("/api/translate", methods=["POST"])
@@ -437,25 +621,6 @@ def api_translate():
 
     if not TRANSLATOR["provider"]:
         return jsonify({"error": "사용 가능한 번역 API 키가 없습니다 (.env에 OPENAI/GEMINI/OPENROUTER_API_KEY 필요)"}), 503
-
-    cache = _translation_cache_path(key, ep_id)
-    if cache.is_file():
-        with open(cache, encoding="utf-8") as f:
-            cached = json.load(f)
-        # 대화 번역은 캐시에 있음. 프로필이 추가로 필요하면 그 부분만 번역해 병합.
-        if prof_texts and cached.get("profile") is None:
-            with _translate_lock:
-                try:
-                    ko_prof = _translate_batch(prof_texts)
-                except Exception as e:
-                    return jsonify({"error": f"translation failed: {e}"}), 502
-            n_fail = sum(1 for v in ko_prof if v is None)
-            cached["profile"] = ko_prof
-            if n_fail == 0:
-                _save_translation_cache(cache, cached)
-            else:
-                cached["partial_profile"] = n_fail
-        return jsonify(cached)
 
     with open(fp, encoding="utf-8") as f:
         data = json.load(f)
@@ -484,9 +649,7 @@ def api_translate():
         "profile": ko[n_base:] if prof_texts else None,
     }
     n_fail = sum(1 for v in ko if v is None)
-    if n_fail == 0:   # 전부 성공했을 때만 캐시 (부분 실패는 재시도 여지)
-        _save_translation_cache(cache, payload)
-    else:
+    if n_fail:
         payload["partial"] = n_fail
     return jsonify(payload)
 
@@ -495,7 +658,7 @@ def api_translate():
 def main():
     global RUN_ROOT
     ap = argparse.ArgumentParser(description="Doctor-Patient 대화 기록 리뷰 뷰어")
-    ap.add_argument("--run", default="saved/current_target",
+    ap.add_argument("--run", default="saved/run_batch_20260911",
                     help="결과 run 폴더 (예: saved/current_target, 절대경로 허용)")
     ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=5004)

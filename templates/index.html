@@ -1008,9 +1008,15 @@
       <span class="panel-role">Patient</span>
     </div>
     <div class="panel-body">
-      <div class="section-label">SYSTEM PROMPT</div>
+      <div class="section-label">SYSTEM PROMPT — 1. PROFILE ALIGNMENT</div>
       <div class="prompt-box prompt-box--rich">
-        <div class="prompt-doc patient-prompt-doc">
+        <div class="prompt-doc patient-prompt-doc patient-alignment-doc">
+          <p class="doctor-cand-empty">Select a patient profile from Start Simulation.</p>
+        </div>
+      </div>
+      <div class="section-label">SYSTEM PROMPT — 2. RESPONSE GENERATION</div>
+      <div class="prompt-box prompt-box--rich">
+        <div class="prompt-doc patient-prompt-doc patient-response-doc">
           <p class="doctor-cand-empty">Select a patient profile from Start Simulation.</p>
         </div>
       </div>
@@ -1167,7 +1173,10 @@
     <select class="modal-select" id="simulationProfileFolder"></select>
 
     <label class="modal-label" for="simulationProfileFile">JSON file</label>
-    <select class="modal-select" id="simulationProfileFile" style="margin-bottom:18px;"></select>
+    <select class="modal-select" id="simulationProfileFile"></select>
+
+    <label class="modal-label" for="conversationStyle">Conversation style</label>
+    <select class="modal-select" id="conversationStyle" style="margin-bottom:18px;"></select>
 
     <div class="modal-actions">
       <button class="modal-btn modal-btn-cancel" id="configCancelBtn">Cancel</button>
@@ -1202,6 +1211,7 @@ const simulationProfileRoot = document.getElementById('simulationProfileRoot');
 const simulationProfileRootPath = document.getElementById('simulationProfileRootPath');
 const simulationProfileFolder = document.getElementById('simulationProfileFolder');
 const simulationProfileFile = document.getElementById('simulationProfileFile');
+const conversationStyle = document.getElementById('conversationStyle');
 let simulationProfileCatalog = [];
 
 function selectedProfileRoot() {
@@ -1258,6 +1268,14 @@ function openConfigModal() {
         data.current ? data.current.folder : '',
         data.current ? data.current.relative_path : '',
       );
+      conversationStyle.innerHTML = '';
+      (data.styles || []).forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name.charAt(0).toUpperCase() + name.slice(1);
+        option.selected = name === data.current_style;
+        conversationStyle.appendChild(option);
+      });
       if (!simulationProfileFile.value) {
         configStatus.className = 'modal-status err';
         configStatus.textContent = 'No JSON profiles found.';
@@ -1288,13 +1306,16 @@ configApplyBtn.addEventListener('click', () => {
     body: JSON.stringify({
       root_id: simulationProfileRoot.value,
       relative_path: simulationProfileFile.value,
+      conversation_style: conversationStyle.value,
     }),
   })
   .then(r => r.json())
   .then(res => {
     if (res.ok) {
-      const promptEl = document.querySelector('.patient-prompt-doc');
+      const promptEl = document.querySelector('.patient-response-doc');
       if (promptEl && res.patient_system_html) promptEl.innerHTML = res.patient_system_html;
+      const alignEl = document.querySelector('.patient-alignment-doc');
+      if (alignEl && res.patient_alignment_html) alignEl.innerHTML = res.patient_alignment_html;
       closeConfigModal();
       beginSimulation();
     } else {
