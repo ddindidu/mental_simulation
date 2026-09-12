@@ -129,33 +129,33 @@ def get_questioning_system_prompt(
 
 def get_final_diagnosis_system_prompt(doctor_model: str = "") -> str:  # final diagnosis system prompt
     # 허용된 질환 리스트 정의
-    allowed_candidates = [
-        "Attention-Deficit/Hyperactivity Disorder (Combined Presentation)",
-        "Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)",
-        "Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)",
-        "Delusional Disorder",
-        "Schizophrenia",
-        "Schizoaffective Disorder (Bipolar Type)",
-        "Schizoaffective Disorder (Depressive Type)",
-        "Bipolar I Disorder",
-        "Bipolar II Disorder",
-        "Bipolar I Disorder with Psychotic Features",
-        "Generalized Anxiety Disorder",
-        "Specific Phobia",
-        "Major Depressive Disorder",
-        "Persistent Depressive Disorder",
-        "Major Depressive Disorder with Psychotic Features",
-        "Obsessive-Compulsive Disorder",
-        "Body Dysmorphic Disorder",
-        "Posttraumatic Stress Disorder",
-        "Acute Stress Disorder",
-        "Adjustment Disorder",
-        "Anorexia Nervosa",
-        "Bulimia Nervosa",
-        "Binge-Eating Disorder"
-    ]
+    # allowed_candidates = [
+    #     "Attention-Deficit/Hyperactivity Disorder (Combined Presentation)",
+    #     "Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)",
+    #     "Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)",
+    #     "Delusional Disorder",
+    #     "Schizophrenia",
+    #     "Schizoaffective Disorder (Bipolar Type)",
+    #     "Schizoaffective Disorder (Depressive Type)",
+    #     "Bipolar I Disorder",
+    #     "Bipolar II Disorder",
+    #     "Bipolar I Disorder with Psychotic Features",
+    #     "Generalized Anxiety Disorder",
+    #     "Specific Phobia",
+    #     "Major Depressive Disorder",
+    #     "Persistent Depressive Disorder",
+    #     "Major Depressive Disorder with Psychotic Features",
+    #     "Obsessive-Compulsive Disorder",
+    #     "Body Dysmorphic Disorder",
+    #     "Posttraumatic Stress Disorder",
+    #     "Acute Stress Disorder",
+    #     "Adjustment Disorder",
+    #     "Anorexia Nervosa",
+    #     "Bulimia Nervosa",
+    #     "Binge-Eating Disorder"
+    # ]
     
-    candidates_bullet = "\n".join([f"- {c}" for c in allowed_candidates])
+    # candidates_bullet = "\n".join([f"- {c}" for c in allowed_candidates])
 
     # ver.1
 #     return f"""{_no_think_prefix(doctor_model)}You are a board-certified psychiatrist.
