@@ -65,8 +65,8 @@ DOCTOR_VARIANTS: list[dict] = [
     {"key": "gpt-5.4-mini", "model": "gpt-5.4-mini-2026-03-17", "provider": "openai"},
     {"key": "claude-sonnet-5", "model": "anthropic/claude-sonnet-5", "provider": "openrouter"},
     {"key": "claude-haiku-4.5", "model": "anthropic/claude-haiku-4.5", "provider": "openrouter"},
-    {"key": "llama-3.3-70b-instruct", "model": "meta-llama/llama-3.3-70b-instruct", "provider": "openrouter"},
-    {"key": "qwen3-235b", "model": "qwen/qwen3-235b-a22b-2507", "provider": "openrouter"},
+    {"key": "llama-3.3-70b-instruct", "model": "meta-llama/llama-3.3-70b-instruct", "provider": "vllm"},
+    {"key": "qwen3-235b", "model": "qwen/qwen3-235b-a22b-2507", "provider": "vllm"},
 ]
 
 # Mirrors app.py's _run_eval_pipeline() order, plus the cross-analysis reporting
