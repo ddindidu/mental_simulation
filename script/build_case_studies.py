@@ -9,7 +9,7 @@ Classification 1 (median split on per-case mean precision / mean recall):
   (low/low intentionally excluded per user request)
 
 Classification 2 (median split on per-case mean inference quality (jaccard) /
-mean question reasonability (composite_score)):
+mean information acquisition score (IAS)):
   - high_inference_high_question
   - high_inference_low_question
   - low_inference_high_question
@@ -87,7 +87,7 @@ def fmt_symptoms(ids: list[str]) -> str:
 
 
 def aggregate_cases() -> list[dict]:
-    """Return one record per (model, log_file) with mean precision/recall/jaccard/composite."""
+    """Return one record per (model, log_file) with mean precision/recall/jaccard/IAS."""
     cases: dict[tuple[str, str], dict] = {}
 
     for model in MODELS:
@@ -114,14 +114,11 @@ def aggregate_cases() -> list[dict]:
             turns = [t for t in q.get("turns", []) if not t.get("skipped")]
             if not turns or key not in cases:
                 continue
-            cases[key]["mean_composite"] = statistics.fmean(
-                t["composite_score"] for t in turns
+            cases[key]["mean_ias"] = statistics.fmean(
+                t["ias"] for t in turns
             )
-            dcs_vals = [t["dcs"] for t in turns if t.get("dcs") is not None]
-            cases[key]["mean_dcs"] = statistics.fmean(dcs_vals) if dcs_vals else 0.0
-            cases[key]["mean_mandatory_first"] = statistics.fmean(
-                t["mandatory_first_compliance"] for t in turns
-            )
+            ecr_vals = [t["ecr"] for t in turns if t.get("ecr") is not None]
+            cases[key]["mean_ecr"] = statistics.fmean(ecr_vals) if ecr_vals else 0.0
             cases[key]["mean_redundancy_penalty"] = statistics.fmean(
                 t["redundancy_penalty"] for t in turns
             )
@@ -132,7 +129,7 @@ def aggregate_cases() -> list[dict]:
             cases[key]["question_turns"] = turns
 
     # keep only cases that have both inference and question data
-    return [c for c in cases.values() if "mean_composite" in c]
+    return [c for c in cases.values() if "mean_ias" in c]
 
 
 def median_split(cases: list[dict]) -> dict[str, float]:
@@ -140,9 +137,8 @@ def median_split(cases: list[dict]) -> dict[str, float]:
         "precision": statistics.median(c["mean_precision"] for c in cases),
         "recall": statistics.median(c["mean_recall"] for c in cases),
         "jaccard": statistics.median(c["mean_jaccard"] for c in cases),
-        "composite": statistics.median(c["mean_composite"] for c in cases),
-        "dcs": statistics.median(c["mean_dcs"] for c in cases),
-        "mandatory_first": statistics.median(c["mean_mandatory_first"] for c in cases),
+        "ias": statistics.median(c["mean_ias"] for c in cases),
+        "ecr": statistics.median(c["mean_ecr"] for c in cases),
         "redundancy_penalty": statistics.median(c["mean_redundancy_penalty"] for c in cases),
     }
 
@@ -152,7 +148,7 @@ def classify(cases: list[dict], med: dict[str, float]) -> None:
         c["prec_level"] = "high" if c["mean_precision"] >= med["precision"] else "low"
         c["rec_level"] = "high" if c["mean_recall"] >= med["recall"] else "low"
         c["inf_level"] = "high" if c["mean_jaccard"] >= med["jaccard"] else "low"
-        c["q_level"] = "high" if c["mean_composite"] >= med["composite"] else "low"
+        c["q_level"] = "high" if c["mean_ias"] >= med["ias"] else "low"
         c["cls1"] = f"{c['prec_level']}_precision_{c['rec_level']}_recall"
         c["cls2"] = f"{c['inf_level']}_inference_{c['q_level']}_question"
 
@@ -203,22 +199,21 @@ def render_case_md(c: dict, med: dict[str, float], axis_note: str) -> str:
             return lo
         return "at median"
 
-    lines.append(f"| Question reasonability (composite) | {c['mean_composite']:.3f} | {med['composite']:.3f} | {c['q_level']} |")
-    lines.append(f"|  ↳ DCS (discrimination coverage) | {c['mean_dcs']:.3f} | {med['dcs']:.3f} | {_level(c['mean_dcs'], med['dcs'], 'high', 'low')} |")
-    lines.append(f"|  ↳ Mandatory-first compliance | {c['mean_mandatory_first']:.3f} | {med['mandatory_first']:.3f} | {_level(c['mean_mandatory_first'], med['mandatory_first'], 'high', 'low')} |")
+    lines.append(f"| Information acquisition (IAS) | {c['mean_ias']:.3f} | {med['ias']:.3f} | {c['q_level']} |")
+    lines.append(f"|  ↳ ECR (expected candidate reduction) | {c['mean_ecr']:.3f} | {med['ecr']:.3f} | {_level(c['mean_ecr'], med['ecr'], 'high', 'low')} |")
     lines.append(f"|  ↳ Redundancy penalty (1=violation) | {c['mean_redundancy_penalty']:.3f} | {med['redundancy_penalty']:.3f} | {_level(c['mean_redundancy_penalty'], med['redundancy_penalty'], 'worse (more redundant)', 'better (less redundant)')} |")
     lines.append(f"| Safety screening fully covered | {c.get('safety_all_covered')} | | |")
     lines.append("")
-    lines.append("## Question reasonability — per-turn breakdown")
+    lines.append("## Information acquisition — per-turn breakdown")
     lines.append("")
-    lines.append("| Turn | Question | DCS | Mandatory-first | Redundancy penalty | Composite |")
-    lines.append("|---|---|---|---|---|---|")
+    lines.append("| Turn | Question | ECR | Redundancy penalty | IAS |")
+    lines.append("|---|---|---|---|---|")
     for t in c.get("question_turns", []):
         q_text = (t.get("question") or "").replace("|", "/").replace("\n", " ")
-        dcs_str = f"{t['dcs']:.2f}" if t.get("dcs") is not None else "n/a (single candidate)"
+        ecr_str = f"{t['ecr']:.2f}" if t.get("ecr") is not None else "n/a (single candidate)"
         lines.append(
-            f"| {t['turn']} | {q_text} | {dcs_str} | {t['mandatory_first_compliance']} | "
-            f"{t['redundancy_penalty']} | {t['composite_score']:.2f} |"
+            f"| {t['turn']} | {q_text} | {ecr_str} | "
+            f"{t['redundancy_penalty']} | {t['ias']:.2f} |"
         )
     lines.append("")
     lines.append("## Dialogue transcript")
@@ -281,17 +276,16 @@ def render_case_md(c: dict, med: dict[str, float], axis_note: str) -> str:
             q = question_by_turn.get(k)
             if q is None or q.get("skipped"):
                 return
-            dcs_str = f"{q['dcs']:.2f}" if q.get("dcs") is not None else "n/a (single candidate)"
+            ecr_str = f"{q['ecr']:.2f}" if q.get("ecr") is not None else "n/a (single candidate)"
             lines.append(
                 f"> **Judge (question scoring)** — targeted symptoms: "
-                f"{fmt_symptoms(q.get('targeted_symptoms', []))}"
+                f"{fmt_symptoms(q.get('question_targets', []))}"
             )
             lines.append(
-                f"> DCS={dcs_str} kg_edge_fraction={q.get('kg_edge_fraction')} "
-                f"edge_alignment={q.get('edge_alignment')} "
-                f"mandatory_first_compliance={q['mandatory_first_compliance']} "
+                f"> diagnostic_relevance={q.get('diagnostic_relevance')} "
                 f"redundancy_penalty={q['redundancy_penalty']} "
-                f"composite={q['composite_score']:.2f}"
+                f"ECR={ecr_str} "
+                f"IAS={q['ias']:.2f}"
             )
             lines.append("")
 
@@ -353,10 +347,10 @@ def main() -> None:
         print(f"cls1 {bucket}: {len(picked)} cases -> {out_dir}")
 
     cls2_buckets = {
-        "high_inference_high_question": lambda c: min(c["mean_jaccard"] - med["jaccard"], c["mean_composite"] - med["composite"]),
-        "high_inference_low_question": lambda c: (c["mean_jaccard"] - med["jaccard"]) - (c["mean_composite"] - med["composite"]),
-        "low_inference_high_question": lambda c: (c["mean_composite"] - med["composite"]) - (c["mean_jaccard"] - med["jaccard"]),
-        "low_inference_low_question": lambda c: -max(c["mean_jaccard"] - med["jaccard"], c["mean_composite"] - med["composite"]),
+        "high_inference_high_question": lambda c: min(c["mean_jaccard"] - med["jaccard"], c["mean_ias"] - med["ias"]),
+        "high_inference_low_question": lambda c: (c["mean_jaccard"] - med["jaccard"]) - (c["mean_ias"] - med["ias"]),
+        "low_inference_high_question": lambda c: (c["mean_ias"] - med["ias"]) - (c["mean_jaccard"] - med["jaccard"]),
+        "low_inference_low_question": lambda c: -max(c["mean_jaccard"] - med["jaccard"], c["mean_ias"] - med["ias"]),
     }
     for bucket, score_fn in cls2_buckets.items():
         picked = pick_top(cases, "cls2", bucket, score_fn, N_PER_BUCKET)

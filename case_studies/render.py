@@ -29,34 +29,29 @@ AXIS_META = {
         "icon": "🧲", "higher_is_better": True,
     },
     "question_quality": {
-        "title": "Question Quality",
-        "blurb": "Per turn, does the doctor's question target discriminating symptoms (DCS), avoid asking "
-                 "about already-resolved symptoms (redundancy), and measurably shrink the candidate set "
-                 "afterward (information gain)?",
+        "title": "Information Acquisition",
+        "blurb": "Per turn, does the doctor's question target diagnostically relevant, unresolved "
+                 "information — discriminating symptoms or unconfirmed mandatory criteria (IAS) — while "
+                 "also being expected to shrink the candidate set (ECR)?",
         "icon": "❓", "higher_is_better": True,
     },
-    "information_gain": {
-        "title": "Information Gain",
-        "blurb": "Mean expected candidate-set reduction per question (IG = 1 − E[|C_t+1|] / |C_t|), "
-                 "conditioned on turns where the candidate set had not yet collapsed to one.",
+    "ecr": {
+        "title": "Expected Candidate Reduction",
+        "blurb": "Mean expected candidate-set reduction per question (ECR = 1 − E[|C_t+1|] / |C_t|, "
+                 "averaged per-target over unresolved question targets), conditioned on turns where the "
+                 "candidate set had not yet collapsed to one.",
         "icon": "📉", "higher_is_better": True,
     },
-    "ig_positive_rate": {
-        "title": "Positive Information-Gain Rate",
+    "ecr_positive_rate": {
+        "title": "Positive ECR Rate",
         "blurb": "What fraction of a doctor's questions are expected to shrink the candidate set at all "
-                 "(IG > 0), versus questions that are redundant or off-target (IG ≤ 0)?",
+                 "(ECR > 0), versus questions that are redundant or off-target (ECR ≤ 0)?",
         "icon": "➕", "higher_is_better": True,
     },
-    "discriminating_rate": {
-        "title": "Discriminating-Question Rate",
-        "blurb": "What fraction of a doctor's questions target at least one symptom that discriminates "
-                 "between two currently-candidate disorders (DCS > 0)?",
-        "icon": "🔀", "higher_is_better": True,
-    },
-    "mean_dcs": {
-        "title": "Mean Discrimination Coverage Score",
-        "blurb": "Averaged over turns: what fraction of the symptoms a question targets are actually "
-                 "discriminating symptoms for the current candidate set (DCS)?",
+    "mean_ias": {
+        "title": "Mean Information Acquisition Score",
+        "blurb": "Averaged over turns: IAS = diagnostic relevance × (1 − redundancy) — does the question "
+                 "target diagnostically relevant, not-yet-resolved information for the current candidate set?",
         "icon": "🧭", "higher_is_better": True,
     },
     "diagnostic_reasoning": {
@@ -114,7 +109,7 @@ AXIS_META = {
 
 AXIS_ORDER = [
     "diagnosis_precision", "diagnosis_recall",
-    "question_quality", "information_gain", "ig_positive_rate", "discriminating_rate", "mean_dcs",
+    "question_quality", "ecr", "ecr_positive_rate", "mean_ias",
     "diagnostic_reasoning",
     "efficiency", "avg_turn_count", "cssr", "time_to_first_correct", "redundant_turn_ratio", "overcommitment",
     "safety_compliance",
@@ -348,11 +343,10 @@ def render_turn(t: dict, highlighted_turn) -> str:
             def chip(label, val, digits=2):
                 return f'<span class="qchip">{label} {fmt(val, digits)}</span>'
             chips = '<div class="qscores">' + "".join([
-                chip("composite", qs.get("composite_score")),
-                chip("DCS", qs.get("dcs")),
-                chip("IG", qs.get("information_gain")),
+                chip("IAS", qs.get("ias")),
+                chip("relevance", qs.get("diagnostic_relevance")),
+                chip("ECR", qs.get("ecr")),
                 chip("redundant", qs.get("redundancy_penalty"), 0),
-                chip("mandatory-first", qs.get("mandatory_first_compliance"), 0),
                 chip("cand→" + fmt(qs.get("candidate_size_after"), 0), None) if qs.get("candidate_size_after") is not None else "",
             ]) + '</div>'
         parts.append(
@@ -426,15 +420,15 @@ def render_model_bars(agg: dict, this_model: str, higher_is_better=True) -> str:
 
 def render_diagnostic_reasoning(dre: dict) -> str:
     if not dre or dre.get("overall_score") is None:
-        return '<div class="card"><h2>Diagnostic reasoning judge</h2><p style="color:var(--text-muted)">No structured checklist evaluation for this episode.</p></div>'
-    parts = ['<div class="card"><h2>Diagnostic reasoning judge (checklist vs DSM-5 criteria)</h2>']
+        return '<div class="card"><h2>Diagnostic reasoning</h2><p style="color:var(--text-muted)">No structured checklist evaluation for this episode.</p></div>'
+    parts = ['<div class="card"><h2>Diagnostic reasoning (algorithmic symptom coverage + LLM-judged scalar requirements)</h2>']
     parts.append('<div class="metric-grid" style="margin-bottom:12px">')
     parts.append(f'<div class="metric"><div class="k">Overall score</div><div class="v">{fmt(dre.get("overall_score"))}</div></div>')
     parts.append(f'<div class="metric"><div class="k">Symptom coverage</div><div class="v">{fmt(dre.get("symptom_satisfaction_score"))}</div></div>')
     parts.append(f'<div class="metric"><div class="k">Duration</div><div class="v">{fmt(dre.get("duration_score"))}</div></div>')
     parts.append(f'<div class="metric"><div class="k">Functional impairment</div><div class="v">{fmt(dre.get("functional_impairment_score"))}</div></div>')
     parts.append('</div>')
-    for ce in dre.get("judge_criterion_evaluations") or []:
+    for ce in dre.get("symptom_criterion_evaluations") or []:
         parts.append('<div class="judge-group">')
         parts.append(f'<span class="score">{fmt(ce.get("symptom_coverage_score"))}</span>')
         parts.append(f'<div class="gname">{esc(ce.get("group"))} <span style="font-weight:400;color:var(--text-muted)">'

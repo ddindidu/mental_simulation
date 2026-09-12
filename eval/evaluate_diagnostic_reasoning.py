@@ -99,6 +99,26 @@ def _log_sort_key(name: str) -> tuple[int, int]:
     return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
 
 
+def _load_final_cumulative_evidence(results_dir: Path, log_name: str) -> tuple[set[str], set[str]]:
+    """
+    Final-turn cumulative_confirmed/cumulative_denied from the *_result.json
+    written by symptom_diagnosis.py — the algorithmic symptom-group scorer's
+    evidence source. Empty sets if the result file or turns are missing.
+    """
+    result_path = results_dir / f"{log_name}_result.json"
+    if not result_path.exists():
+        return set(), set()
+    try:
+        data = json.loads(result_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return set(), set()
+    turns = data.get("turns", [])
+    if not turns:
+        return set(), set()
+    last = turns[-1]
+    return set(last.get("cumulative_confirmed", [])), set(last.get("cumulative_denied", []))
+
+
 # ── Formatting ────────────────────────────────────────────────────────────────
 
 def _checklist_or_reason(doc_block: dict) -> dict | str | None:
@@ -200,16 +220,20 @@ def main() -> None:
         diagnosis      = str(doc_block.get("diagnosis") or "").strip()
         checklist_data = _checklist_or_reason(doc_block)
         has_structured = isinstance(checklist_data, dict)
+        final_confirmed, final_denied = _load_final_cumulative_evidence(results_dir, log_file.stem)
 
-        print(f"  Scoring {log_file.stem}  [{gt}]  has_checklist={has_structured} ...",
+        print(f"  Scoring {log_file.stem}  [{gt}]  has_checklist={has_structured} "
+              f"evidence_symptoms={len(final_confirmed)} ...",
               flush=True)
 
         result = score_episode(
-            disease_id       = gt,
-            doctor_checklist = checklist_data,
-            criteria         = criteria,
-            sym_names        = sym_names,
-            llm_chat         = _llm_chat,
+            disease_id            = gt,
+            doctor_checklist      = checklist_data,
+            criteria              = criteria,
+            sym_names             = sym_names,
+            llm_chat              = _llm_chat,
+            cumulative_confirmed  = final_confirmed,
+            cumulative_denied     = final_denied,
         )
 
         episode_results.append({
@@ -218,6 +242,7 @@ def main() -> None:
             "ground_truth_name":  id2name.get(gt, gt),
             "doctor_diagnosis":   diagnosis,
             "has_structured_checklist": has_structured,
+            "scoring_method":     result.get("scoring_method", {}),
             "overall_score":      result.get("overall_score", 0.0),
             "symptom_satisfaction_score":   result.get("symptom_satisfaction_score"),
             "symptom_group_scores":         result.get("symptom_group_scores", {}),
@@ -227,7 +252,7 @@ def main() -> None:
             "psychosocial_stressor_score":  result.get("psychosocial_stressor_score"),
             "additional_requirements_score": result.get("additional_requirements_score"),
             "_parse_error":       result.get("_parse_error", False),
-            "judge_criterion_evaluations": result.get("criterion_evaluations", []),
+            "symptom_criterion_evaluations": result.get("criterion_evaluations", []),
             "judge_notes": {
                 "duration_verified":             result.get("duration_verified"),
                 "functional_impairment_verified": result.get("functional_impairment_verified"),

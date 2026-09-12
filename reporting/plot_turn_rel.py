@@ -19,9 +19,8 @@ Outputs (saved under --output/turn_rel/):
   turn_rel_inference_precision.png
   turn_rel_inference_recall.png
   turn_rel_question.png
-  turn_rel_question_dcs.png
-  turn_rel_question_composite.png
-  turn_rel_question_mandatory.png
+  turn_rel_question_ias.png
+  turn_rel_question_ecr.png
   turn_rel_question_redundancy.png
 
 Usage:
@@ -53,7 +52,7 @@ BINS       = [0.0, 0.25, 0.5, 0.75, 1.0]
 BIN_LABELS = ["0%\n(start)", "25%", "50%", "75%", "100%\n(end)"]
 
 INF_METRICS = ("accuracy", "precision", "recall", "jaccard", "weighted_recall")
-Q_METRICS   = ("dcs", "composite_score", "mandatory_first_compliance", "redundancy_penalty")
+Q_METRICS   = ("ias", "ecr", "redundancy_penalty")
 
 INF_COLORS  = {"accuracy": "#1f77b4", "precision": "#ff7f0e", "recall": "#2ca02c",
                "jaccard": "#9467bd", "weighted_recall": "#8c564b"}
@@ -62,13 +61,9 @@ INF_MARKERS = {"accuracy": "o", "precision": "s", "recall": "^",
 INF_LABELS  = {"accuracy": "Accuracy", "precision": "Precision", "recall": "Recall",
                "jaccard": "Jaccard", "weighted_recall": "Weighted Recall"}
 
-Q_COLORS    = {"dcs": "#1f77b4", "composite_score": "#ff7f0e",
-               "mandatory_first_compliance": "#2ca02c", "redundancy_penalty": "#d62728"}
-Q_MARKERS   = {"dcs": "o", "composite_score": "s",
-               "mandatory_first_compliance": "^", "redundancy_penalty": "v"}
-Q_LABELS    = {"dcs": "DCS", "composite_score": "Composite",
-               "mandatory_first_compliance": "Mandatory First",
-               "redundancy_penalty": "Redundancy Penalty"}
+Q_COLORS    = {"ias": "#1f77b4", "ecr": "#17becf", "redundancy_penalty": "#d62728"}
+Q_MARKERS   = {"ias": "o", "ecr": "D", "redundancy_penalty": "v"}
+Q_LABELS    = {"ias": "IAS", "ecr": "ECR", "redundancy_penalty": "Redundancy Penalty"}
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -364,12 +359,10 @@ def main():
                            Q_METRICS,
                            Q_COLORS, Q_MARKERS, Q_LABELS, Q_METRICS)
         _save_grid(dids, s_dis, c_ser, s_ovr, c_ovr, id2name, _q_comb,
-                   "Question Metrics — Relative Progress  (DCS / Composite / Mandatory / Redundancy)",
+                   "Question Metrics — Relative Progress  (IAS / ECR / Redundancy)",
                    args.output / "turn_rel_question.png")
 
-        fname_map = {"dcs": "dcs", "composite_score": "composite",
-                     "mandatory_first_compliance": "mandatory",
-                     "redundancy_penalty": "redundancy"}
+        fname_map = {"ias": "ias", "ecr": "ecr", "redundancy_penalty": "redundancy"}
         for met, fname in fname_map.items():
             def _fn(ax, bd, ser, title, _m=met):
                 _draw_single(ax, bd, ser, title, _m,

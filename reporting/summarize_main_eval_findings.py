@@ -109,10 +109,10 @@ def main() -> None:
             ("recall",          "Recall\n(truth coverage)",     inf, False),
             ("jaccard",         "Jaccard Index",                inf, False),
         ]),
-        ("Question Quality (cosine)", [
-            ("cosine_conditional_mean_composite", "Cond. Mean\nComposite",       q, False),
-            ("cosine_discriminating_q_rate",      "Discriminating-Q\nRate",      q, False),
-            ("cosine_ig_positive_rate",           "IG-Positive\nRate",           q, False),
+        ("Information Acquisition (cosine)", [
+            ("cosine_conditional_mean_ias", "Cond. Mean\nIAS",       q, False),
+            ("cosine_conditional_mean_ecr", "Cond. Mean\nECR",       q, False),
+            ("cosine_ecr_positive_rate",    "ECR-Positive\nRate",    q, False),
         ]),
         ("Efficiency", [
             ("final_accuracy",        "Final Accuracy\n(exact diagnosis)", eff, False),
@@ -172,8 +172,8 @@ def main() -> None:
         ("Recall",                inf, "recall",                             False),
         ("Jaccard",               inf, "jaccard",                            False),
         ("Weighted Recall",       inf, "weighted_recall",                    False),
-        ("Q: Cond. Composite",    q,   "cosine_conditional_mean_composite",  False),
-        ("Q: Disc-Q Rate",        q,   "cosine_discriminating_q_rate",       False),
+        ("Q: Cond. IAS",          q,   "cosine_conditional_mean_ias",        False),
+        ("Q: Cond. ECR",          q,   "cosine_conditional_mean_ecr",        False),
         ("Final Accuracy",        eff, "final_accuracy",                     False),
         ("CSSR",                  eff, "cssr",                               False),
         ("Turn Count",            eff, "turn_count",                         True),

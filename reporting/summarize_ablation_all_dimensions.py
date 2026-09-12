@@ -10,7 +10,7 @@ For each dimension, applies macro-mean aggregation per stratum.
 
 Data sources:
   Inference Quality   : analysis/<j>/<j>/<m>/turn_eval.json            (per-turn rows)
-  Question Quality    : results/<j>/<j>/<m>/question_eval.json          (per-episode, per-mapper)
+  Info. Acquisition   : results/<j>/<j>/<m>/question_eval.json          (per-episode, per-mapper)
   Efficiency          : results/<j>/<j>/<m>/efficiency_eval.json        (per-episode)
   Diagnostic Reasoning: results/<j>/<j>/<m>/diagnostic_reasoning_eval.json (per-episode)
 
@@ -163,10 +163,10 @@ def ablate_inference(outcomes: dict[str, bool], episodes: list[dict]) -> dict:
 # ─── Dimension 2: Question Quality ───────────────────────────────────────────
 
 Q_METRICS = [
-    "conditional_mean_composite", "conditional_mean_ig",
-    "ig_positive_rate", "discriminating_q_rate",
-    "mean_composite", "mean_dcs", "redundancy_rate",
-    "early_ig_mean", "active_turn_count",
+    "conditional_mean_ias", "conditional_mean_ecr",
+    "ecr_positive_rate",
+    "mean_ias", "mean_ecr", "redundancy_rate",
+    "early_ecr_mean", "active_turn_count",
 ]
 Q_MAPPERS = ("cosine", "llm_judge")
 
@@ -345,9 +345,9 @@ def _plot_all(all_results: dict[str, dict]) -> None:
     DIM_CONFIGS = [
         ("inference",  "Inference Quality",  ["accuracy", "recall", "precision", "jaccard"],
          ["Accuracy\n(exact match)", "Recall\n(truth coverage)", "Precision", "Jaccard"]),
-        ("question",   "Question Quality\n(cosine mapper)",
-         ["conditional_mean_composite", "discriminating_q_rate", "ig_positive_rate", "conditional_mean_ig"],
-         ["Cond. Mean\nComposite", "Discriminating-Q\nRate", "IG-Positive\nRate", "Cond. Mean IG"]),
+        ("question",   "Information Acquisition\n(cosine mapper)",
+         ["conditional_mean_ias", "conditional_mean_ecr", "ecr_positive_rate", "redundancy_rate"],
+         ["Cond. Mean\nIAS", "Cond. Mean\nECR", "ECR-Positive\nRate", "Redundancy\nRate"]),
         ("efficiency", "Efficiency",
          ["cssr", "redundant_turn_ratio", "monotonicity_violations", "turn_count"],
          ["CSSR\n(↑ better)", "Redundant Turn\nRatio (↓ better)", "Monotonicity\nViolations (↓)", "Turn Count\n(↓ better)"]),
@@ -420,9 +420,9 @@ def _plot_all(all_results: dict[str, dict]) -> None:
         ("inference", "accuracy",                      "Inf: Accuracy",       False),
         ("inference", "recall",                        "Inf: Recall",         False),
         ("inference", "precision",                     "Inf: Precision",      False),
-        ("question",  "conditional_mean_composite",    "Q: Cond Composite",   False),
-        ("question",  "discriminating_q_rate",         "Q: Disc-Q Rate",      False),
-        ("question",  "ig_positive_rate",              "Q: IG-Pos Rate",      False),
+        ("question",  "conditional_mean_ias",          "Q: Cond IAS",         False),
+        ("question",  "conditional_mean_ecr",          "Q: Cond ECR",         False),
+        ("question",  "ecr_positive_rate",             "Q: ECR-Pos Rate",     False),
         ("efficiency","cssr",                          "Eff: CSSR",           False),
         ("efficiency","redundant_turn_ratio",          "Eff: Redund Ratio",   True),
         ("efficiency","turn_count",                    "Eff: Turn Count",     True),
@@ -490,7 +490,7 @@ def _plot_all(all_results: dict[str, dict]) -> None:
         ax2.axvline(b - 0.5, color="white", linewidth=2)
 
     # Dimension labels on top
-    dim_spans = [("Inference\nQuality", 0, 2), ("Question Quality\n(cosine)", 3, 5),
+    dim_spans = [("Inference\nQuality", 0, 2), ("Info. Acquisition\n(cosine)", 3, 5),
                  ("Efficiency", 6, 8), ("Diagnostic\nReasoning", 9, 11)]
     ax2_top = ax2.secondary_xaxis("top")
     ax2_top.set_xticks([])
@@ -541,7 +541,7 @@ def main() -> None:
         dim_rows["inference"] += _flatten_agg(model, "inference",
                                                mdata["inference"], INF_METRICS)
 
-        # 2. Question Quality
+        # 2. Information Acquisition (IAS / ECR)
         q_eps = _load_question_episodes(model)
         if q_eps and "episode_metrics" in q_eps[0]:
             mdata["question"] = ablate_question(outcomes, q_eps)

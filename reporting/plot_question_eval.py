@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 """
-Question Metrics Evaluation Plotter  (spec §4.4)
+Information Acquisition Evaluation Plotter (IAS / ECR)
 
 Reads *_result.json + log .txt files, runs SemanticSimilarityMapper (no LLM needed),
-computes per-turn question scores, and generates visualisations:
+computes per-turn IAS/ECR scores, and generates visualisations:
   - question_eval_semantic.json                  (saved directly under --output)
-  - question_eval/question_eval_plot.png         (DCS + composite + mandatory_first + redundancy + IG combined)
-  - question_eval/question_eval_plot_dcs.png
-  - question_eval/question_eval_plot_composite.png
-  - question_eval/question_eval_plot_mandatory.png
+  - question_eval/question_eval_plot.png         (IAS + ECR + redundancy combined)
+  - question_eval/question_eval_plot_ias.png
+  - question_eval/question_eval_plot_ecr.png
   - question_eval/question_eval_plot_redundancy.png
-  - question_eval/question_eval_plot_ig.png
 
 For LLM-based mappers (llm_judge / hybrid), run evaluate_question.py separately;
 this script is intentionally LLM-free for reproducible offline analysis.
@@ -44,15 +42,9 @@ from eval.question_score import (
     SemanticSimilarityMapper,
     load_all_symptoms,
     load_criteria,
-    load_differential_edges,
-    score_dcs,
-    score_edge_alignment,
-    mandatory_first_compliance,
-    redundancy_penalty,
-    composite_question_score,
-    score_information_gain,
     safety_screening_compliance,
 )
+from eval.informative_question_score import score_question, DEFAULT_PROBABILITY_MODE
 
 
 # ── Log parsing: questions & inference candidates per turn ─────────────────────
@@ -100,7 +92,6 @@ def _build_code_to_id() -> dict[str, str]:
 def compute_question_metrics(results_dir: Path, logs_dir: Path) -> list[dict]:
     all_symptoms = load_all_symptoms()
     criteria     = load_criteria()
-    diff_edges   = load_differential_edges()
     code2id      = _build_code_to_id()
     mapper       = SemanticSimilarityMapper()
 
@@ -149,40 +140,19 @@ def compute_question_metrics(results_dir: Path, logs_dir: Path) -> list[dict]:
                 if code2id.get(c.strip().upper())
             ]
 
-            q_syms     = mapper.map(question, all_symptoms)
-            dcs, kg_fr = score_dcs(q_syms, candidate_ids, criteria, diff_edges)
-            edge_align = score_edge_alignment(q_syms, candidate_ids, diff_edges)
-            mand_first = mandatory_first_compliance(
-                q_syms, candidate_ids, cumulative_confirmed, cumulative_denied, criteria)
-            redund     = redundancy_penalty(q_syms, cumulative_confirmed, cumulative_denied)
-            composite  = composite_question_score(dcs, edge_align, mand_first, redund)
-
-            # KG-based Information Gain: how much does this question narrow |C_t|?
-            cs = turn_data.get("candidate_set", {})
-            current_size = (
-                len(set(cs.get("high_likely", []))
-                    | set(cs.get("moderate_likely", []))
-                    | set(cs.get("low_likely", [])))
-                if cs else 0
-            )
-            ig = score_information_gain(
-                q_syms, cumulative_confirmed, cumulative_denied, criteria, current_size
+            score = score_question(
+                question, candidate_ids,
+                cumulative_confirmed, cumulative_denied,
+                all_symptoms, criteria, mapper,
+                probability_mode=DEFAULT_PROBABILITY_MODE,
             )
 
-            asked_per_turn.append(set(q_syms))
+            asked_per_turn.append(set(score["question_targets"]))
             turns_out.append({
-                "turn":                       t,
-                "question":                   question,
-                "candidate_ids":              candidate_ids,
-                "targeted_symptoms":          q_syms,
-                "dcs":                        dcs,
-                "kg_edge_fraction":           round(kg_fr, 4),
-                "edge_alignment":             edge_align,
-                "mandatory_first_compliance": mand_first,
-                "redundancy_penalty":         redund,
-                "composite_score":            composite,
-                "information_gain":           ig,
-                "candidate_size_before":      current_size,
+                "turn":              t,
+                "question":          question,
+                "candidate_ids":     candidate_ids,
+                **score,
             })
 
         safety = safety_screening_compliance(asked_per_turn)
@@ -200,7 +170,7 @@ def compute_question_metrics(results_dir: Path, logs_dir: Path) -> list[dict]:
 
 # ── Build per-disorder stats ────────────────────────────────────────────────────
 
-QMETRICS = ("dcs", "composite_score", "mandatory_first_compliance", "redundancy_penalty", "information_gain")
+QMETRICS = ("ias", "ecr", "redundancy_penalty")
 
 def build_stats(episodes: list[dict]):
     stats_by_dis: dict = defaultdict(lambda: defaultdict(lambda: {m: [] for m in QMETRICS}))
@@ -246,23 +216,17 @@ def build_stats(episodes: list[dict]):
 
 METRIC_IDX = {m: i + 1 for i, m in enumerate(QMETRICS)}
 COLORS  = {
-    "dcs":                        "#1f77b4",
-    "composite_score":            "#ff7f0e",
-    "mandatory_first_compliance": "#2ca02c",
-    "redundancy_penalty":         "#d62728",
-    "information_gain":           "#17becf",
+    "ias":                "#1f77b4",
+    "ecr":                "#17becf",
+    "redundancy_penalty": "#d62728",
 }
 MARKERS = {
-    "dcs": "o", "composite_score": "s",
-    "mandatory_first_compliance": "^", "redundancy_penalty": "v",
-    "information_gain": "D",
+    "ias": "o", "ecr": "D", "redundancy_penalty": "v",
 }
 YLABELS = {
-    "dcs":                        "DCS",
-    "composite_score":            "Composite",
-    "mandatory_first_compliance": "Mandatory First",
-    "redundancy_penalty":         "Redundancy Penalty",
-    "information_gain":           "Information Gain",
+    "ias":                "IAS",
+    "ecr":                "ECR",
+    "redundancy_penalty": "Redundancy Penalty",
 }
 
 
@@ -349,7 +313,7 @@ def _draw_combined(ax, turn_data: dict, series: dict, title: str):
                     zorder=3, linestyle=ls)
 
     ax2 = ax.twinx()
-    counts = [len([v for v in turn_data[t]["dcs"] if not np.isnan(v)]) for t in turns]
+    counts = [len([v for v in turn_data[t]["ias"] if not np.isnan(v)]) for t in turns]
     ax2.bar(turns, counts, color="gray", alpha=0.15, width=0.7, zorder=0)
     ax2.set_ylabel("# Samples", fontsize=7, color="gray")
     ax2.tick_params(axis="y", labelsize=6, colors="gray")
@@ -416,11 +380,9 @@ def plot_all(episodes: list[dict], results_dir: Path) -> None:
 
     # Per-metric
     metric_names = {
-        "dcs":                        "dcs",
-        "composite_score":            "composite",
-        "mandatory_first_compliance": "mandatory",
-        "redundancy_penalty":         "redundancy",
-        "information_gain":           "ig",
+        "ias":                "ias",
+        "ecr":                "ecr",
+        "redundancy_penalty": "redundancy",
     }
     for metric, fname_suffix in metric_names.items():
         def _fn(ax, td, ser, title, _m=metric):

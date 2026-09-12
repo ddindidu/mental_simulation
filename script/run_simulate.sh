@@ -2,8 +2,8 @@
 set -e
 cd "$(dirname "$0")/.."
 
-PATIENT_MODELS=("gemini-3.5-flash")
-DOCTOR_MODELS=("gemini-3.5-flash")
+PATIENT_MODELS=("gemini-3.1-pro-preview")
+DOCTOR_MODELS=("gemini-3.1-pro-preview")
 
 # 특정 프로필 파일을 지정하려면 아래 배열에 경로를 추가하세요.
 # SYMPTOM_PROFILES=("data/symptom_profiles/sample_profile.json")

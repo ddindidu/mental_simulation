@@ -60,8 +60,8 @@ MODEL_COLORS = {
 AXES = [
     ("Precision\n(Inference)", "inference", "precision"),
     ("Recall\n(Inference)", "inference", "recall"),
-    ("Cond. Composite Score\n(Question)", "question", "llm_judge_conditional_mean_composite"),
-    ("Cond. Information Gain\n(Question)", "question", "llm_judge_conditional_mean_ig"),
+    ("Cond. IAS\n(Question)", "question", "llm_judge_conditional_mean_ias"),
+    ("Cond. ECR\n(Question)", "question", "llm_judge_conditional_mean_ecr"),
     ("Turn Count\n(Efficiency)", "efficiency", "turn_count"),
     ("CSSR\n(Efficiency)", "efficiency", "cssr"),
     ("Final Accuracy", "efficiency", "final_accuracy"),

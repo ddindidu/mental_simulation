@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
-Question Reasonability Evaluation — spec §4.4
+Information Acquisition Evaluation — "정보 수집 능력" dimension (IAS / ECR)
 
 For each logged episode:
   1. Load cumulative symptom state and candidate_set per turn from result JSON
   2. Parse doctor questions and inference candidates from the log file
   3. Run cosine and llm_judge mappers on each question
-  4. Compute per-turn scores: DCS, edge_alignment, mandatory_first, redundancy,
-     composite, information_gain, candidate_size
+  4. Compute per-turn scores: IAS (+ its diagnostic_relevance / redundancy_penalty
+     components), ECR, and every intermediate symptom set used to derive them
+     (discriminative/required/candidate/resolved/unresolved symptoms) for
+     debugging and case-study inspection.
   5. Compute per-episode aggregate metrics (all-turn + active-turn conditional)
   6. Track safety-critical symptom coverage across the episode
 
@@ -33,20 +35,15 @@ import numpy as np
 from eval.question_score import (
     CosineSemanticMapper,
     LLMJudgeMapper,
-    HybridMapper,
-    SemanticSimilarityMapper,
     load_all_symptoms,
     load_criteria,
-    load_differential_edges,
-    score_dcs,
-    score_edge_alignment,
-    mandatory_first_compliance,
-    redundancy_penalty,
-    composite_question_score,
-    score_information_gain,
     safety_screening_compliance,
-    compute_episode_question_metrics,
     SAFETY_CRITICAL_IDS,
+)
+from eval.informative_question_score import (
+    score_question,
+    compute_episode_information_metrics,
+    DEFAULT_PROBABILITY_MODE,
 )
 from utils.llm import get_run_dir as _get_run_dir
 from utils.config import CONFIG
@@ -123,7 +120,6 @@ def _extract_questions_and_candidates(
 def evaluate() -> list[dict]:
     all_symptoms = load_all_symptoms()
     criteria     = load_criteria()
-    diff_edges   = load_differential_edges()
     code2id      = _build_code_to_id()
 
     mappers: dict[str, CosineSemanticMapper | LLMJudgeMapper] = {
@@ -191,37 +187,20 @@ def evaluate() -> list[dict]:
 
             scores_by_mapper: dict[str, dict] = {}
             for mapper_name, mapper in mappers.items():
-                q_syms   = mapper.map(question, all_symptoms)
-                dcs, kg_frac = score_dcs(q_syms, candidate_ids, criteria, diff_edges)
-                edge_align   = score_edge_alignment(q_syms, candidate_ids, diff_edges)
-                mand_first   = mandatory_first_compliance(
-                    q_syms, candidate_ids,
-                    cumulative_confirmed, cumulative_denied, criteria,
-                )
-                redund    = redundancy_penalty(q_syms, cumulative_confirmed, cumulative_denied)
-                composite = composite_question_score(dcs, edge_align, mand_first, redund)
-                ig        = score_information_gain(
-                    q_syms,
+                scores_by_mapper[mapper_name] = score_question(
+                    question,
+                    candidate_ids,
                     cumulative_confirmed,
                     cumulative_denied,
+                    all_symptoms,
                     criteria,
-                    candidate_size,
+                    mapper,
+                    probability_mode=DEFAULT_PROBABILITY_MODE,
                 )
 
-                scores_by_mapper[mapper_name] = {
-                    "targeted_symptoms":          q_syms,
-                    "dcs":                        dcs,
-                    "kg_edge_fraction":           round(kg_frac, 4),
-                    "edge_alignment":             edge_align,
-                    "mandatory_first_compliance": mand_first,
-                    "redundancy_penalty":         redund,
-                    "composite_score":            composite,
-                    "information_gain":           ig,
-                }
-
-            # Safety tracking: union of cosine symptoms as reference
+            # Safety tracking: union of cosine question_targets as reference
             asked_per_turn.append(
-                set(scores_by_mapper.get("cosine", {}).get("targeted_symptoms", []))
+                set(scores_by_mapper.get("cosine", {}).get("question_targets", []))
             )
 
             turns_out.append({
@@ -234,9 +213,9 @@ def evaluate() -> list[dict]:
                 "scores_by_mapper":      scores_by_mapper,
             })
 
-        # Per-episode aggregate metrics (new conditional metrics included)
+        # Per-episode aggregate metrics (all-turn + active-turn conditional)
         episode_metrics: dict[str, dict] = {
-            mapper_name: compute_episode_question_metrics(turns_out, mapper_name)
+            mapper_name: compute_episode_information_metrics(turns_out, mapper_name)
             for mapper_name in mappers
         }
 
@@ -285,14 +264,13 @@ def _print_summary(episode_results: list[dict]) -> None:
     def _avg(lst: list) -> str:
         return f"{float(np.mean(lst)):.4f}" if lst else "   N/A"
 
-    print("\n=== Question Quality Summary ===")
+    print("\n=== Information Acquisition Summary (IAS / ECR) ===")
 
     # ── Main metrics ───────────────────────────────────────────────────────────
     MAIN = [
-        ("conditional_mean_composite", "Cond. Mean Composite (active turns)"),
-        ("conditional_mean_ig",        "Cond. Mean IG        (active turns)"),
-        ("ig_positive_rate",           "IG-Positive Rate     (active turns)"),
-        ("discriminating_q_rate",      "Discriminating-Q Rate (composite>0.3)"),
+        ("conditional_mean_ias", "Cond. Mean IAS       (active turns)"),
+        ("conditional_mean_ecr", "Cond. Mean ECR       (active turns)"),
+        ("ecr_positive_rate",    "ECR-Positive Rate    (active turns)"),
     ]
     print(f"\n{'── Main Metrics':-<60}")
     hdr = f"  {'Metric':<42} {'cosine':>9} {'llm_judge':>10}"
@@ -306,10 +284,10 @@ def _print_summary(episode_results: list[dict]) -> None:
 
     # ── Supporting metrics ─────────────────────────────────────────────────────
     SUB = [
-        ("mean_composite",   "Mean Composite      (all turns)"),
-        ("mean_dcs",         "Mean DCS            (all turns)"),
+        ("mean_ias",         "Mean IAS            (all turns)"),
+        ("mean_ecr",         "Mean ECR            (all turns)"),
         ("redundancy_rate",  "Redundancy Rate     (all turns)"),
-        ("early_ig_mean",    "Early IG Mean       (first half active)"),
+        ("early_ecr_mean",   "Early ECR Mean      (first half active)"),
         ("active_turn_count","Active Turn Count"),
     ]
     print(f"\n{'── Supporting Metrics':-<60}")

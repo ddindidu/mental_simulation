@@ -129,20 +129,20 @@ print(f"  HIGH case: {best_model} / {a1_high[2]}  mean_precision={a1_high[3]['me
 print(f"  LOW  case: {worst_model} / {a1_low[2]}  mean_precision={a1_low[3]['mean_precision']:.3f} final_acc={a1_low[3]['final_accuracy']}")
 print()
 
-# ── Axis 2: Question quality (turn-level within episode) ──────────────────
+# ── Axis 2: Information acquisition (turn-level within episode, IAS) ──────
 
 print("=" * 70)
-print("AXIS 2: Question quality (LLM-judge composite score, per turn)")
+print("AXIS 2: Information acquisition (LLM-judge IAS, per turn)")
 print("=" * 70)
 axis2_model_stats = {}
 for m, md in MODELS.items():
     vals = []
     for log, qe in md.question_eval.items():
         em = qe.get("episode_metrics", {}).get("llm_judge", {})
-        if em.get("mean_composite") is not None:
-            vals.append(em["mean_composite"])
+        if em.get("mean_ias") is not None:
+            vals.append(em["mean_ias"])
     axis2_model_stats[m] = stats.mean(vals) if vals else 0.0
-    print(f"  {m:28s} mean_composite={axis2_model_stats[m]:.4f}  n={len(vals)}")
+    print(f"  {m:28s} mean_ias={axis2_model_stats[m]:.4f}  n={len(vals)}")
 
 a2_best_model = max(axis2_model_stats, key=axis2_model_stats.get)
 a2_worst_model = min(axis2_model_stats, key=axis2_model_stats.get)
@@ -158,7 +158,7 @@ def pick_axis2_turn(md: ModelData, want_good: bool):
         turns = qe.get("turns", [])
         for i, t in enumerate(turns):
             lj = t.get("scores_by_mapper", {}).get("llm_judge", {})
-            comp = lj.get("composite_score")
+            comp = lj.get("ias")
             if comp is None:
                 continue
             prev_size = turns[i - 1]["candidate_size"] if i > 0 else N_DISORDERS
@@ -182,8 +182,8 @@ def pick_axis2_turn(md: ModelData, want_good: bool):
 
 a2_high = pick_axis2_turn(MODELS[a2_best_model], True)
 a2_low = pick_axis2_turn(MODELS[a2_worst_model], False)
-print(f"  HIGH case: {a2_best_model} / {a2_high[1]} turn {a2_high[3]['turn']}  composite={a2_high[3]['scores_by_mapper']['llm_judge']['composite_score']:.3f}  cand {a2_high[4]}->{a2_high[5]}")
-print(f"  LOW  case: {a2_worst_model} / {a2_low[1]} turn {a2_low[3]['turn']}  composite={a2_low[3]['scores_by_mapper']['llm_judge']['composite_score']:.3f}  cand {a2_low[4]}->{a2_low[5]}")
+print(f"  HIGH case: {a2_best_model} / {a2_high[1]} turn {a2_high[3]['turn']}  ias={a2_high[3]['scores_by_mapper']['llm_judge']['ias']:.3f}  cand {a2_high[4]}->{a2_high[5]}")
+print(f"  LOW  case: {a2_worst_model} / {a2_low[1]} turn {a2_low[3]['turn']}  ias={a2_low[3]['scores_by_mapper']['llm_judge']['ias']:.3f}  cand {a2_low[4]}->{a2_low[5]}")
 print()
 
 # ── Axis 3: Diagnostic reasoning coverage ──────────────────────────────────
@@ -437,14 +437,14 @@ def build_bundle(axis: str, level: str, model: str, log: str, rationale: str,
         if prior_qe and prior_q_text:
             lj = prior_qe.get("scores_by_mapper", {}).get("llm_judge", {})
             rec["question_scores"] = {
-                "targeted_symptoms": annotate_symptom_ids(lj.get("targeted_symptoms", [])),
-                "dcs": lj.get("dcs"),
-                "kg_edge_fraction": lj.get("kg_edge_fraction"),
-                "edge_alignment": lj.get("edge_alignment"),
-                "mandatory_first_compliance": lj.get("mandatory_first_compliance"),
+                "question_targets": annotate_symptom_ids(lj.get("question_targets", [])),
+                "discriminative_targets": annotate_symptom_ids(lj.get("discriminative_targets", [])),
+                "required_targets": annotate_symptom_ids(lj.get("required_targets", [])),
+                "resolved_targets": annotate_symptom_ids(lj.get("resolved_targets", [])),
+                "diagnostic_relevance": lj.get("diagnostic_relevance"),
                 "redundancy_penalty": lj.get("redundancy_penalty"),
-                "composite_score": lj.get("composite_score"),
-                "information_gain": lj.get("information_gain"),
+                "ias": lj.get("ias"),
+                "ecr": lj.get("ecr"),
                 "candidate_size_after": prior_qe.get("candidate_size"),
             }
         turns_out.append(rec)
@@ -547,18 +547,15 @@ SCALAR_AXES = [
     dict(key="diagnosis_recall", higher_is_better=True, unit="",
          extractor=lambda md, log: turn_eval_mean(md, log, "recall"),
          label="per-turn diagnosis-inference recall (|predicted ∩ truth| / |truth|)"),
-    dict(key="information_gain", higher_is_better=True, unit="",
-         extractor=lambda md, log: qe_episode_metric(md, log, "conditional_mean_ig"),
-         label="information gain per question (conditional on active turns, LLM-judge mapper)"),
-    dict(key="ig_positive_rate", higher_is_better=True, unit="%",
-         extractor=lambda md, log: qe_episode_metric(md, log, "ig_positive_rate"),
-         label="rate of turns with positive information gain"),
-    dict(key="discriminating_rate", higher_is_better=True, unit="%",
-         extractor=lambda md, log: qe_episode_metric(md, log, "discriminating_q_rate"),
-         label="rate of turns asking a discriminating question (DCS > 0)"),
-    dict(key="mean_dcs", higher_is_better=True, unit="",
-         extractor=lambda md, log: qe_episode_metric(md, log, "mean_dcs"),
-         label="Discrimination Coverage Score (DCS)"),
+    dict(key="ecr", higher_is_better=True, unit="",
+         extractor=lambda md, log: qe_episode_metric(md, log, "conditional_mean_ecr"),
+         label="expected candidate reduction per question (conditional on active turns, LLM-judge mapper)"),
+    dict(key="ecr_positive_rate", higher_is_better=True, unit="%",
+         extractor=lambda md, log: qe_episode_metric(md, log, "ecr_positive_rate"),
+         label="rate of turns with positive expected candidate reduction"),
+    dict(key="mean_ias", higher_is_better=True, unit="",
+         extractor=lambda md, log: qe_episode_metric(md, log, "mean_ias"),
+         label="Information Acquisition Score (IAS)"),
     dict(key="avg_turn_count", higher_is_better=False, unit="turns",
          extractor=lambda md, log: eff_field(md, log, "turn_count"),
          label="interview length (turn count)"),
@@ -624,15 +621,15 @@ selections = [
      f"diagnosis was wrong.",
      axis1_model_stats, None),
     ("question_quality", "high", a2_best_model, a2_high[1],
-     f"{a2_best_model} has the highest mean LLM-judged question-composite score "
+     f"{a2_best_model} has the highest mean LLM-judged Information Acquisition Score (IAS) "
      f"({axis2_model_stats[a2_best_model]:.2f}) of the 6 doctor models. Turn "
-     f"{a2_high[3]['turn']} of this episode scored {a2_high[3]['scores_by_mapper']['llm_judge']['composite_score']:.2f} "
+     f"{a2_high[3]['turn']} of this episode scored {a2_high[3]['scores_by_mapper']['llm_judge']['ias']:.2f} "
      f"and the reference candidate set shrank {a2_high[4]} → {a2_high[5]} immediately after.",
      axis2_model_stats, a2_high[3]["turn"]),
     ("question_quality", "low", a2_worst_model, a2_low[1],
-     f"{a2_worst_model} has the lowest mean LLM-judged question-composite score "
+     f"{a2_worst_model} has the lowest mean LLM-judged Information Acquisition Score (IAS) "
      f"({axis2_model_stats[a2_worst_model]:.2f}) of the 6 doctor models. Turn "
-     f"{a2_low[3]['turn']} of this episode scored {a2_low[3]['scores_by_mapper']['llm_judge']['composite_score']:.2f} "
+     f"{a2_low[3]['turn']} of this episode scored {a2_low[3]['scores_by_mapper']['llm_judge']['ias']:.2f} "
      f"and the reference candidate set did not shrink ({a2_low[4]} → {a2_low[5]}) — the question "
      f"was redundant or off-target.",
      axis2_model_stats, a2_low[3]["turn"]),

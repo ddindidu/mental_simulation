@@ -1,23 +1,35 @@
 """
 Diagnostic Reasoning Quality Scoring — spec §4.6 (Final Diagnosis Axis)
 
-Evaluates whether the doctor's diagnostic checklist covers the required
-criteria for the ground-truth diagnosis, using an LLM judge.
+Evaluates whether the required criteria for the ground-truth diagnosis were
+actually covered during the interview, using HYBRID scoring:
+  - symptom-group coverage (2x-weighted, the bulk of the score): ALGORITHMIC.
+    Computed from cumulative_confirmed/cumulative_denied — the actual evidence
+    extracted turn-by-turn by the symptom-extraction judge (symptom_diagnosis.py),
+    same S-code ID space as diagnostic_criteria.json. No LLM call, no
+    self-report bias (the doctor's own checklist wording is not the source of
+    truth for this portion anymore).
+  - non-symptom requirements (duration, functional impairment, stressors,
+    additional requirements): still LLM-judged against the doctor's
+    self-reported checklist text — the pipeline has no structured evidence
+    extraction for these yet (tracked as an open gap).
 
 Score components (all against the GT disease's criteria):
-  - must_include symptom groups: coverage ratio × must_include_all/one_of penalties  (weight 2)
-  - include symptom groups: counted only when explicitly addressed                   (weight 1)
-  - duration verification                                                             (weight 1)
-  - functional impairment (if required by GT criteria)                               (weight 1)
-  - traumatic / psychosocial stressor (if required)                                  (weight 1 each)
-  - additional_requirements coverage                                                 (weight 1)
+  - must_include symptom groups: coverage ratio × must_include_all/one_of penalties  (weight 2, algorithmic)
+  - include symptom groups: counted only when explicitly addressed                   (weight 1, algorithmic)
+  - duration verification                                                             (weight 1, LLM judge)
+  - functional impairment (if required by GT criteria)                               (weight 1, LLM judge)
+  - traumatic / psychosocial stressor (if required)                                  (weight 1 each, LLM judge)
+  - additional_requirements coverage                                                 (weight 1, LLM judge)
 
 Public API:
   load_symptom_names(symptom_dir)  → dict[str, dict]
-  build_gt_criteria_text(did, criteria, sym_names) → str
-  judge_checklist(doctor_text, gt_text, disease_name, did, llm_chat) → dict
-  compute_score(judgment, did, criteria)  → float
-  score_episode(did, doctor_checklist, criteria, sym_names, llm_chat) → dict
+  build_gt_criteria_text(did, criteria, sym_names) → str            (full text, debug display)
+  build_gt_scalar_text(did, criteria) → str                          (non-symptom text, fed to the scalar judge)
+  compute_symptom_criterion_evaluations(did, criteria, confirmed, denied, sym_names) → list[dict]
+  judge_checklist(doctor_checklist, gt_scalar_text, llm_chat) → dict  (scalar fields only)
+  compute_score(judgment, did, criteria) → dict
+  score_episode(did, doctor_checklist, criteria, sym_names, llm_chat, confirmed, denied) → dict
 """
 from __future__ import annotations
 
@@ -129,55 +141,138 @@ def build_gt_criteria_text(
     return "\n".join(lines)
 
 
-# ── LLM judge ─────────────────────────────────────────────────────────────────
+def build_gt_scalar_text(disease_id: str, criteria: dict) -> str:
+    """
+    Non-symptom requirements only (duration, functional impairment, stressors,
+    additional requirements) — the ONLY thing the scalar LLM judge sees.
+    Symptom-group requirements are scored algorithmically (see
+    compute_symptom_criterion_evaluations), not by this text or that judge.
+    """
+    disease_data = criteria.get(disease_id, {})
+    disease_name = disease_data.get("name", disease_id)
+    rc = disease_data.get("required_criteria", {})
+    lines: list[str] = [f"Disease: {disease_name} ({disease_id})", ""]
+
+    top_dur = rc.get("min_duration")
+    if top_dur and not isinstance(top_dur, dict):
+        lines.append(f"[Duration]: minimum {top_dur}")
+
+    max_dur = rc.get("max_duration")
+    if max_dur and not isinstance(max_dur, dict):
+        lines.append(f"[Max Duration]: must not exceed {max_dur}")
+
+    fi = rc.get("functional_impairment_required")
+    if fi is not None and not isinstance(fi, dict):
+        lines.append(f"[Functional Impairment]: {'Required' if fi else 'Not required'}")
+
+    traumatic = rc.get("traumatic_stressor_required")
+    if traumatic and not isinstance(traumatic, dict):
+        lines.append(f"[Traumatic Stressor]: Required ({traumatic})")
+
+    psycho = rc.get("psychosocial_stressor_required")
+    if psycho and not isinstance(psycho, dict):
+        lines.append(f"[Psychosocial Stressor]: Required ({psycho})")
+
+    add_reqs = rc.get("additional_requirements")
+    if add_reqs and isinstance(add_reqs, list):
+        lines.append("[Additional Requirements]:")
+        for req in add_reqs:
+            lines.append(f"  - {req}")
+
+    if len(lines) == 2:
+        lines.append("(No non-symptom requirements for this disease.)")
+
+    return "\n".join(lines)
+
+
+# ── Algorithmic symptom-group scoring ──────────────────────────────────────────
+
+def compute_symptom_criterion_evaluations(
+    disease_id: str,
+    criteria: dict,
+    cumulative_confirmed: set[str],
+    cumulative_denied: set[str],
+    sym_names: dict[str, dict] | None = None,
+) -> list[dict]:
+    """
+    Deterministic replacement for the LLM-judged symptom-group
+    `criterion_evaluations`. Uses the ACTUAL evidence collected during the
+    interview (`cumulative_confirmed`/`cumulative_denied`, produced by the
+    per-turn symptom-extraction judge in symptom_diagnosis.py — same
+    S-code ID space as diagnostic_criteria.json) instead of the doctor's
+    self-reported free-text checklist, removing self-report bias for this
+    2x-weighted portion of the score (see compute_score / weighting table).
+
+    Output shape matches what the old LLM judge produced, so compute_score()
+    and compute_symptom_satisfaction() need no changes.
+    """
+    rc = criteria.get(disease_id, {}).get("required_criteria", {})
+    sym_names = sym_names or {}
+    out: list[dict] = []
+
+    for key, val in rc.items():
+        if not isinstance(val, dict) or "symptom_pool" not in val:
+            continue
+        relation  = val.get("relation", "include")
+        min_count = val.get("min_count", 1) or 1
+        pool      = set(val.get("symptom_pool", []))
+        mia       = set(val.get("must_include_all", []))
+        mio       = set(val.get("must_include_one_of", []))
+
+        confirmed_in_pool = pool & cumulative_confirmed
+        valid_count = len(confirmed_in_pool)
+        coverage = min(1.0, valid_count / min_count)
+
+        mia_satisfied = (mia <= cumulative_confirmed) if mia else None
+        mio_satisfied = bool(mio & cumulative_confirmed) if mio else None
+
+        matched = sorted(confirmed_in_pool)
+        missing = sorted(pool - cumulative_confirmed)
+
+        out.append({
+            "group":                        key,
+            "relation":                      relation,
+            "min_count_required":            min_count,
+            "valid_symptom_count":           valid_count,
+            "symptom_coverage_score":        round(coverage, 4),
+            "must_include_one_of_satisfied": mio_satisfied,
+            "must_include_all_satisfied":    mia_satisfied,
+            "matched_symptom_descriptions":  [_sym_text(s, sym_names) for s in matched],
+            "missing_required_symptoms":     [_sym_text(s, sym_names) for s in missing],
+        })
+
+    return out
+
+
+# ── LLM judge (scalar / non-symptom requirements only) ────────────────────────
 
 _JUDGE_SYSTEM = """/no_think
 You are a clinical evaluation judge. Your task is to assess whether a doctor's
-diagnostic checklist adequately covers the required diagnostic criteria for a
-psychiatric disorder.
+diagnostic checklist covers specific NON-SYMPTOM diagnostic requirements for a
+psychiatric disorder: duration, functional impairment, traumatic/psychosocial
+stressor, and any additional requirements.
 
-You will receive:
-1. The ground-truth diagnosis (the correct disease and its required criteria)
-2. The doctor's stated diagnostic checklist
-
-Evaluate each required criterion group and overall requirements.
-
-When matching doctor descriptions to criterion symptoms, be generous:
-a doctor saying "patient often loses focus" matches "difficulty sustaining attention";
-"racing thoughts and inflated self-esteem" matches typical manic symptoms, etc.
-Count a symptom as matched if the doctor's description clearly refers to the
-same clinical phenomenon, even if worded differently.
+Symptom-group coverage (mandatory/optional symptom pools) is scored
+algorithmically from the interview's actual confirmed/denied evidence — do
+NOT evaluate symptoms here, only the non-symptom fields below.
 
 Output ONLY valid JSON, exactly in the format specified. No preamble or extra text.
 """
 
 _JUDGE_TEMPLATE = """\
-=== GROUND TRUTH CRITERIA ===
+=== GROUND TRUTH NON-SYMPTOM REQUIREMENTS ===
 {gt_text}
 
-=== DOCTOR'S DIAGNOSTIC CHECKLIST ===
+=== DOCTOR'S DIAGNOSTIC CHECKLIST (non-symptom fields) ===
 {doctor_text}
 
 === EVALUATION TASK ===
-For each criterion GROUP listed above (the bracketed [Criterion Group: ...] sections),
-evaluate the doctor's checklist. Skip scalar fields (Duration, Functional Impairment, etc.)
-in the criterion_evaluations array — those have dedicated fields below.
+Evaluate only the non-symptom fields above (Duration, Functional Impairment,
+Traumatic/Psychosocial Stressor, Additional Requirements). If a requirement
+is not listed under GROUND TRUTH, its field MUST be null.
 
 Return this JSON (no other text):
 {{
-  "criterion_evaluations": [
-    {{
-      "group": "<group key, e.g. inattention>",
-      "relation": "<must_include | include>",
-      "min_count_required": <integer>,
-      "valid_symptom_count": <integer, how many of doctor's symptoms match this group's pool>,
-      "symptom_coverage_score": <float 0.0–1.0, = min(1.0, valid_symptom_count / min_count_required)>,
-      "must_include_one_of_satisfied": <true | false | null (null if no such requirement)>,
-      "must_include_all_satisfied": <true | false | null (null if no such requirement)>,
-      "matched_symptom_descriptions": ["brief description of which doctor symptoms were matched"],
-      "missing_required_symptoms": ["brief description of required symptoms the doctor did NOT mention"]
-    }}
-  ],
   "duration_verified": <true | false | null (null if no duration requirement)>,
   "functional_impairment_verified": <true | false | null (null if not required by criteria)>,
   "traumatic_stressor_verified": <true | false | null (null if not required)>,
@@ -188,21 +283,15 @@ Return this JSON (no other text):
 """
 
 
-def _format_doctor_checklist(doctor_checklist: dict | str | None) -> str:
+def _format_doctor_checklist_scalar(doctor_checklist: dict | str | None) -> str:
+    """Non-symptom fields only — the ONLY thing the scalar LLM judge sees.
+    Symptom-group fields (symptom_groups) are intentionally omitted; those
+    are scored algorithmically from actual interview evidence instead."""
     if doctor_checklist is None:
         return "(No checklist provided — using reason text only)"
     if isinstance(doctor_checklist, str):
         return doctor_checklist
-    # structured dict
     parts: list[str] = []
-    groups = doctor_checklist.get("symptom_groups", [])
-    for g in groups:
-        name  = g.get("group", "unknown")
-        syms  = g.get("confirmed_symptoms", [])
-        count = g.get("count", len(syms))
-        parts.append(f"Symptom Group [{name}] — {count} confirmed:")
-        for s in syms:
-            parts.append(f"  - {s}")
     dur = doctor_checklist.get("duration_verified")
     if dur:
         parts.append(f"Duration: {dur}")
@@ -225,12 +314,17 @@ def _format_doctor_checklist(doctor_checklist: dict | str | None) -> str:
 
 def judge_checklist(
     doctor_checklist: dict | str | None,
-    gt_text: str,
+    gt_scalar_text: str,
     llm_chat: Callable,
 ) -> dict:
-    """Call LLM judge; return parsed judgment dict (or error dict)."""
-    doctor_text = _format_doctor_checklist(doctor_checklist)
-    user_msg = _JUDGE_TEMPLATE.format(gt_text=gt_text, doctor_text=doctor_text)
+    """
+    Call the scalar-only LLM judge (duration / functional impairment /
+    stressors / additional requirements); return parsed judgment dict (or
+    error dict). `gt_scalar_text` must come from build_gt_scalar_text() —
+    symptom-group text is no longer part of this judge's input.
+    """
+    doctor_text = _format_doctor_checklist_scalar(doctor_checklist)
+    user_msg = _JUDGE_TEMPLATE.format(gt_text=gt_scalar_text, doctor_text=doctor_text)
 
     messages = [
         {"role": "system", "content": _JUDGE_SYSTEM},
@@ -322,8 +416,11 @@ def compute_score(judgment: dict, disease_id: str, criteria: dict) -> dict:
         "_parse_error": bool,
       }
     """
-    if judgment.get("_parse_error"):
-        return {"overall_score": 0.0, "_parse_error": True}
+    # Symptom-group coverage is algorithmic and never depends on the scalar
+    # LLM judge, so a scalar-judge parse failure only drops the scalar
+    # metrics from the macro-mean below — it does NOT zero out the whole
+    # score the way a full-judge parse failure used to.
+    scalar_parse_error = bool(judgment.get("_parse_error"))
 
     rc = criteria.get(disease_id, {}).get("required_criteria", {})
 
@@ -348,6 +445,8 @@ def compute_score(judgment: dict, disease_id: str, criteria: dict) -> dict:
     symptom_satisfaction_score = compute_symptom_satisfaction(judgment, disease_id, criteria)
 
     def _bin_score(key: str) -> float | None:
+        if scalar_parse_error:
+            return None
         val = judgment.get(key)
         if val is None:
             return None
@@ -358,7 +457,7 @@ def compute_score(judgment: dict, disease_id: str, criteria: dict) -> dict:
     traumatic_score  = _bin_score("traumatic_stressor_verified")
     psycho_score     = _bin_score("psychosocial_stressor_verified")
 
-    add_score = judgment.get("additional_requirements_coverage")
+    add_score = None if scalar_parse_error else judgment.get("additional_requirements_coverage")
     if isinstance(add_score, (int, float)):
         add_score = float(max(0.0, min(1.0, add_score)))
     else:
@@ -400,7 +499,7 @@ def compute_score(judgment: dict, disease_id: str, criteria: dict) -> dict:
         "traumatic_stressor_score":    round(traumatic_score, 4) if traumatic_score is not None else None,
         "psychosocial_stressor_score": round(psycho_score, 4) if psycho_score is not None else None,
         "additional_requirements_score": round(add_score, 4) if add_score is not None else None,
-        "_parse_error":                False,
+        "_parse_error":                scalar_parse_error,
     }
 
 
@@ -410,14 +509,43 @@ def score_episode(
     criteria: dict,
     sym_names: dict[str, dict],
     llm_chat: Callable,
+    cumulative_confirmed: set[str] | None = None,
+    cumulative_denied: set[str] | None = None,
 ) -> dict:
     """
-    Full pipeline for one episode: build GT text → judge → score.
+    Full pipeline for one episode — HYBRID scoring:
+      - symptom-group coverage (2x-weighted): algorithmic, from the actual
+        cumulative_confirmed/cumulative_denied evidence collected during the
+        interview (see compute_symptom_criterion_evaluations). No LLM call,
+        no self-report bias.
+      - non-symptom requirements (duration, functional impairment, stressors,
+        additional requirements): still LLM-judged against the doctor's
+        self-reported checklist, since the pipeline has no structured
+        evidence extraction for these yet.
 
     Returns merged dict:
-      judgment fields + score fields + "gt_criteria_text"
+      judgment fields (criterion_evaluations + scalar fields) + score fields
+      + "gt_criteria_text" for debug/case-study display.
     """
-    gt_text  = build_gt_criteria_text(disease_id, criteria, sym_names)
-    judgment = judge_checklist(doctor_checklist, gt_text, llm_chat)
+    cumulative_confirmed = cumulative_confirmed or set()
+    cumulative_denied    = cumulative_denied or set()
+
+    criterion_evaluations = compute_symptom_criterion_evaluations(
+        disease_id, criteria, cumulative_confirmed, cumulative_denied, sym_names,
+    )
+
+    gt_scalar_text  = build_gt_scalar_text(disease_id, criteria)
+    scalar_judgment = judge_checklist(doctor_checklist, gt_scalar_text, llm_chat)
+
+    judgment = {**scalar_judgment, "criterion_evaluations": criterion_evaluations}
     scores   = compute_score(judgment, disease_id, criteria)
-    return {**judgment, **scores, "gt_criteria_text": gt_text}
+    gt_text  = build_gt_criteria_text(disease_id, criteria, sym_names)  # full text, for debug display only
+    return {
+        **judgment,
+        **scores,
+        "gt_criteria_text": gt_text,
+        "scoring_method": {
+            "symptom_groups": "algorithmic",
+            "scalar_requirements": "llm_judge",
+        },
+    }

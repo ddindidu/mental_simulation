@@ -45,16 +45,15 @@ from utils.paths import ANALYSIS_ROOT, LOGS_ROOT, RESULTS_ROOT
 MAPPERS = ("cosine", "llm_judge")
 
 METRICS: list[tuple[str, str, bool]] = [
-    ("conditional_mean_composite",  "Cond. Mean Composite (active turns)", True),
-    ("conditional_mean_ig",         "Cond. Mean IG (active turns)",        True),
-    ("ig_positive_rate",            "IG-Positive Rate (active turns)",     True),
-    ("discriminating_q_rate",       "Discriminating-Q Rate",               True),
-    ("mean_composite",              "Mean Composite (all turns)",          False),
-    ("mean_dcs",                    "Mean DCS (all turns)",                False),
-    ("mean_redundancy",             "Mean Redundancy (all turns)",         False),
-    ("redundancy_rate",             "Redundancy Rate (all turns)",         False),
-    ("early_ig_mean",               "Early IG Mean (first-half active)",   False),
-    ("active_turn_count",           "Active Turn Count",                   False),
+    ("conditional_mean_ias", "Cond. Mean IAS (active turns)",      True),
+    ("conditional_mean_ecr", "Cond. Mean ECR (active turns)",      True),
+    ("ecr_positive_rate",    "ECR-Positive Rate (active turns)",   True),
+    ("mean_ias",             "Mean IAS (all turns)",               False),
+    ("mean_ecr",             "Mean ECR (all turns)",               False),
+    ("mean_redundancy",      "Mean Redundancy (all turns)",        False),
+    ("redundancy_rate",      "Redundancy Rate (all turns)",        False),
+    ("early_ecr_mean",       "Early ECR Mean (first-half active)", False),
+    ("active_turn_count",    "Active Turn Count",                  False),
 ]
 
 

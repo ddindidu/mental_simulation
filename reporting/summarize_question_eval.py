@@ -42,17 +42,16 @@ MAPPERS = ("cosine", "llm_judge")
 # Metrics to aggregate: (key, description, is_main)
 METRICS: list[tuple[str, str, bool]] = [
     # Main metrics
-    ("conditional_mean_composite",  "Cond. Mean Composite (active turns)", True),
-    ("conditional_mean_ig",         "Cond. Mean IG (active turns)",        True),
-    ("ig_positive_rate",            "IG-Positive Rate (active turns)",     True),
-    ("discriminating_q_rate",       "Discriminating-Q Rate",               True),
+    ("conditional_mean_ias", "Cond. Mean IAS (active turns)",     True),
+    ("conditional_mean_ecr", "Cond. Mean ECR (active turns)",     True),
+    ("ecr_positive_rate",    "ECR-Positive Rate (active turns)",  True),
     # Supporting metrics
-    ("mean_composite",              "Mean Composite (all turns)",          False),
-    ("mean_dcs",                    "Mean DCS (all turns)",                False),
-    ("mean_redundancy",             "Mean Redundancy (all turns)",         False),
-    ("redundancy_rate",             "Redundancy Rate (all turns)",         False),
-    ("early_ig_mean",               "Early IG Mean (first-half active)",   False),
-    ("active_turn_count",           "Active Turn Count",                   False),
+    ("mean_ias",             "Mean IAS (all turns)",              False),
+    ("mean_ecr",             "Mean ECR (all turns)",              False),
+    ("mean_redundancy",      "Mean Redundancy (all turns)",       False),
+    ("redundancy_rate",      "Redundancy Rate (all turns)",       False),
+    ("early_ecr_mean",       "Early ECR Mean (first-half active)",False),
+    ("active_turn_count",    "Active Turn Count",                 False),
 ]
 
 
@@ -97,7 +96,7 @@ def aggregate_model(question_eval: list[dict]) -> dict[str, Any]:
             sm = t.get("scores_by_mapper", {}).get("llm_judge", {})
             if sm:
                 llm_total += 1
-                if not sm.get("targeted_symptoms"):
+                if not sm.get("question_targets"):
                     llm_empty += 1
 
     agg: dict[str, Any] = {

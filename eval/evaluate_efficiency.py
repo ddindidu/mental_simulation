@@ -6,7 +6,9 @@ Metrics per episode (computed from the KG-deterministic CandidateSet sizes):
   final_accuracy               : 1.0 if final diagnosis matches ground truth
   turn_count                   : total patient turns
   cssr                         : (size[0] − size[T-1]) / T
-  time_to_first_correct_narrowing : first turn where high_likely = {gt} and size = 1
+  time_to_first_correct_narrowing : first turn where the reference candidate set
+                                     (high|moderate|low) has collapsed to exactly {gt}
+                                     (true complement of overcommitment_turns)
   monotonicity_violations      : turns where ref candidate set grew
   redundant_turn_ratio         : fraction of consecutive turns with no candidate set change
   overcommitment_turns         : turns after first size-1 collapse until episode end
@@ -104,7 +106,7 @@ def _extract_final_diagnosis(log_file: Path) -> str:
 
 def score_efficiency_episode(
     candidate_sizes: list[int],
-    high_likely_per_turn: list[set[str]],
+    all_candidates_per_turn: list[set[str]],
     ground_truth: str,
     final_diagnosis_id: str | None,
 ) -> dict:
@@ -119,10 +121,13 @@ def score_efficiency_episode(
     # CSSR
     cssr = (candidate_sizes[0] - candidate_sizes[-1]) / T
 
-    # time_to_first_correct_narrowing: first turn where high_likely == {gt}
+    # time_to_first_correct_narrowing: first turn where the reference candidate
+    # set (high | moderate | low) has collapsed to exactly {ground_truth}.
+    # This must use the SAME "candidate set size == 1" condition as
+    # overcommitment_turns below so the two metrics are true complements.
     ttfcn = T + 1  # sentinel: never reached
-    for i, hl in enumerate(high_likely_per_turn):
-        if ground_truth in hl and len(hl) == 1:
+    for i, ids in enumerate(all_candidates_per_turn):
+        if ids == {ground_truth}:
             ttfcn = i + 1  # 1-indexed
             break
 
@@ -187,17 +192,18 @@ def evaluate() -> list[dict]:
 
         turns = result.get("turns", [])
 
-        # Extract per-turn candidate sizes and high_likely sets
-        candidate_sizes:      list[int]      = []
-        high_likely_per_turn: list[set[str]] = []
+        # Extract per-turn candidate sizes and full candidate-id sets
+        candidate_sizes:         list[int]      = []
+        all_candidates_per_turn: list[set[str]] = []
 
         for turn_data in turns:
             cs = turn_data.get("candidate_set", {})
             hl = set(cs.get("high_likely", []))
             ml = set(cs.get("moderate_likely", []))
             ll = set(cs.get("low_likely", []))
-            candidate_sizes.append(len(hl) + len(ml) + len(ll))
-            high_likely_per_turn.append(hl)
+            all_ids = hl | ml | ll
+            candidate_sizes.append(len(all_ids))
+            all_candidates_per_turn.append(all_ids)
 
         if not candidate_sizes:
             print(
@@ -212,10 +218,10 @@ def evaluate() -> list[dict]:
         final_diag_id = code2id.get(final_diag.strip().upper()) if final_diag else None
 
         metrics = score_efficiency_episode(
-            candidate_sizes      = candidate_sizes,
-            high_likely_per_turn = high_likely_per_turn,
-            ground_truth         = gt,
-            final_diagnosis_id   = final_diag_id,
+            candidate_sizes         = candidate_sizes,
+            all_candidates_per_turn = all_candidates_per_turn,
+            ground_truth            = gt,
+            final_diagnosis_id      = final_diag_id,
         )
 
         episode_results.append({
