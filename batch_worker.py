@@ -69,6 +69,21 @@ def _diagnosis_matches(final_diag: str, true_name: str, true_code: str = "") -> 
     return bool(tn) and fd.lower() == tn
 
 
+def _style_suffix() -> str:
+    """파일명에 붙일 conversation style 접미사 ('_verbose' 등)."""
+    style = _current_conversation_style()
+    return f"_{style}" if style else ""
+
+
+def _current_conversation_style() -> str:
+    """현재 patient에 적용된 conversation style (조회 실패 시 빈 문자열)."""
+    try:
+        import patient
+        return patient.current_conversation_style()
+    except Exception:
+        return ""
+
+
 def _make_symptom_diagnosis_runner(label: str):
     """txt 로그 → *_result.json(증상 추출 + KG 후보군). eval/* 가 이 파일을 읽는다."""
     sd_cache: list = []
@@ -240,6 +255,7 @@ def _run_case_group(
 
             json_log_data = {
                 "run": run_idx,
+                "conversation_style": _current_conversation_style(),
                 "closed_at_patient_turn": result.get("closed_at_patient_turn"),
                 "final_diagnosis": final_diag,
                 "is_correct": is_correct,
@@ -297,9 +313,10 @@ def run_disorder(
         )
         return patient.SYSTEM_PROMPT
 
+    style_suffix = _style_suffix()
     correct, runs_log = _run_case_group(
         label=code,
-        case_id_fn=lambda i: f"{code}_{i}",
+        case_id_fn=lambda i: f"{code}_{i}{style_suffix}",
         n_runs=runs_per_disorder,
         setup_fn=_setup,
         true_name=true_name,
@@ -348,8 +365,11 @@ def run_profile(
         patient.set_symptom_profile_path(profile_p)
         return patient.SYSTEM_PROMPT
 
+    style_suffix = _style_suffix()
+
     def _case_id(i: int) -> str:
-        return profile_id if runs_per_profile == 1 else f"{profile_id}_{i}"
+        base = profile_id if runs_per_profile == 1 else f"{profile_id}_{i}"
+        return f"{base}{style_suffix}"
 
     correct, runs_log = _run_case_group(
         label=profile_id,

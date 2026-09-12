@@ -59,7 +59,7 @@ def load_diagnostic_criteria() -> dict:
 
 # ── Log parsing ───────────────────────────────────────────────────────────────
 
-_ANALYST_KEYS = {"matched", "matched_sections", "answer_strategy"}
+_ANALYST_KEYS = {"matched", "matched_section", "matched_sections", "answer_strategy"}
 
 def extract_patient_responses(log_file: Path) -> list[str]:
     """Return a list of natural-language patient utterances from a log file."""

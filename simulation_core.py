@@ -43,7 +43,6 @@ def run_interview_simulation(
         raise ValueError("max_turns must be >= 1")
 
     doctor_model = get_doctor_model_name()
-    inference_system = doctor.get_inference_system_prompt(doctor_model)
     final_system = doctor.get_final_diagnosis_system_prompt(doctor_model)
     diag_tokens = get_doctor_diagnosis_max_tokens()
     inf_tokens = get_doctor_inference_max_tokens()
@@ -56,7 +55,9 @@ def run_interview_simulation(
     opening_messages = [
         {
             "role": "system",
-            "content": doctor.get_questioning_system_prompt(max_turns, [], doctor_model),
+            "content": doctor.build_questioning_prompt(
+                "", [], turn_index=1, max_turns=max_turns, doctor_model=doctor_model
+            ),
         },
         {"role": "user", "content": doctor.opening_user_message()},
     ]
@@ -71,10 +72,12 @@ def run_interview_simulation(
     q_open = doctor.parse_questioning_result(doctor_raw)
     question_text = q_open["question"]
     doctor_memory["opening_question"] = {
-        "category": q_open["category"],
-        "subcategory": q_open["subcategory"],
+        "intent": q_open["intent"],
         "question": question_text,
     }
+    doctor.record_doctor_question(
+        doctor_memory, turn=1, intent=q_open["intent"], question=question_text
+    )
 
     transcript.append(("doctor", question_text))
     if verbose:
@@ -84,7 +87,7 @@ def run_interview_simulation(
 
     for t in range(1, max_turns + 1):
         doctor_last = patient_hist[-1]["content"]
-        align_messages = patient.build_alignment_messages(doctor_last, t)
+        align_messages = patient.build_alignment_messages(doctor_last, t, patient_hist)
         _log(verbose, "Patient LLM (alignment)", f"turn {t}", align_messages)
         align_raw = llm_chat(
             align_messages,
@@ -108,21 +111,33 @@ def run_interview_simulation(
         )
         patient_hist.append({"role": "assistant", "content": patient_msg})
         transcript.append(("patient", patient_msg))
+        doctor.record_patient_turn(
+            doctor_memory,
+            turn=t,
+            target_item=patient.alignment_target_item(parsed_align),
+            answer=patient_msg,
+        )
         if verbose:
             print(f"[turn {t}] patient: {patient_msg[:200]}...", flush=True)
 
         tr_text = doctor.format_interview_transcript(transcript)
 
         inf_messages = [
-            {"role": "system", "content": inference_system},
-            {"role": "user", "content": doctor.inference_user_payload(
-                tr_text,
-                previous_candidates=(
-                    doctor_memory["inference_history"][-1]["candidates"]
-                    if doctor_memory["inference_history"]
-                    else []
+            {
+                "role": "system",
+                "content": doctor.build_inference_prompt(
+                    tr_text,
+                    previous_candidates=(
+                        doctor_memory["inference_history"][-1]["candidates"]
+                        if doctor_memory["inference_history"]
+                        else []
+                    ),
+                    turn_index=t,
+                    max_turns=max_turns,
+                    doctor_model=doctor_model,
                 ),
-            )},
+            },
+            {"role": "user", "content": "Return the JSON now."},
         ]
         _log(verbose, "Doctor LLM (inference)", f"turn {t}", inf_messages)
         inf_raw = llm_chat(
@@ -131,7 +146,7 @@ def run_interview_simulation(
             role="doctor",
             phase="inference",
             turn=t,
-            source="doctor.inference_user_payload",
+            source="doctor.build_inference_prompt",
         )
         candidates, inf_note, is_final = doctor.parse_inference_result(inf_raw)
         if verbose:
@@ -181,12 +196,15 @@ def run_interview_simulation(
         questioning_messages = [
             {
                 "role": "system",
-                "content": doctor.get_questioning_system_prompt(max_turns, candidates, doctor_model),
+                "content": doctor.build_questioning_prompt(
+                    tr_text,
+                    candidates,
+                    turn_index=t + 1,
+                    max_turns=max_turns,
+                    doctor_model=doctor_model,
+                ),
             },
-            {
-                "role": "user",
-                "content": doctor.questioning_followup_user_payload(tr_text, candidates),
-            },
+            {"role": "user", "content": "Return the JSON now."},
         ]
         _log(
             verbose,
@@ -199,10 +217,13 @@ def run_interview_simulation(
             role="doctor",
             phase="followup",
             turn=t,
-            source="doctor.questioning_followup_user_payload",
+            source="doctor.build_questioning_prompt",
         )
         q_follow = doctor.parse_questioning_result(doctor_raw)
         question_text = q_follow["question"]
+        doctor.record_doctor_question(
+            doctor_memory, turn=t + 1, intent=q_follow["intent"], question=question_text
+        )
 
         transcript.append(("doctor", question_text))
         if verbose:

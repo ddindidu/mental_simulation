@@ -603,13 +603,11 @@ def _chat_openai(messages: list[dict], max_new_tokens: int, role: Role) -> str:
 
     g = _gen_for_role(role)
 
-    def _call(use_completion_tokens: bool):
-        kw: dict[str, Any] = {
-            "model": model,
-            "messages": messages,
-            "temperature": float(g["temperature"]),
-            "top_p": float(g["top_p"]),
-        }
+    def _call(use_completion_tokens: bool, sampling: bool = True):
+        kw: dict[str, Any] = {"model": model, "messages": messages}
+        if sampling:
+            kw["temperature"] = float(g["temperature"])
+            kw["top_p"] = float(g["top_p"])
         reff = o_cfg.get("reasoning_effort")
         if reff and _openai_reasoning_style_model(model):
             kw["reasoning_effort"] = reff
@@ -627,6 +625,10 @@ def _chat_openai(messages: list[dict], max_new_tokens: int, role: Role) -> str:
             resp = _call(True)
         elif "max_tokens" in err and use_mct and "unsupported" in err:
             resp = _call(False)
+        elif "temperature" in err or "top_p" in err:
+            # 일부 모델은 기본 sampling 값만 받는다. 그 인자만 빼고 다시 부른다.
+            print(f"[llm] {model} rejected temperature/top_p; retrying with its defaults.", flush=True)
+            resp = _call(use_mct, sampling=False)
         else:
             raise
     _log_openai_response_object(resp)

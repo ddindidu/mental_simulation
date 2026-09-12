@@ -20,150 +20,111 @@ def _no_think_prefix(doctor_model: str = "") -> str:
     return ""
 
 
-def get_inference_system_prompt(doctor_model: str = "") -> str:  # inference system prompt
-    # 허용된 질환 리스트 정의
-    allowed_candidates = [
-        "Attention-Deficit/Hyperactivity Disorder (Combined Presentation)",
-        "Attention-Deficit/Hyperactivity Disorder (Predominantly Inattentive Presentation)",
-        "Attention-Deficit/Hyperactivity Disorder (Predominantly Hyperactive/Impulsive Presentation)",
-        "Delusional Disorder",
-        "Schizophrenia",
-        "Schizoaffective Disorder (Bipolar Type)",
-        "Schizoaffective Disorder (Depressive Type)",
-        "Bipolar I Disorder",
-        "Bipolar II Disorder",
-        "Bipolar I Disorder with Psychotic Features",
-        "Generalized Anxiety Disorder",
-        "Specific Phobia",
-        "Major Depressive Disorder",
-        "Persistent Depressive Disorder",
-        "Major Depressive Disorder with Psychotic Features",
-        "Obsessive-Compulsive Disorder",
-        "Body Dysmorphic Disorder",
-        "Posttraumatic Stress Disorder",
-        "Acute Stress Disorder",
-        "Adjustment Disorder",
-        "Anorexia Nervosa",
-        "Bulimia Nervosa",
-        "Binge-Eating Disorder"
-    ]
-    
-    candidates_bullet = "\n".join([f"- {c}" for c in allowed_candidates])
-    
-    # ver.1
-#     return f"""/no_think
-# You are a board-certified psychiatrist.
-# Your goal is to identify the patient's accurate diagnosis through an interview.
+INFERENCE_PROMPT = """You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.
+Your goal is to reach the correct diagnosis within {max_turns} turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.
 
-# Based on the interview conversation so far and the Previous Candidates (if provided),
-# infer the current differential diagnosis candidates.
+[Current Turn]
+{current_turn}
 
-# [Constraint: Allowed Candidate List]
-# You MUST ONLY select candidates from the following list. Do not use any diagnosis names outside of this list:
-# {candidates_bullet}
+[Previous Candidates]
+{previous_candidates}
 
-# [Important — Note Field Formatting]
-# In the "note" field, you MUST explain WHY the candidate list has changed or remained the same
-# compared to the previous candidates.
-# For example: "Previously the candidates were [A, B, C], but based on this conversation,
-# C seems unlikely because [reason], so the current candidates are [A, B]."
+[Dialogue History]
+{dialogue_history}
 
-# [When to End the Interview]
-# Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident
-# final diagnosis and no further questioning is needed. You may set is_final=true with one
-# OR multiple candidates still listed (the final diagnosis call will select among them).
-# Continue the interview (is_final: false) if uncertainty remains, even if only one candidate
-# is currently listed.
+[Instruction]
+- Give candidates as ICD-10 codes, not disease names.
+- If the list changed from the previous candidates, say in "note" what this turn added or ruled out. If it did not change, leave "note" empty.
+- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.
 
-# Output Format (JSON only, no other text):
-# {{"candidates": ["Disease1", "Disease2"], "note": "Explanation of changes from previous candidates", "is_final": false}}
-# """
-
-    # ver.2 (260730 updated)
-    # - Remove the constraint on allowed candidates in the prompt.
-    return f"""{_no_think_prefix(doctor_model)}You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
-
-Based on the interview conversation so far and the Previous Candidates (if provided), infer the current differential diagnosis candidates based on International Classification of Diseases Version 10 (ICD-10). Do not use any diagnosis names.
-
-[Important — Note Field Formatting]
-In the "note" field, you MUST explain WHY the candidate list has changed or remained the same compared to the previous candidates.
-For example: "Previously the candidates were [A, B, C], but based on this conversation, C seems unlikely because [reason], so the current candidates are [A, B]."
-
-[When to End the Interview]
-Set "is_final": true ONLY when you have gathered sufficient evidence to make a confident final diagnosis and no further questioning is needed. You may set is_final=true with one OR multiple candidates still listed (the final diagnosis call will select among them). Continue the interview (is_final: false) if uncertainty remains, even if only one candidate is currently listed.
-
-Output Format (JSON only, no other text):
-{{"candidates": ["Disease Code1", "Disease Code2"], "note": "Explanation of changes from previous candidates", "is_final": false}}
+[Output Format — JSON only, no other text]
+{"candidates": ["<ICD-10 code>", "..."], "note": "<why the list changed, or empty>", "is_final": <true or false>}
 """
 
 
-def get_questioning_system_prompt(  # questioning system prompt
+def build_inference_prompt(
+    transcript: str,
+    previous_candidates: list[str] | None = None,
+    turn_index: int | None = None,
+    max_turns: int = 10,
+    doctor_model: str = "",
+) -> str:
+    """Fill the inference prompt for this turn."""
+    return (
+        _no_think_prefix(doctor_model)
+        + INFERENCE_PROMPT
+        .replace("{current_turn}", str(turn_index) if turn_index else "1")
+        .replace("{previous_candidates}",
+                 ", ".join(previous_candidates) if previous_candidates else "(none — this is your first inference)")
+        .replace("{dialogue_history}", transcript)
+        .replace("{max_turns}", str(max_turns))
+    )
+
+
+def get_inference_system_prompt(doctor_model: str = "", max_turns: int = 10) -> str:
+    """The prompt with its per-turn slots left visible — what the UI shows."""
+    return (
+        build_inference_prompt("{dialogue_history}", None, None, max_turns, doctor_model)
+        .replace("[Current Turn]\n1", "[Current Turn]\n{current_turn}")
+        .replace("(none — this is your first inference)", "{previous_candidates}")
+    )
+
+
+QUESTIONING_PROMPT = """You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.
+Your goal is to reach the correct diagnosis within {max_turns} turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.
+
+[Current Turn]
+{current_turn}
+
+[Current Candidates]
+{current_candidates}
+
+[Dialogue History]
+{dialogue_history}
+
+[Instruction]
+- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.
+- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.
+- Keep the question clear enough for the patient to understand.
+- Respond in English.
+
+[Output Format — JSON only, no other text]
+{"intent": "<what you want to find out with this question>", "question": "<how you actually ask it in the interview>"}
+"""
+
+
+def build_questioning_prompt(
+    transcript: str = "",
+    candidates: list[str] | None = None,
+    turn_index: int | None = None,
+    max_turns: int = 10,
+    doctor_model: str = "",
+) -> str:
+    """Fill the questioning prompt for this turn."""
+    return (
+        _no_think_prefix(doctor_model)
+        + QUESTIONING_PROMPT
+        .replace("{current_turn}", str(turn_index) if turn_index else "1")
+        .replace("{current_candidates}",
+                 ", ".join(candidates) if candidates else "(none yet — this is your opening question)")
+        .replace("{dialogue_history}",
+                 transcript or "(none yet — the interview has not started)")
+        .replace("{max_turns}", str(max_turns))
+    )
+
+
+def get_questioning_system_prompt(
     max_turns: int,
     candidates: list[str] | None = None,
     doctor_model: str = "",
 ) -> str:
-    cand_list = list(candidates or [])
-    # asked_list = list(asked_questions or [])
-
-    if cand_list:
-        candidate_block = (
-            "\n[Current Candidate Diagnoses]\n" + "\n".join(f"- {c}" for c in cand_list)
-        )
-    else:
-        candidate_block = ""
-
-    # asked_block = ""
-    # if asked_list:
-    #     asked_block = "\n[Already Asked Questions]\n" + "\n".join(f"- {q}" for q in asked_list)
-
-    # ver.1
-#     return f"""{_no_think_prefix(doctor_model)}You are a board-certified psychiatrist. 
-# Your goal is to identify the patient's accurate diagnosis through an interview.
-
-# Based on the interview so far and the current differential diagnosis candidates,
-# ask one follow-up question to narrow down the diagnosis.
-
-# [Candidate Diseases]
-# {candidate_block}
-
-# [Already Asked Questions]
-# {asked_block}
-
-# [Interview Strategy]
-# - Review the conversation and the candidate disease list.
-# - Ask exactly one follow-up question that best differentiates among the candidates.
-# - Keep the question clear and easy for the patient to understand. Two sentences at most.
-# - Respond in English.
-
-# [Output Format — JSON only, no other text]
-# {{
-#   "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
-#   "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
-#   "question": "The actual question to say to the patient (only this field is delivered to the patient)"
-# }}
-# """
-
-    # ver.2 (260730 updated)
-    # 
-    return f"""{_no_think_prefix(doctor_model)}You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.
-
-Based on the interview so far and the current differential diagnosis candidates, ask one follow-up question to narrow down the diagnosis.
-
-[Candidate Diseases]
-{candidate_block}
-
-[Interview Strategy]
-- Review the conversation and ask one follow-up question that best differentiates among the candidates.
-- Keep the question clear and easy for the patient to understand. Two sentences at most.
-- Respond in English.
-
-[Output Format — JSON only, no other text]
-{{
-  "category": "Type of question (e.g., symptom presence, duration, intensity, aggravating factors, medical history, social history, differential point)",
-  "subcategory": "Specific symptom/area if applicable (e.g., sleep, anhedonia, appetite, guilt). null if not applicable.",
-  "question": "The actual question to say to the patient (only this field is delivered to the patient)"
-}}
-"""
+    """The prompt with its per-turn slots left visible — what the UI shows."""
+    return (
+        build_questioning_prompt("", candidates, None, max_turns, doctor_model)
+        .replace("[Current Turn]\n1", "[Current Turn]\n{current_turn}")
+        .replace("(none yet — this is your opening question)", "{current_candidates}")
+        .replace("(none yet — the interview has not started)", "{dialogue_history}")
+    )
 
 
 def get_final_diagnosis_system_prompt(doctor_model: str = "") -> str:  # final diagnosis system prompt
@@ -291,26 +252,7 @@ def format_interview_transcript(entries: list[tuple[str, str]]) -> str:  # conve
     return "\n\n".join(lines)
 
 
-def inference_user_payload(transcript: str, previous_candidates: list[str] | None = None) -> str:
-    """Build user payload for inference phase, including previous candidates if available."""
-    if previous_candidates:
-        cand_str = json.dumps(previous_candidates, ensure_ascii=False)
-        return f"Previous Candidates:\n{cand_str}\n\nInterview Transcript:\n\n{transcript}"
-    return f"Interview Transcript:\n\n{transcript}"
-
-
 def final_diagnosis_user_payload(transcript: str, candidates: list[str]) -> str:  # constructing scripts for final diagnosis
-    cand_json = json.dumps(candidates, ensure_ascii=False)
-    return (
-        f"Candidate Diseases: \n{cand_json}\n\n"
-        f"Interview Transcript: \n{transcript}"
-    )
-
-
-def questioning_followup_user_payload(  # constructing scripts for questioning phase
-    transcript: str,
-    candidates: list[str],
-) -> str:
     cand_json = json.dumps(candidates, ensure_ascii=False)
     return (
         f"Candidate Diseases: \n{cand_json}\n\n"
@@ -383,38 +325,89 @@ def parse_final_diagnosis_result(raw: str) -> dict[str, Any]:
 
 
 def parse_questioning_result(raw: str) -> dict[str, Any]:
-    """Parse questioning phase LLM output (JSON) → category, subcategory, question."""
+    """Parse questioning phase LLM output (JSON) → intent, question.
+
+    Older runs wrote "category"/"subcategory" instead of "intent"; both are read so a log
+    from either version parses the same way.
+    """
     text = (raw or "").strip()
     if not text:
-        return {"category": "", "subcategory": None, "question": ""}
+        return {"intent": "", "question": ""}
     m = re.search(r"\{[\s\S]*\}", text)
     if not m:
-        return {"category": "", "subcategory": None, "question": text}
+        return {"intent": "", "question": text}
     try:
         data: Any = json.loads(m.group())
     except json.JSONDecodeError:
-        return {"category": "", "subcategory": None, "question": text}
+        return {"intent": "", "question": text}
     if not isinstance(data, dict):
-        return {"category": "", "subcategory": None, "question": text}
+        return {"intent": "", "question": text}
     q = str(data.get("question") or "").strip()
-    cat = str(data.get("category") or data.get("type") or "").strip()
-    sub = data.get("subcategory")
-    if sub is None or (isinstance(sub, str) and not sub.strip()):
-        sub_norm: str | None = None
-    else:
-        sub_norm = str(sub).strip()
-    if not q:
-        q = text
-    return {"category": cat, "subcategory": sub_norm, "question": q}
+    intent = str(data.get("intent") or data.get("category") or data.get("type") or "").strip()
+    return {"intent": intent, "question": q or text}
 
 
 def new_doctor_memory() -> dict[str, Any]:  # initializing doctor memory (json)
     return {
-        "schema": "doctor_memory/v4",
+        "schema": "doctor_memory/v6",
         "status": "running",
         "latest_inference": None,
         "inference_history": [],  # 매 턴 후보 질환 이력 누적
+        "turns": [],              # 턴별로 doctor/patient 산출물을 한 칸에 모아둔 것
     }
+
+
+def _turn_slot(state: dict[str, Any], turn: int) -> dict[str, Any]:
+    """turns 안에서 해당 턴 칸을 찾고, 없으면 만들어 돌려준다.
+
+    한 턴은 의사의 질문 → 환자의 응답 → 의사의 후보 추론 순으로 세 번에 걸쳐 채워지므로
+    먼저 도착한 쪽이 칸을 만들고 나머지가 같은 칸에 덧붙인다.
+    """
+    turns: list[dict[str, Any]] = state.setdefault("turns", [])
+    for slot in turns:
+        if slot.get("turn") == turn:
+            return slot
+    slot = {"turn": turn, "doctor": None, "patient": None, "inference": None}
+    turns.append(slot)
+    turns.sort(key=lambda s: s.get("turn", 0))
+    return slot
+
+
+def record_doctor_question(
+    state: dict[str, Any],
+    *,
+    turn: int,
+    intent: str,
+    question: str,
+) -> dict[str, Any]:
+    """Keep what the doctor meant to ask, next to what they actually asked.
+
+    The transcript only carries the question as the patient heard it; the intent is the
+    doctor's own account of what that turn was for, and it is what makes a turn readable
+    afterwards — the note in inference_history says what the answer changed, this says
+    what was being sought.
+    """
+    entry = {"intent": intent, "question": question}
+    _turn_slot(state, turn)["doctor"] = entry
+    return entry
+
+
+def record_patient_turn(
+    state: dict[str, Any],
+    *,
+    turn: int,
+    target_item: dict[str, Any] | None,
+    answer: str,
+) -> dict[str, Any]:
+    """Keep the profile item the patient aligned on, next to what they said about it.
+
+    target_item is the alignment stage's own output ({key, name, description, reason});
+    answer is the utterance the doctor actually heard. Together with the doctor half of
+    the same turn slot, one turn can be read end to end without re-opening the prompt log.
+    """
+    entry = {"target_item": target_item, "answer": answer}
+    _turn_slot(state, turn)["patient"] = entry
+    return entry
 
 
 def update_doctor_memory_after_inference(  # updating doctor memory with inference result
@@ -440,6 +433,11 @@ def update_doctor_memory_after_inference(  # updating doctor memory with inferen
     }
     state["inference_history"].append(entry)
     state["latest_inference"] = entry
+    _turn_slot(state, turn)["inference"] = {
+        "candidates": list(candidates),
+        "note": note,
+        "is_final": is_final,
+    }
     return state
 
 
