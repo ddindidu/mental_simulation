@@ -602,8 +602,11 @@ def _chat_openai(messages: list[dict], max_new_tokens: int, role: Role) -> str:
     limit = _effective_openai_output_limit(model, max_new_tokens, o_cfg)
 
     g = _gen_for_role(role)
+    # Reasoning-style models (gpt-5*, o1/o3/o4) only accept default sampling —
+    # skip temperature/top_p from the first call instead of failing and retrying.
+    supports_sampling = not _openai_reasoning_style_model(model)
 
-    def _call(use_completion_tokens: bool, sampling: bool = True):
+    def _call(use_completion_tokens: bool, sampling: bool = supports_sampling):
         kw: dict[str, Any] = {"model": model, "messages": messages}
         if sampling:
             kw["temperature"] = float(g["temperature"])

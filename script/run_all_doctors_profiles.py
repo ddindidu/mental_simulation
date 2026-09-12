@@ -14,6 +14,16 @@ Every model, profile set and conversation style is an argument, so one script co
 whatever combination an experiment needs; the patched config file is restored to its
 original contents when the script exits (normally or via Ctrl-C).
 
+Running two invocations at once (e.g. to compare patient/judge model pairs)
+is only safe if each uses a DIFFERENT --config path — every downstream
+subprocess (run_profile_batch.py, its ProcessPoolExecutor(spawn) workers, and
+every eval/*.py + reporting/*.py step) resolves its config via the
+MS_CONFIG_PATH env var this script sets for its own process tree, so two
+invocations pointed at two different --config files never touch the same
+file and can genuinely run in parallel. Two invocations sharing the default
+config/config.json (or the same --config path) WILL race and corrupt each
+other's runs — never do that.
+
 Usage:
   python3 script/run_all_doctors_profiles.py
   python3 script/run_all_doctors_profiles.py --limit 2 --skip-eval   # smoke test
@@ -22,12 +32,19 @@ Usage:
   python3 script/run_all_doctors_profiles.py --patient-model gemini-3.5-flash --patient-provider gemini
   python3 script/run_all_doctors_profiles.py --styles plain verbose reserved tangent pleasing
   python3 script/run_all_doctors_profiles.py --config config/config_mgk.json
+
+  # Two genuinely parallel runs (distinct --config each; auto-bootstrapped
+  # from config/config.json on first use, then patched/restored independently):
+  python3 script/run_all_doctors_profiles.py --config config/config.run_a.json --patient-model gpt-5.5 --patient-provider openai --judge-model gpt-5.5 --judge-provider openai &
+  python3 script/run_all_doctors_profiles.py --config config/config.run_b.json --patient-model gemini-3.1-pro-preview --patient-provider gemini --judge-model gemini-3.1-pro-preview --judge-provider gemini &
+  wait
 """
 from __future__ import annotations
 
 import argparse
 import copy
 import json
+import os
 import subprocess
 import sys
 import time
@@ -42,10 +59,12 @@ DEFAULT_JUDGE = {"provider": "openai", "model": "gpt-5.5"}
 CONVERSATION_STYLES = ["plain", "verbose", "reserved", "tangent", "pleasing"]
 
 DOCTOR_VARIANTS: list[dict] = [
-    {"key": "gemini-3.5-flash", "model": "gemini-3.5-flash", "provider": "gemini"},
+    {"key": "gemini-3.8-flash", "model": "gemini-3.8-flash", "provider": "gemini"},
     {"key": "gemini-3.1-flash-lite", "model": "gemini-3.1-flash-lite", "provider": "gemini"},
     {"key": "gpt-5.4", "model": "gpt-5.4", "provider": "openai"},
     {"key": "gpt-5.4-mini", "model": "gpt-5.4-mini-2026-03-17", "provider": "openai"},
+    {"key": "claude-sonnet-5", "model": "anthropic/claude-sonnet-5", "provider": "openrouter"},
+    {"key": "claude-haiku-4.5", "model": "anthropic/claude-haiku-4.5", "provider": "openrouter"},
     {"key": "llama-3.3-70b-instruct", "model": "meta-llama/llama-3.3-70b-instruct", "provider": "openrouter"},
     {"key": "qwen3-235b", "model": "qwen/qwen3-235b-a22b-2507", "provider": "openrouter"},
 ]
@@ -147,8 +166,22 @@ def main() -> int:
     patient_llm = {"provider": args.patient_provider, "model": args.patient_model}
     judge_llm = {"provider": args.judge_provider, "model": args.judge_model}
     config_path = args.config.resolve()
+
+    if not config_path.exists():
+        # Bootstrap a fresh isolated config from the real default so a custom
+        # --config path can be used without pre-creating the file by hand.
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(CONFIG_PATH.read_text(encoding="utf-8"), encoding="utf-8")
+
+    # Propagate this run's config path to every subprocess this process
+    # spawns (run_profile_batch.py, its ProcessPoolExecutor(spawn) workers,
+    # and each eval/*.py + reporting/*.py step) via inherited os.environ —
+    # see utils/config.py's MS_CONFIG_PATH handling. This is what makes two
+    # invocations with two different --config paths safe to run at once.
+    os.environ["MS_CONFIG_PATH"] = str(config_path)
+
     print(
-        f"[orchestrator] config={config_path.name} | patient={args.patient_model} "
+        f"[orchestrator] config={config_path} | patient={args.patient_model} "
         f"judge={args.judge_model} | styles={args.styles} | profiles={args.profiles_root}",
         flush=True,
     )

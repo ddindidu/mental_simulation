@@ -2,7 +2,9 @@
 # doctors alias
 # gpt-5.4
 # gpt-5.4-mini
-# gemini-
+# gemini-3.8-flash
+# gemini-3.1-flash-lite
+
 
 #!/bin/bash
 set -e
