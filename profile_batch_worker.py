@@ -5,6 +5,19 @@ module runs exactly one simulation per pre-generated profile JSON (e.g. under
 data/profiles/add_requirements/<difficulty>/<disease>/<disease>_S<NNN>_P<NNN>.json),
 one profile = one simulation.
 
+Simulation-only: this module writes the dialogue logs (.txt + .json) and
+nothing else. It used to also run eval/symptom_diagnosis.py's per-profile
+symptom extraction inline (writing *_result.json) right after simulating,
+which bound "generate a dialogue" and "evaluate a dialogue" into a single
+step — you couldn't run or re-run one without the other. That call was
+removed: eval/symptom_diagnosis.py already runs as its own standalone,
+resumable pass over an entire run_dir's logs (see its main()), with its own
+existing-output check (skip if *_result.json is already up to date) and its
+own source check (it only processes .txt logs that actually exist) — so it's
+the dedicated "evaluation" file for this split, run separately after
+simulation via `python3 eval/symptom_diagnosis.py` (already the first step
+in script/run_all_doctors_profiles.py's EVAL_PIPELINE).
+
 Must run in its own spawned process (ProcessPoolExecutor with mp_context="spawn"):
 patient.py / utils.llm.py hold mutable module-global state (current log path,
 SYSTEM_PROMPT) that is not safe to share across concurrently-running profiles in
@@ -20,22 +33,29 @@ from typing import Any
 def run_profile(
     profile_path: str,
     logs_dir: str,
-    results_dir: str,
     max_turns: int,
     style: str | None = None,
 ) -> dict[str, Any]:
-    """Run one simulation for a single profile JSON. Returns a status dict.
+    """Run one simulation (dialogue generation only) for a single profile JSON.
+    Returns a status dict. No evaluation happens here — see the module
+    docstring; run eval/symptom_diagnosis.py separately afterward.
 
     `style` overrides the conversation style for this run only; with it the same profile
     can be run once per style, each landing in its own <profile>_<style> files.
 
-    Skips (status="skipped") if both the json log and result JSON already exist,
-    so a batch can be safely re-run to pick up where it left off.
+    Output check: skips (status="skipped") if both dialogue log files (.txt
+    and .json) already exist, so a batch can be safely re-run to pick up
+    where it left off.
+
+    Source check: if the profile JSON itself doesn't exist, returns
+    status="error" without touching any output file.
     """
     profile_p = Path(profile_path)
     profile_id = profile_p.stem
     logs_path = Path(logs_dir)
-    results_path = Path(results_dir)
+
+    if not profile_p.exists():
+        return {"profile_id": profile_id, "status": "error", "error": f"profile not found: {profile_p}"}
 
     # KG 모드 차단. patient 는 import 시점에 프로필을 빌드하므로 그 전에 검사한다.
     from utils.config import CONFIG
@@ -59,9 +79,8 @@ def run_profile(
 
     txt_log_path = logs_path / f"{case_id}.txt"
     json_log_path = logs_path / f"{case_id}.json"
-    result_json_path = results_path / f"{case_id}_result.json"
 
-    if json_log_path.exists() and result_json_path.exists():
+    if txt_log_path.exists() and json_log_path.exists():
         return {"profile_id": profile_id, "style": style, "status": "skipped"}
 
     set_log_path(txt_log_path)
@@ -97,27 +116,6 @@ def run_profile(
     json_log_path.write_text(
         json.dumps(json_log_data, ensure_ascii=False, indent=2), encoding="utf-8"
     )
-
-    # Symptom extraction + KG-deterministic candidate_set — required by the
-    # downstream eval/evaluate_*.py scripts (they read results/<run_dir>/*_result.json).
-    try:
-        import eval.symptom_diagnosis as sd
-        all_symptoms = sd.load_all_symptoms()
-        criteria = sd.load_diagnostic_criteria()
-        sd_result = sd.process_log(txt_log_path, all_symptoms, criteria)
-        if sd_result is not None:
-            results_path.mkdir(parents=True, exist_ok=True)
-            result_json_path.write_text(
-                json.dumps(sd_result, indent=2, ensure_ascii=False), encoding="utf-8"
-            )
-    except Exception as e:
-        return {
-            "profile_id": profile_id,
-            "style": style,
-            "status": "sim_ok_sd_failed",
-            "final_diagnosis": fd.get("diagnosis", ""),
-            "error": f"symptom_diagnosis failed: {e}",
-        }
 
     return {
         "profile_id": profile_id,

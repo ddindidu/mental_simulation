@@ -3,12 +3,17 @@
 
 For each doctor model:
   1. Patch --config's llm.patient / llm.judge / llm.doctor.
-  2. Run script/run_profile_batch.py — one simulation per profile JSON under
-     --profiles-root (default: data/v2_final_profiles) and one per conversation
-     style, skipping any run that already has both a log and a result JSON so the
-     batch is safely resumable.
+  2. Run script/run_profile_batch.py — SIMULATION ONLY: one dialogue per
+     profile JSON under --profiles-root (default: data/v2_final_profiles) and
+     one per conversation style, skipping any run that already has both
+     dialogue log files (.txt + .json) so the batch is safely resumable. No
+     evaluation happens in this step.
   3. Run the eval/*.py + reporting/*.py pipeline for that doctor's run_dir
-     (mirrors app.py's _run_eval_pipeline, plus the cross-analysis reporting plots).
+     (mirrors app.py's _run_eval_pipeline, plus the cross-analysis reporting
+     plots). eval/symptom_diagnosis.py runs first — it's the per-profile
+     EVALUATION step (symptom extraction + candidate_set), decoupled from
+     step 2 and independently resumable (skips a log whose *_result.json is
+     already up to date).
 
 Every model, profile set and conversation style is an argument, so one script covers
 whatever combination an experiment needs; the patched config file is restored to its
@@ -27,6 +32,8 @@ other's runs — never do that.
 Usage:
   python3 script/run_all_doctors_profiles.py
   python3 script/run_all_doctors_profiles.py --limit 2 --skip-eval   # smoke test
+  python3 script/run_all_doctors_profiles.py --skip-eval             # dialogues only, no evaluation
+  python3 script/run_all_doctors_profiles.py --skip-simulate         # evaluation only, over dialogues that already exist
   python3 script/run_all_doctors_profiles.py --doctors gemini-3.5-flash qwen3-235b
   python3 script/run_all_doctors_profiles.py --doctors gpt-5.5@openai   # not in the list
   python3 script/run_all_doctors_profiles.py --patient-model gemini-3.5-flash --patient-provider gemini
@@ -144,6 +151,9 @@ def main() -> int:
     parser.add_argument("--workers", type=int, default=4, help="Parallel simulation processes per doctor.")
     parser.add_argument("--limit", type=int, default=None, help="Only the first N profiles per doctor (smoke test).")
     parser.add_argument("--skip-eval", action="store_true", help="Skip the eval/reporting pipeline, simulate only.")
+    parser.add_argument("--skip-simulate", action="store_true",
+                         help="Skip script/run_profile_batch.py, run only the eval/reporting pipeline "
+                              "against dialogues that already exist (e.g. after a --skip-eval run).")
     args = parser.parse_args()
 
     known = {d["key"]: d for d in DOCTOR_VARIANTS}
@@ -198,16 +208,18 @@ def main() -> int:
             )
             _save_config(config_path, _patch_config(base_cfg, doctor, patient_llm, judge_llm))
 
-            sim_cmd = [
-                PYTHON_BIN, "script/run_profile_batch.py",
-                "--profiles-root", str(args.profiles_root),
-                "--workers", str(args.workers),
-            ]
-            if args.styles:
-                sim_cmd += ["--styles", *args.styles]
-            if args.limit:
-                sim_cmd += ["--limit", str(args.limit)]
-            sim_ok = _run(sim_cmd, f"simulate[{doctor['key']}]")
+            sim_ok: bool | None = None
+            if not args.skip_simulate:
+                sim_cmd = [
+                    PYTHON_BIN, "script/run_profile_batch.py",
+                    "--profiles-root", str(args.profiles_root),
+                    "--workers", str(args.workers),
+                ]
+                if args.styles:
+                    sim_cmd += ["--styles", *args.styles]
+                if args.limit:
+                    sim_cmd += ["--limit", str(args.limit)]
+                sim_ok = _run(sim_cmd, f"simulate[{doctor['key']}]")
 
             eval_results: list[tuple[str, bool]] = []
             if not args.skip_eval:
@@ -229,7 +241,8 @@ def main() -> int:
 
     print(f"\n{'='*70}\n[orchestrator] Summary\n{'='*70}", flush=True)
     for s in summary:
-        print(f"  {s['doctor']:<24} simulate={'OK' if s['simulate_ok'] else 'FAIL'}", flush=True)
+        sim_label = "SKIPPED" if s["simulate_ok"] is None else ("OK" if s["simulate_ok"] else "FAIL")
+        print(f"  {s['doctor']:<24} simulate={sim_label}", flush=True)
         for name, ok in s["eval_results"]:
             print(f"      {'OK  ' if ok else 'FAIL'}  {name}", flush=True)
 

@@ -1,6 +1,16 @@
 #!/usr/bin/env python3
-"""Run one simulation per profile JSON under a profiles root, using whichever
-patient/judge/doctor models config/config.json currently specifies.
+"""Run one SIMULATION (dialogue generation only, no evaluation) per profile
+JSON under a profiles root, using whichever patient/judge/doctor models
+config/config.json currently specifies.
+
+This writes only the dialogue log files (.txt + .json) — it does not run
+symptom extraction or produce *_result.json. Run `eval/symptom_diagnosis.py`
+afterward for that: it's a separate, standalone, resumable pass over an
+entire run_dir's logs (own existing-output check: skips a log whose
+*_result.json is already up to date; own source check: it only processes
+.txt logs that actually exist). Splitting these means you can regenerate/
+re-run dialogues without forcing re-evaluation, or re-run evaluation alone
+(e.g. after changing scoring logic) without re-simulating anything.
 
 Intended to be invoked once per doctor model by script/run_all_doctors_profiles.py
 (which patches config/config.json's llm.doctor before each call), but can be run directly
@@ -103,7 +113,7 @@ def main() -> int:
     errors: list[str] = []
     with ProcessPoolExecutor(max_workers=max(1, args.workers), mp_context=ctx) as executor:
         futures = {
-            executor.submit(run_profile, str(p), str(logs_dir), str(results_dir), max_turns, st): p
+            executor.submit(run_profile, str(p), str(logs_dir), max_turns, st): p
             for p, st in jobs
         }
         for fut in as_completed(futures):
@@ -115,7 +125,7 @@ def main() -> int:
             done += 1
             status = res.get("status")
             marker = {
-                "done": "OK", "skipped": "SKIP", "error": "ERR", "sim_ok_sd_failed": "SD_ERR",
+                "done": "OK", "skipped": "SKIP", "error": "ERR",
             }.get(status, "?")
             if status == "skipped":
                 n_skipped += 1
