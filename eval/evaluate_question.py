@@ -129,16 +129,35 @@ def evaluate() -> list[dict]:
 
     all_episode_results: list[dict] = []
     skipped = 0
+    n_cached = 0
 
     result_paths = sorted(RESULTS_DIR.glob("*_result.json"))
     if not result_paths:
         print("No result files found.", file=sys.stderr)
         sys.exit(1)
 
+    # Cache: reuse a previously-scored episode as-is if its turn count hasn't
+    # grown since last time — avoids re-running the llm_judge mapper (a real
+    # judge LLM call per turn) on episodes already fully scored in an earlier
+    # invocation of this script.
+    out_path = RESULTS_DIR / "question_eval.json"
+    cached: dict[str, dict] = {}
+    if out_path.exists():
+        try:
+            cached = {e["log_file"]: e for e in json.loads(out_path.read_text(encoding="utf-8"))}
+        except (json.JSONDecodeError, OSError):
+            cached = {}
+
     for res_path in result_paths:
         result   = json.loads(res_path.read_text(encoding="utf-8"))
         log_name = result["log_file"]
         log_file = LOGS_DIR / f"{log_name}.txt"
+
+        cached_ep = cached.get(log_name)
+        if cached_ep is not None and len(cached_ep.get("turns", [])) == len(result.get("turns", [])):
+            all_episode_results.append(cached_ep)
+            n_cached += 1
+            continue
 
         gt_m = re.match(r"(D\d+)", log_name)
         if not gt_m:
@@ -231,9 +250,10 @@ def evaluate() -> list[dict]:
 
     if skipped:
         print(f"\n({skipped} log files not found, skipped)")
+    if n_cached:
+        print(f"({n_cached} episodes reused from cache, no llm_judge call)")
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    out_path = RESULTS_DIR / "question_eval.json"
     out_path.write_text(
         json.dumps(all_episode_results, indent=2, ensure_ascii=False),
         encoding="utf-8",

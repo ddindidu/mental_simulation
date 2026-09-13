@@ -197,10 +197,28 @@ def main() -> None:
         print(f"No log files found in {logs_dir}", file=sys.stderr)
         sys.exit(1)
 
+    # Cache: a log's final doctor block never changes once written, so a
+    # previously-scored episode can be reused as-is — this avoids re-running
+    # the judge LLM call (judge_checklist) on episodes already scored in an
+    # earlier invocation of this script.
+    out_path = results_dir / "diagnostic_reasoning_eval.json"
+    cached: dict[str, dict] = {}
+    if out_path.exists():
+        try:
+            cached = {e["log_file"]: e for e in json.loads(out_path.read_text(encoding="utf-8"))}
+        except (json.JSONDecodeError, OSError):
+            cached = {}
+
     episode_results: list[dict] = []
     skipped = 0
+    n_cached = 0
 
     for log_file in log_files:
+        if log_file.stem in cached:
+            episode_results.append(cached[log_file.stem])
+            n_cached += 1
+            continue
+
         gt = _gt_id(log_file.stem)
         if not gt:
             continue
@@ -265,13 +283,14 @@ def main() -> None:
 
     _print_summary(episode_results, id2name)
 
-    out_path = results_dir / "diagnostic_reasoning_eval.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(
         json.dumps(episode_results, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
     print(f"Saved → {out_path}")
+    if n_cached:
+        print(f"({n_cached} episodes reused from cache, no judge LLM call)")
     if skipped:
         print(f"({skipped} episodes skipped)")
 
