@@ -419,7 +419,7 @@ def _fold_profile_records(items: list[dict]) -> list[dict]:
 # 셋 다 OpenAI 호환 API라 openai SDK 하나로 처리한다.
 _PROVIDERS = {
     "openai": {"key_env": "OPENAI_API_KEY", "base_url": None,
-               "default_model": "gpt-5.4-mini"},
+               "default_model": "gpt-5.6-luna"},
     "openrouter": {"key_env": "OPENROUTER_API_KEY", "base_url": "https://openrouter.ai/api/v1",
                    "default_model": "google/gemini-3.5-flash"},
     "gemini": {"key_env": "GEMINI_API_KEY",
