@@ -1,0 +1,390 @@
+---------- turn 0 | doctor:opening | doctor.opening_user_message() | model=anthropic/claude-sonnet-5 ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n1\n\n[Current Candidates]\n(none yet — this is your opening question)\n\n[Dialogue History]\n(none yet — the interview has not started)\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "Identify the primary reason for the visit today", "question": "Hi, welcome in. I'm Dr. Lee. What brings you in to see me today?"}
+=====================================
+
+---------- turn 1 | patient:alignment | patient.build_alignment_messages() | model=gpt-5.6-terra ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Body Dysmorphic Disorder. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S067\n  name: Preoccupation_with_Appearance\n  description: Preoccupation with one or more perceived defects or flaws in physical appearance that are not observable or appear slight to others.\n  manifestation: I came in because I can't stop focusing on how uneven and puffy the left side of my face looks on video calls and in salsa photos, even though everyone keeps telling me they don't see anything, and it's starting to mess with my work and social life.\n- key: S068\n  name: Appearance_Related_Repetitive_Behaviors\n  description: Repetitive behaviors or mental acts performed in response to appearance concerns.\n  manifestation: Before meetings or going out, I keep opening the camera preview, changing the angle and lighting, fixing my hair around that side of my face, retaking pictures, and asking my friends if I look strange until I’m late or too drained to go.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: I’ve missed ticket deadlines and joined some video calls late because I couldn’t get past how I looked, and my supervisor brought it up in a performance review. I’ve also skipped salsa nights and community events when I knew people would be taking photos.\n\n[Patient Info]\n- demographics: Female / 33 / computer_support_specialist / graduate\n- chief_complaint_symptom_code: S067\n\n[Dialogue History]\n(this is the start of the consultation)\n\n[Last Question]\nHi, welcome in. I'm Dr. Lee. What brings you in to see me today?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 1\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key":"S067","name":"Preoccupation_with_Appearance","description":"Preoccupation with one or more perceived defects or flaws in physical appearance that are not observable or appear slight to others.","reason":"This is the first reply of the consultation and is the chief complaint symptom."}
+=====================================
+
+---------- turn 1 | patient:response | patient.build_response_messages() | model=gpt-5.6-terra ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Body Dysmorphic Disorder, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\n(this is the start of the consultation)\n\n[Last Question]\nHi, welcome in. I'm Dr. Lee. What brings you in to see me today?\n\n[Patient Info]\n- demographics: Female / 33 / computer_support_specialist / graduate\n- severity: Moderate\n\n[Targeted Info]\nname: Preoccupation_with_Appearance\nmanifestation: \"I came in because I can't stop focusing on how uneven and puffy the left side of my face looks on video calls and in salsa photos, even though everyone keeps telling me they don't see anything, and it's starting to mess with my work and social life.\"\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+I came in because I can’t stop noticing how uneven and puffy the left side of my face looks, especially on video calls and in salsa photos. Everyone tells me they don’t see it, but it’s been getting in the way of work and being social.
+=====================================
+
+---------- turn 1 | doctor:inference | doctor.build_inference_prompt() | model=anthropic/claude-sonnet-5 ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n1\n\n[Previous Candidates]\n(none — this is your first inference)\n\n[Dialogue History]\nDoctor: Hi, welcome in. I'm Dr. Lee. What brings you in to see me today?\n\nPatient: I came in because I can’t stop noticing how uneven and puffy the left side of my face looks, especially on video calls and in salsa photos. Everyone tells me they don’t see it, but it’s been getting in the way of work and being social.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["F45.22", "F22.8", "F41.1"], "note": "Initial presentation suggests preoccupation with a perceived physical defect not observed by others, causing distress and social/occupational impairment—most consistent with body dysmorphic disorder. Delusional disorder (somatic type) and generalized anxiety are considered as differentials pending further assessment of insight and pervasiveness of worry.", "is_final": false}
+=====================================
+
+---------- turn 1 | doctor:followup | doctor.build_questioning_prompt() | model=anthropic/claude-sonnet-5 ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n2\n\n[Current Candidates]\nF45.22, F22.8, F41.1\n\n[Dialogue History]\nDoctor: Hi, welcome in. I'm Dr. Lee. What brings you in to see me today?\n\nPatient: I came in because I can’t stop noticing how uneven and puffy the left side of my face looks, especially on video calls and in salsa photos. Everyone tells me they don’t see it, but it’s been getting in the way of work and being social.\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "How much time per day does the patient spend thinking about or checking their facial appearance?", "question": "On an average day, roughly how many hours would you say you spend thinking about or checking the appearance of your face?"}
+=====================================
+
+---------- turn 2 | patient:alignment | patient.build_alignment_messages() | model=gpt-5.6-terra ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Body Dysmorphic Disorder. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S067\n  name: Preoccupation_with_Appearance\n  description: Preoccupation with one or more perceived defects or flaws in physical appearance that are not observable or appear slight to others.\n  manifestation: I came in because I can't stop focusing on how uneven and puffy the left side of my face looks on video calls and in salsa photos, even though everyone keeps telling me they don't see anything, and it's starting to mess with my work and social life.\n- key: S068\n  name: Appearance_Related_Repetitive_Behaviors\n  description: Repetitive behaviors or mental acts performed in response to appearance concerns.\n  manifestation: Before meetings or going out, I keep opening the camera preview, changing the angle and lighting, fixing my hair around that side of my face, retaking pictures, and asking my friends if I look strange until I’m late or too drained to go.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: I’ve missed ticket deadlines and joined some video calls late because I couldn’t get past how I looked, and my supervisor brought it up in a performance review. I’ve also skipped salsa nights and community events when I knew people would be taking photos.\n\n[Patient Info]\n- demographics: Female / 33 / computer_support_specialist / graduate\n- chief_complaint_symptom_code: S067\n\n[Dialogue History]\nDoctor: Hi, welcome in. I'm Dr. Lee. What brings you in to see me today?\n\nPatient: I came in because I can’t stop noticing how uneven and puffy the left side of my face looks, especially on video calls and in salsa photos. Everyone tells me they don’t see it, but it’s been getting in the way of work and being social.\n\n[Last Question]\nOn an average day, roughly how many hours would you say you spend thinking about or checking the appearance of your face?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 2\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key":"S068","name":"Appearance_Related_Repetitive_Behaviors","description":"Repetitive behaviors or mental acts performed in response to appearance concerns.","reason":"The doctor is asking about the time spent thinking about or checking facial appearance, particularly appearance-checking behavior and related mental preoccupation."}
+=====================================
+
+---------- turn 2 | patient:response | patient.build_response_messages() | model=gpt-5.6-terra ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Body Dysmorphic Disorder, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\nDoctor: Hi, welcome in. I'm Dr. Lee. What brings you in to see me today?\n\nPatient: I came in because I can’t stop noticing how uneven and puffy the left side of my face looks, especially on video calls and in salsa photos. Everyone tells me they don’t see it, but it’s been getting in the way of work and being social.\n\n[Last Question]\nOn an average day, roughly how many hours would you say you spend thinking about or checking the appearance of your face?\n\n[Patient Info]\n- demographics: Female / 33 / computer_support_specialist / graduate\n- severity: Moderate\n\n[Targeted Info]\nname: Appearance_Related_Repetitive_Behaviors\nmanifestation: \"Before meetings or going out, I keep opening the camera preview, changing the angle and lighting, fixing my hair around that side of my face, retaking pictures, and asking my friends if I look strange until I’m late or too drained to go.\"\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+A few hours, probably—especially before meetings or if I’m going out. I keep checking the camera preview, changing the angle or lighting, fixing my hair to cover that side, retaking pictures, and asking friends if I look strange. Sometimes it goes on until I’m late or just too drained to go.
+=====================================
+
+---------- turn 2 | doctor:inference | doctor.build_inference_prompt() | model=anthropic/claude-sonnet-5 ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n2\n\n[Previous Candidates]\nF45.22, F22.8, F41.1\n\n[Dialogue History]\nDoctor: Hi, welcome in. I'm Dr. Lee. What brings you in to see me today?\n\nPatient: I came in because I can’t stop noticing how uneven and puffy the left side of my face looks, especially on video calls and in salsa photos. Everyone tells me they don’t see it, but it’s been getting in the way of work and being social.\n\nDoctor: On an average day, roughly how many hours would you say you spend thinking about or checking the appearance of your face?\n\nPatient: A few hours, probably—especially before meetings or if I’m going out. I keep checking the camera preview, changing the angle or lighting, fixing my hair to cover that side, retaking pictures, and asking friends if I look strange. Sometimes it goes on until I’m late or just too drained to go.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["F45.22", "F22.8"], "note": "Excessive time (hours/day) spent checking/camouflaging a perceived facial flaw that others don't notice supports body dysmorphic disorder; ruled out F41.1 (generalized anxiety) since worry is specifically appearance-focused with compulsive checking/reassurance-seeking, not diffuse worry. Retained F22.8 pending assessment of insight/conviction level.", "is_final": false}
+=====================================
+
+---------- turn 2 | doctor:followup | doctor.build_questioning_prompt() | model=anthropic/claude-sonnet-5 ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n3\n\n[Current Candidates]\nF45.22, F22.8\n\n[Dialogue History]\nDoctor: Hi, welcome in. I'm Dr. Lee. What brings you in to see me today?\n\nPatient: I came in because I can’t stop noticing how uneven and puffy the left side of my face looks, especially on video calls and in salsa photos. Everyone tells me they don’t see it, but it’s been getting in the way of work and being social.\n\nDoctor: On an average day, roughly how many hours would you say you spend thinking about or checking the appearance of your face?\n\nPatient: A few hours, probably—especially before meetings or if I’m going out. I keep checking the camera preview, changing the angle or lighting, fixing my hair to cover that side, retaking pictures, and asking friends if I look strange. Sometimes it goes on until I’m late or just too drained to go.\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "Assess degree of insight/conviction about the perceived defect", "question": "When friends tell you they don't notice any unevenness, how convinced are you that they're wrong versus considering they might be right?"}
+=====================================
+
+---------- turn 3 | patient:alignment | patient.build_alignment_messages() | model=gpt-5.6-terra ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Body Dysmorphic Disorder. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S067\n  name: Preoccupation_with_Appearance\n  description: Preoccupation with one or more perceived defects or flaws in physical appearance that are not observable or appear slight to others.\n  manifestation: I came in because I can't stop focusing on how uneven and puffy the left side of my face looks on video calls and in salsa photos, even though everyone keeps telling me they don't see anything, and it's starting to mess with my work and social life.\n- key: S068\n  name: Appearance_Related_Repetitive_Behaviors\n  description: Repetitive behaviors or mental acts performed in response to appearance concerns.\n  manifestation: Before meetings or going out, I keep opening the camera preview, changing the angle and lighting, fixing my hair around that side of my face, retaking pictures, and asking my friends if I look strange until I’m late or too drained to go.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: I’ve missed ticket deadlines and joined some video calls late because I couldn’t get past how I looked, and my supervisor brought it up in a performance review. I’ve also skipped salsa nights and community events when I knew people would be taking photos.\n\n[Patient Info]\n- demographics: Female / 33 / computer_support_specialist / graduate\n- chief_complaint_symptom_code: S067\n\n[Dialogue History]\nDoctor: Hi, welcome in. I'm Dr. Lee. What brings you in to see me today?\n\nPatient: I came in because I can’t stop noticing how uneven and puffy the left side of my face looks, especially on video calls and in salsa photos. Everyone tells me they don’t see it, but it’s been getting in the way of work and being social.\n\nDoctor: On an average day, roughly how many hours would you say you spend thinking about or checking the appearance of your face?\n\nPatient: A few hours, probably—especially before meetings or if I’m going out. I keep checking the camera preview, changing the angle or lighting, fixing my hair to cover that side, retaking pictures, and asking friends if I look strange. Sometimes it goes on until I’m late or just too drained to go.\n\n[Last Question]\nWhen friends tell you they don't notice any unevenness, how convinced are you that they're wrong versus considering they might be right?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 3\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key":"S067","name":"Preoccupation_with_Appearance","description":"Preoccupation with one or more perceived defects or flaws in physical appearance that are not observable or appear slight to others.","reason":"The question assesses the degree of conviction that the perceived facial flaw is real despite reassurance from others, which directly concerns the appearance preoccupation."}
+=====================================
+
+---------- turn 3 | patient:response | patient.build_response_messages() | model=gpt-5.6-terra ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Body Dysmorphic Disorder, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\nDoctor: Hi, welcome in. I'm Dr. Lee. What brings you in to see me today?\n\nPatient: I came in because I can’t stop noticing how uneven and puffy the left side of my face looks, especially on video calls and in salsa photos. Everyone tells me they don’t see it, but it’s been getting in the way of work and being social.\n\nDoctor: On an average day, roughly how many hours would you say you spend thinking about or checking the appearance of your face?\n\nPatient: A few hours, probably—especially before meetings or if I’m going out. I keep checking the camera preview, changing the angle or lighting, fixing my hair to cover that side, retaking pictures, and asking friends if I look strange. Sometimes it goes on until I’m late or just too drained to go.\n\n[Last Question]\nWhen friends tell you they don't notice any unevenness, how convinced are you that they're wrong versus considering they might be right?\n\n[Patient Info]\n- demographics: Female / 33 / computer_support_specialist / graduate\n- severity: Moderate\n\n[Targeted Info]\nname: Preoccupation_with_Appearance\nmanifestation: \"I came in because I can't stop focusing on how uneven and puffy the left side of my face looks on video calls and in salsa photos, even though everyone keeps telling me they don't see anything, and it's starting to mess with my work and social life.\"\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+Most of the time I think they’re wrong, or maybe they’re just being nice. I know they say they don’t see it, but when I see myself on the camera or in photos, that left side looks obviously uneven and puffy to me. Part of me wonders if I’m over-focusing on it, but I still can’t really believe it isn’t there.
+=====================================
+
+---------- turn 3 | doctor:inference | doctor.build_inference_prompt() | model=anthropic/claude-sonnet-5 ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n3\n\n[Previous Candidates]\nF45.22, F22.8\n\n[Dialogue History]\nDoctor: Hi, welcome in. I'm Dr. Lee. What brings you in to see me today?\n\nPatient: I came in because I can’t stop noticing how uneven and puffy the left side of my face looks, especially on video calls and in salsa photos. Everyone tells me they don’t see it, but it’s been getting in the way of work and being social.\n\nDoctor: On an average day, roughly how many hours would you say you spend thinking about or checking the appearance of your face?\n\nPatient: A few hours, probably—especially before meetings or if I’m going out. I keep checking the camera preview, changing the angle or lighting, fixing my hair to cover that side, retaking pictures, and asking friends if I look strange. Sometimes it goes on until I’m late or just too drained to go.\n\nDoctor: When friends tell you they don't notice any unevenness, how convinced are you that they're wrong versus considering they might be right?\n\nPatient: Most of the time I think they’re wrong, or maybe they’re just being nice. I know they say they don’t see it, but when I see myself on the camera or in photos, that left side looks obviously uneven and puffy to me. Part of me wonders if I’m over-focusing on it, but I still can’t really believe it isn’t there.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["F45.22", "F22.8"], "note": "Patient endorses preoccupation with perceived facial asymmetry (>1hr/day), repetitive checking/camouflaging behaviors, and functional impairment consistent with body dysmorphic disorder. Insight is poor but not fully absent (some doubt expressed), so delusional disorder remains possible but less likely than BDD with poor insight; both retained pending further insight assessment.", "is_final": false}
+=====================================
+
+---------- turn 3 | doctor:followup | doctor.build_questioning_prompt() | model=anthropic/claude-sonnet-5 ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n4\n\n[Current Candidates]\nF45.22, F22.8\n\n[Dialogue History]\nDoctor: Hi, welcome in. I'm Dr. Lee. What brings you in to see me today?\n\nPatient: I came in because I can’t stop noticing how uneven and puffy the left side of my face looks, especially on video calls and in salsa photos. Everyone tells me they don’t see it, but it’s been getting in the way of work and being social.\n\nDoctor: On an average day, roughly how many hours would you say you spend thinking about or checking the appearance of your face?\n\nPatient: A few hours, probably—especially before meetings or if I’m going out. I keep checking the camera preview, changing the angle or lighting, fixing my hair to cover that side, retaking pictures, and asking friends if I look strange. Sometimes it goes on until I’m late or just too drained to go.\n\nDoctor: When friends tell you they don't notice any unevenness, how convinced are you that they're wrong versus considering they might be right?\n\nPatient: Most of the time I think they’re wrong, or maybe they’re just being nice. I know they say they don’t see it, but when I see myself on the camera or in photos, that left side looks obviously uneven and puffy to me. Part of me wonders if I’m over-focusing on it, but I still can’t really believe it isn’t there.\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "Assess whether the belief is an isolated, encapsulated concern about appearance or part of a broader pattern of unusual beliefs/perceptions, to differentiate BDD with absent insight from delusional disorder", "question": "Aside from your concerns about your face, have you noticed any other unusual thoughts, beliefs, or experiences—like feeling that people are watching you, talking about you, or hearing things others don't hear?"}
+=====================================
+
+---------- turn 4 | patient:alignment | patient.build_alignment_messages() | model=gpt-5.6-terra ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Body Dysmorphic Disorder. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S067\n  name: Preoccupation_with_Appearance\n  description: Preoccupation with one or more perceived defects or flaws in physical appearance that are not observable or appear slight to others.\n  manifestation: I came in because I can't stop focusing on how uneven and puffy the left side of my face looks on video calls and in salsa photos, even though everyone keeps telling me they don't see anything, and it's starting to mess with my work and social life.\n- key: S068\n  name: Appearance_Related_Repetitive_Behaviors\n  description: Repetitive behaviors or mental acts performed in response to appearance concerns.\n  manifestation: Before meetings or going out, I keep opening the camera preview, changing the angle and lighting, fixing my hair around that side of my face, retaking pictures, and asking my friends if I look strange until I’m late or too drained to go.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: I’ve missed ticket deadlines and joined some video calls late because I couldn’t get past how I looked, and my supervisor brought it up in a performance review. I’ve also skipped salsa nights and community events when I knew people would be taking photos.\n\n[Patient Info]\n- demographics: Female / 33 / computer_support_specialist / graduate\n- chief_complaint_symptom_code: S067\n\n[Dialogue History]\nDoctor: Hi, welcome in. I'm Dr. Lee. What brings you in to see me today?\n\nPatient: I came in because I can’t stop noticing how uneven and puffy the left side of my face looks, especially on video calls and in salsa photos. Everyone tells me they don’t see it, but it’s been getting in the way of work and being social.\n\nDoctor: On an average day, roughly how many hours would you say you spend thinking about or checking the appearance of your face?\n\nPatient: A few hours, probably—especially before meetings or if I’m going out. I keep checking the camera preview, changing the angle or lighting, fixing my hair to cover that side, retaking pictures, and asking friends if I look strange. Sometimes it goes on until I’m late or just too drained to go.\n\nDoctor: When friends tell you they don't notice any unevenness, how convinced are you that they're wrong versus considering they might be right?\n\nPatient: Most of the time I think they’re wrong, or maybe they’re just being nice. I know they say they don’t see it, but when I see myself on the camera or in photos, that left side looks obviously uneven and puffy to me. Part of me wonders if I’m over-focusing on it, but I still can’t really believe it isn’t there.\n\n[Last Question]\nAside from your concerns about your face, have you noticed any other unusual thoughts, beliefs, or experiences—like feeling that people are watching you, talking about you, or hearing things others don't hear?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 4\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key":"None","name":"None","description":"None","reason":"The doctor is screening for other psychotic-like thoughts, beliefs, or perceptual experiences, which are not covered by the provided symptom profile."}
+=====================================
+
+---------- turn 4 | patient:response | patient.build_response_messages() | model=gpt-5.6-terra ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Body Dysmorphic Disorder, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\nDoctor: Hi, welcome in. I'm Dr. Lee. What brings you in to see me today?\n\nPatient: I came in because I can’t stop noticing how uneven and puffy the left side of my face looks, especially on video calls and in salsa photos. Everyone tells me they don’t see it, but it’s been getting in the way of work and being social.\n\nDoctor: On an average day, roughly how many hours would you say you spend thinking about or checking the appearance of your face?\n\nPatient: A few hours, probably—especially before meetings or if I’m going out. I keep checking the camera preview, changing the angle or lighting, fixing my hair to cover that side, retaking pictures, and asking friends if I look strange. Sometimes it goes on until I’m late or just too drained to go.\n\nDoctor: When friends tell you they don't notice any unevenness, how convinced are you that they're wrong versus considering they might be right?\n\nPatient: Most of the time I think they’re wrong, or maybe they’re just being nice. I know they say they don’t see it, but when I see myself on the camera or in photos, that left side looks obviously uneven and puffy to me. Part of me wonders if I’m over-focusing on it, but I still can’t really believe it isn’t there.\n\n[Last Question]\nAside from your concerns about your face, have you noticed any other unusual thoughts, beliefs, or experiences—like feeling that people are watching you, talking about you, or hearing things others don't hear?\n\n[Patient Info]\n- demographics: Female / 33 / computer_support_specialist / graduate\n- severity: Moderate\n\n[Targeted Info]\nNone\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+No, I haven’t noticed anything like that. I don’t feel like people are watching or talking about me, and I haven’t heard things other people don’t hear.
+=====================================
+
+---------- turn 4 | doctor:inference | doctor.build_inference_prompt() | model=anthropic/claude-sonnet-5 ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n4\n\n[Previous Candidates]\nF45.22, F22.8\n\n[Dialogue History]\nDoctor: Hi, welcome in. I'm Dr. Lee. What brings you in to see me today?\n\nPatient: I came in because I can’t stop noticing how uneven and puffy the left side of my face looks, especially on video calls and in salsa photos. Everyone tells me they don’t see it, but it’s been getting in the way of work and being social.\n\nDoctor: On an average day, roughly how many hours would you say you spend thinking about or checking the appearance of your face?\n\nPatient: A few hours, probably—especially before meetings or if I’m going out. I keep checking the camera preview, changing the angle or lighting, fixing my hair to cover that side, retaking pictures, and asking friends if I look strange. Sometimes it goes on until I’m late or just too drained to go.\n\nDoctor: When friends tell you they don't notice any unevenness, how convinced are you that they're wrong versus considering they might be right?\n\nPatient: Most of the time I think they’re wrong, or maybe they’re just being nice. I know they say they don’t see it, but when I see myself on the camera or in photos, that left side looks obviously uneven and puffy to me. Part of me wonders if I’m over-focusing on it, but I still can’t really believe it isn’t there.\n\nDoctor: Aside from your concerns about your face, have you noticed any other unusual thoughts, beliefs, or experiences—like feeling that people are watching you, talking about you, or hearing things others don't hear?\n\nPatient: No, I haven’t noticed anything like that. I don’t feel like people are watching or talking about me, and I haven’t heard things other people don’t hear.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["F45.22", "F22.8"], "note": "No evidence of other psychotic symptoms (paranoia, hallucinations) reduces likelihood of broader psychotic disorder, but partial insight into excessive focus still leaves both BDD with poor insight and delusional disorder somatic type as possibilities.", "is_final": false}
+=====================================
+
+---------- turn 4 | doctor:followup | doctor.build_questioning_prompt() | model=anthropic/claude-sonnet-5 ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n5\n\n[Current Candidates]\nF45.22, F22.8\n\n[Dialogue History]\nDoctor: Hi, welcome in. I'm Dr. Lee. What brings you in to see me today?\n\nPatient: I came in because I can’t stop noticing how uneven and puffy the left side of my face looks, especially on video calls and in salsa photos. Everyone tells me they don’t see it, but it’s been getting in the way of work and being social.\n\nDoctor: On an average day, roughly how many hours would you say you spend thinking about or checking the appearance of your face?\n\nPatient: A few hours, probably—especially before meetings or if I’m going out. I keep checking the camera preview, changing the angle or lighting, fixing my hair to cover that side, retaking pictures, and asking friends if I look strange. Sometimes it goes on until I’m late or just too drained to go.\n\nDoctor: When friends tell you they don't notice any unevenness, how convinced are you that they're wrong versus considering they might be right?\n\nPatient: Most of the time I think they’re wrong, or maybe they’re just being nice. I know they say they don’t see it, but when I see myself on the camera or in photos, that left side looks obviously uneven and puffy to me. Part of me wonders if I’m over-focusing on it, but I still can’t really believe it isn’t there.\n\nDoctor: Aside from your concerns about your face, have you noticed any other unusual thoughts, beliefs, or experiences—like feeling that people are watching you, talking about you, or hearing things others don't hear?\n\nPatient: No, I haven’t noticed anything like that. I don’t feel like people are watching or talking about me, and I haven’t heard things other people don’t hear.\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "Assess whether the patient can, even briefly or under certain circumstances, entertain the possibility that their perception of facial asymmetry is inaccurate (to gauge degree of insight/fixity of belief)", "question": "Is there ever a moment—even for a few seconds—when you can genuinely consider that the unevenness might just be your perception and not really there, or does it always feel completely certain to you?"}
+=====================================
+
+---------- turn 5 | patient:alignment | patient.build_alignment_messages() | model=gpt-5.6-terra ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Body Dysmorphic Disorder. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S067\n  name: Preoccupation_with_Appearance\n  description: Preoccupation with one or more perceived defects or flaws in physical appearance that are not observable or appear slight to others.\n  manifestation: I came in because I can't stop focusing on how uneven and puffy the left side of my face looks on video calls and in salsa photos, even though everyone keeps telling me they don't see anything, and it's starting to mess with my work and social life.\n- key: S068\n  name: Appearance_Related_Repetitive_Behaviors\n  description: Repetitive behaviors or mental acts performed in response to appearance concerns.\n  manifestation: Before meetings or going out, I keep opening the camera preview, changing the angle and lighting, fixing my hair around that side of my face, retaking pictures, and asking my friends if I look strange until I’m late or too drained to go.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: I’ve missed ticket deadlines and joined some video calls late because I couldn’t get past how I looked, and my supervisor brought it up in a performance review. I’ve also skipped salsa nights and community events when I knew people would be taking photos.\n\n[Patient Info]\n- demographics: Female / 33 / computer_support_specialist / graduate\n- chief_complaint_symptom_code: S067\n\n[Dialogue History]\nDoctor: On an average day, roughly how many hours would you say you spend thinking about or checking the appearance of your face?\n\nPatient: A few hours, probably—especially before meetings or if I’m going out. I keep checking the camera preview, changing the angle or lighting, fixing my hair to cover that side, retaking pictures, and asking friends if I look strange. Sometimes it goes on until I’m late or just too drained to go.\n\nDoctor: When friends tell you they don't notice any unevenness, how convinced are you that they're wrong versus considering they might be right?\n\nPatient: Most of the time I think they’re wrong, or maybe they’re just being nice. I know they say they don’t see it, but when I see myself on the camera or in photos, that left side looks obviously uneven and puffy to me. Part of me wonders if I’m over-focusing on it, but I still can’t really believe it isn’t there.\n\nDoctor: Aside from your concerns about your face, have you noticed any other unusual thoughts, beliefs, or experiences—like feeling that people are watching you, talking about you, or hearing things others don't hear?\n\nPatient: No, I haven’t noticed anything like that. I don’t feel like people are watching or talking about me, and I haven’t heard things other people don’t hear.\n\n[Last Question]\nIs there ever a moment—even for a few seconds—when you can genuinely consider that the unevenness might just be your perception and not really there, or does it always feel completely certain to you?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 5\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key":"S067","name":"Preoccupation_with_Appearance","description":"Preoccupation with one or more perceived defects or flaws in physical appearance that are not observable or appear slight to others.","reason":"The doctor is assessing the degree of insight or conviction about the perceived facial unevenness, which is central to the appearance preoccupation."}
+=====================================
+
+---------- turn 5 | patient:response | patient.build_response_messages() | model=gpt-5.6-terra ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Body Dysmorphic Disorder, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\nDoctor: On an average day, roughly how many hours would you say you spend thinking about or checking the appearance of your face?\n\nPatient: A few hours, probably—especially before meetings or if I’m going out. I keep checking the camera preview, changing the angle or lighting, fixing my hair to cover that side, retaking pictures, and asking friends if I look strange. Sometimes it goes on until I’m late or just too drained to go.\n\nDoctor: When friends tell you they don't notice any unevenness, how convinced are you that they're wrong versus considering they might be right?\n\nPatient: Most of the time I think they’re wrong, or maybe they’re just being nice. I know they say they don’t see it, but when I see myself on the camera or in photos, that left side looks obviously uneven and puffy to me. Part of me wonders if I’m over-focusing on it, but I still can’t really believe it isn’t there.\n\nDoctor: Aside from your concerns about your face, have you noticed any other unusual thoughts, beliefs, or experiences—like feeling that people are watching you, talking about you, or hearing things others don't hear?\n\nPatient: No, I haven’t noticed anything like that. I don’t feel like people are watching or talking about me, and I haven’t heard things other people don’t hear.\n\n[Last Question]\nIs there ever a moment—even for a few seconds—when you can genuinely consider that the unevenness might just be your perception and not really there, or does it always feel completely certain to you?\n\n[Patient Info]\n- demographics: Female / 33 / computer_support_specialist / graduate\n- severity: Moderate\n\n[Targeted Info]\nname: Preoccupation_with_Appearance\nmanifestation: \"I came in because I can't stop focusing on how uneven and puffy the left side of my face looks on video calls and in salsa photos, even though everyone keeps telling me they don't see anything, and it's starting to mess with my work and social life.\"\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+I can consider it for a few seconds, especially when everyone says they don’t see it. But then I see myself on a video call or in a salsa photo, and it looks so obvious to me that I go right back to thinking it’s really there.
+=====================================
+
+---------- turn 5 | doctor:inference | doctor.build_inference_prompt() | model=anthropic/claude-sonnet-5 ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n5\n\n[Previous Candidates]\nF45.22, F22.8\n\n[Dialogue History]\nDoctor: Hi, welcome in. I'm Dr. Lee. What brings you in to see me today?\n\nPatient: I came in because I can’t stop noticing how uneven and puffy the left side of my face looks, especially on video calls and in salsa photos. Everyone tells me they don’t see it, but it’s been getting in the way of work and being social.\n\nDoctor: On an average day, roughly how many hours would you say you spend thinking about or checking the appearance of your face?\n\nPatient: A few hours, probably—especially before meetings or if I’m going out. I keep checking the camera preview, changing the angle or lighting, fixing my hair to cover that side, retaking pictures, and asking friends if I look strange. Sometimes it goes on until I’m late or just too drained to go.\n\nDoctor: When friends tell you they don't notice any unevenness, how convinced are you that they're wrong versus considering they might be right?\n\nPatient: Most of the time I think they’re wrong, or maybe they’re just being nice. I know they say they don’t see it, but when I see myself on the camera or in photos, that left side looks obviously uneven and puffy to me. Part of me wonders if I’m over-focusing on it, but I still can’t really believe it isn’t there.\n\nDoctor: Aside from your concerns about your face, have you noticed any other unusual thoughts, beliefs, or experiences—like feeling that people are watching you, talking about you, or hearing things others don't hear?\n\nPatient: No, I haven’t noticed anything like that. I don’t feel like people are watching or talking about me, and I haven’t heard things other people don’t hear.\n\nDoctor: Is there ever a moment—even for a few seconds—when you can genuinely consider that the unevenness might just be your perception and not really there, or does it always feel completely certain to you?\n\nPatient: I can consider it for a few seconds, especially when everyone says they don’t see it. But then I see myself on a video call or in a salsa photo, and it looks so obvious to me that I go right back to thinking it’s really there.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["F45.22"], "note": "Patient maintains fluctuating but largely fair insight (can briefly consider perception may be inaccurate, no fixed delusional certainty), and denies psychotic symptoms (no paranoia, hallucinations, or delusions of reference). This argues against F22.8 (delusional disorder) and supports BDD with good/fair insight, ruling out the delusional variant.", "is_final": true}
+=====================================
+
+---------- turn 5 | doctor:final | doctor.final_diagnosis_user_payload() | model=anthropic/claude-sonnet-5 ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the full interview transcript and the differential diagnosis candidates, write the final diagnosis report.\n\nBoth the \"diagnosis\" and \"candidates\" MUST be ICD-10 codes.\n\n[Field Instructions]\n- diagnosis: The single diagnosis code of ICD-10.\n- candidates: Top 2–3 differential candidates of ICD-10 codes considered until the end.\n- reason: Brief diagnostic rationale.\n- diagnostic_checklist: Structured evidence summary organized by diagnostic criterion type.\n  List only symptom groups that are relevant to your diagnosis, with the symptoms the patient actually confirmed.\n\nOutput Format (JSON only, no other text):\n{\n  \"diagnosis\": \"Final Diagnosis ICD-10 code\",\n  \"candidates\": [\"Disease Code1\", \"Disease Code2\"],\n  \"reason\": \"Brief diagnostic rationale.\",\n  \"diagnostic_checklist\": {\n    \"symptom_groups\": [\n      {\n        \"group\": \"clinical group name (e.g., inattention, manic_episode, psychotic_symptoms)\",\n        \"confirmed_symptoms\": [\"natural language description of each confirmed symptom in this group\"],\n        \"count\": <integer>\n      }\n    ],\n    \"duration_verified\": \"Description of how the duration criterion was established (e.g., 'symptoms present for over 6 months since childhood'), or null if not assessed.\",\n    \"functional_impairment\": <true if functional impairment was confirmed, false if denied, null if not assessed>,\n    \"traumatic_stressor\": <true if a qualifying traumatic stressor was confirmed, null if not applicable or not assessed>,\n    \"psychosocial_stressor\": <true if a qualifying psychosocial stressor was confirmed, null if not applicable or not assessed>,\n    \"additional_requirements\": [\"Each additional criterion that was explicitly verified during the interview (e.g., 'Onset prior to age 12 confirmed')\"]\n  }\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"F45.22\"]\n\nInterview Transcript: \nDoctor: Hi, welcome in. I'm Dr. Lee. What brings you in to see me today?\n\nPatient: I came in because I can’t stop noticing how uneven and puffy the left side of my face looks, especially on video calls and in salsa photos. Everyone tells me they don’t see it, but it’s been getting in the way of work and being social.\n\nDoctor: On an average day, roughly how many hours would you say you spend thinking about or checking the appearance of your face?\n\nPatient: A few hours, probably—especially before meetings or if I’m going out. I keep checking the camera preview, changing the angle or lighting, fixing my hair to cover that side, retaking pictures, and asking friends if I look strange. Sometimes it goes on until I’m late or just too drained to go.\n\nDoctor: When friends tell you they don't notice any unevenness, how convinced are you that they're wrong versus considering they might be right?\n\nPatient: Most of the time I think they’re wrong, or maybe they’re just being nice. I know they say they don’t see it, but when I see myself on the camera or in photos, that left side looks obviously uneven and puffy to me. Part of me wonders if I’m over-focusing on it, but I still can’t really believe it isn’t there.\n\nDoctor: Aside from your concerns about your face, have you noticed any other unusual thoughts, beliefs, or experiences—like feeling that people are watching you, talking about you, or hearing things others don't hear?\n\nPatient: No, I haven’t noticed anything like that. I don’t feel like people are watching or talking about me, and I haven’t heard things other people don’t hear.\n\nDoctor: Is there ever a moment—even for a few seconds—when you can genuinely consider that the unevenness might just be your perception and not really there, or does it always feel completely certain to you?\n\nPatient: I can consider it for a few seconds, especially when everyone says they don’t see it. But then I see myself on a video call or in a salsa photo, and it looks so obvious to me that I go right back to thinking it’s really there."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "diagnosis": "F45.22",
+  "candidates": ["F45.22", "F22.0", "F42.2"],
+  "reason": "The patient demonstrates a persistent, distressing preoccupation with a perceived facial asymmetry/puffiness that is not observable or is only slight to others, accompanied by repetitive checking, camouflaging, and reassurance-seeking behaviors that impair social and occupational functioning. Insight is fair-to-poor (able to briefly consider the belief may be inaccurate but reverts to conviction), without fixed delusional certainty, and no other psychotic symptoms (no ideas of reference, hallucinations, or paranoia) are present, ruling out a primary psychotic disorder such as delusional disorder. The clinical picture is consistent with Body Dysmorphic Disorder (classified under Hypochondriacal Disorder, F45.22, in ICD-10).",
+  "diagnostic_checklist": {
+    "symptom_groups": [
+      {
+        "group": "preoccupation_with_appearance",
+        "confirmed_symptoms": [
+          "Persistent preoccupation with perceived facial asymmetry/puffiness on the left side",
+          "Preoccupation occurs especially during video calls and photos"
+        ],
+        "count": 2
+      },
+      {
+        "group": "repetitive_behaviors",
+        "confirmed_symptoms": [
+          "Frequent checking of appearance via camera preview",
+          "Adjusting angle/lighting to minimize perceived flaw",
+          "Using hair to camouflage the perceived asymmetry",
+          "Retaking photos",
+          "Seeking reassurance from friends about appearance"
+        ],
+        "count": 5
+      },
+      {
+        "group": "insight",
+        "confirmed_symptoms": [
+          "Able to briefly consider (for a few seconds) that the perceived flaw may not be real when others deny seeing it",
+          "Reverts to strong conviction that the flaw is present after seeing self on camera or in photos",
+          "Denies fixed, unshakable delusional certainty"
+        ],
+        "count": 3
+      },
+      {
+        "group": "exclusion_of_psychotic_symptoms",
+        "confirmed_symptoms": [
+          "Denies ideas of reference or feeling watched/talked about",
+          "Denies auditory or other hallucinations"
+        ],
+        "count": 2
+      }
+    ],
+    "duration_verified": "Symptoms described as ongoing and occurring on an average day for several hours, with functional interference described as persistent (not isolated to a single episode).",
+    "functional_impairment": true,
+    "traumatic_stressor": null,
+    "psychosocial_stressor": true,
+    "additional_requirements": [
+      "Preoccupation is time-consuming (several hours per day)",
+      "Behavior causes lateness and social avoidance",
+      "No evidence of delusional disorder (fair insight present)",
+      "No other psychiatric symptoms (mood, psychosis) reported"
+    ]
+  }
+}
+=====================================
+
