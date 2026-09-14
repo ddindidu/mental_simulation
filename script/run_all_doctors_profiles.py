@@ -42,7 +42,7 @@ Usage:
 
   # Two genuinely parallel runs (distinct --config each; auto-bootstrapped
   # from config/config.json on first use, then patched/restored independently):
-  python3 script/run_all_doctors_profiles.py --config config/config.run_a.json --patient-model gpt-5.5 --patient-provider openai --judge-model gpt-5.5 --judge-provider openai &
+  python3 script/run_all_doctors_profiles.py --config config/config.run_a.json --patient-model gpt-5.6-terra --patient-provider openai --judge-model gpt-5.6-terra --judge-provider openai &
   python3 script/run_all_doctors_profiles.py --config config/config.run_b.json --patient-model gemini-3.1-pro-preview --patient-provider gemini --judge-model gemini-3.1-pro-preview --judge-provider gemini &
   wait
 """
@@ -61,15 +61,15 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = PROJECT_ROOT / "config" / "config.json"
 PYTHON_BIN = sys.executable
 
-DEFAULT_PATIENT = {"provider": "openai", "model": "gpt-5.5"}
-DEFAULT_JUDGE = {"provider": "openai", "model": "gpt-5.5"}
+DEFAULT_PATIENT = {"provider": "openai", "model": "gpt-5.6-terra"}
+DEFAULT_JUDGE = {"provider": "openai", "model": "gpt-5.6-terra"}
 CONVERSATION_STYLES = ["plain", "verbose", "reserved", "tangent", "pleasing"]
 
 DOCTOR_VARIANTS: list[dict] = [
     {"key": "gemini-3.8-flash", "model": "gemini-3.8-flash", "provider": "gemini"},
     {"key": "gemini-3.1-flash-lite", "model": "gemini-3.1-flash-lite", "provider": "gemini"},
     {"key": "gpt-5.4", "model": "gpt-5.4", "provider": "openai"},
-    {"key": "gpt-5.4-mini", "model": "gpt-5.4-mini-2026-03-17", "provider": "openai"},
+    {"key": "gpt-5.6-luna", "model": "gpt-5.6-luna", "provider": "openai"},
     {"key": "claude-sonnet-5", "model": "anthropic/claude-sonnet-5", "provider": "openrouter"},
     {"key": "claude-haiku-4.5", "model": "anthropic/claude-haiku-4.5", "provider": "openrouter"},
     {"key": "llama-3.3-70b-instruct", "model": "meta-llama/llama-3.3-70b-instruct", "provider": "vllm"},
@@ -150,10 +150,22 @@ def main() -> int:
     )
     parser.add_argument("--workers", type=int, default=4, help="Parallel simulation processes per doctor.")
     parser.add_argument("--limit", type=int, default=None, help="Only the first N profiles per doctor (smoke test).")
+    parser.add_argument(
+        "--profile-filter", default=None,
+        help="Only simulate profiles whose filename (stem) contains this substring, "
+             "e.g. '_P001' to run only the P001 patient variant of every D_S combo.",
+    )
     parser.add_argument("--skip-eval", action="store_true", help="Skip the eval/reporting pipeline, simulate only.")
     parser.add_argument("--skip-simulate", action="store_true",
                          help="Skip script/run_profile_batch.py, run only the eval/reporting pipeline "
                               "against dialogues that already exist (e.g. after a --skip-eval run).")
+    parser.add_argument(
+        "--eval-style", default=None,
+        help="Restrict the eval pipeline to logs of one conversation style (e.g. 'plain'). "
+             "Passed as --style to the eval/*.py steps that read logs directly "
+             "(symptom_diagnosis.py, evaluate_final_diagnosis.py, evaluate_diagnostic_reasoning.py); "
+             "steps that only read *_result.json inherit the same scope from those outputs.",
+    )
     args = parser.parse_args()
 
     known = {d["key"]: d for d in DOCTOR_VARIANTS}
@@ -219,12 +231,22 @@ def main() -> int:
                     sim_cmd += ["--styles", *args.styles]
                 if args.limit:
                     sim_cmd += ["--limit", str(args.limit)]
+                if args.profile_filter:
+                    sim_cmd += ["--profile-filter", args.profile_filter]
                 sim_ok = _run(sim_cmd, f"simulate[{doctor['key']}]")
 
             eval_results: list[tuple[str, bool]] = []
             if not args.skip_eval:
+                style_aware_steps = {
+                    "eval/symptom_diagnosis.py",
+                    "eval/evaluate_final_diagnosis.py",
+                    "eval/evaluate_diagnostic_reasoning.py",
+                }
                 for step in EVAL_PIPELINE:
-                    ok = _run([PYTHON_BIN, *step], f"eval[{doctor['key']}]:{step[0]}")
+                    cmd = [PYTHON_BIN, *step]
+                    if args.eval_style and step[0] in style_aware_steps:
+                        cmd += ["--style", args.eval_style]
+                    ok = _run(cmd, f"eval[{doctor['key']}]:{step[0]}")
                     eval_results.append((step[0], ok))
 
             summary.append({

@@ -51,6 +51,11 @@ def main() -> int:
     )
     parser.add_argument("--workers", type=int, default=4, help="Parallel simulation processes.")
     parser.add_argument("--limit", type=int, default=None, help="Only process the first N profiles (smoke test).")
+    parser.add_argument(
+        "--profile-filter", default=None,
+        help="Only process profiles whose filename (stem) contains this substring, "
+             "e.g. '_P001' to run only the P001 patient variant of every D_S combo.",
+    )
     args = parser.parse_args()
 
     from utils.config import CONFIG
@@ -91,6 +96,14 @@ def main() -> int:
     if not profiles:
         print(f"[run_profile_batch] No profile JSON files found under {args.profiles_root}", file=sys.stderr)
         return 1
+    if args.profile_filter:
+        profiles = [p for p in profiles if args.profile_filter in p.stem]
+        if not profiles:
+            print(
+                f"[run_profile_batch] No profiles matched filter {args.profile_filter!r} "
+                f"under {args.profiles_root}", file=sys.stderr,
+            )
+            return 1
     if args.limit:
         profiles = profiles[: args.limit]
 

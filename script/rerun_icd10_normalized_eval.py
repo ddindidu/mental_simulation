@@ -22,7 +22,7 @@ DOCTOR_VARIANTS = [
     {"key": "gemini-3.5-flash", "model": "gemini-3.5-flash", "provider": "gemini"},
     {"key": "gemini-3.1-flash-lite", "model": "gemini-3.1-flash-lite", "provider": "gemini"},
     {"key": "gpt-5.4", "model": "gpt-5.4", "provider": "openai"},
-    {"key": "gpt-5.4-mini", "model": "gpt-5.4-mini-2026-03-17", "provider": "openai"},
+    {"key": "gpt-5.6-luna", "model": "gpt-5.6-luna", "provider": "openai"},
     {"key": "llama-3.3-70b-instruct", "model": "meta-llama/llama-3.3-70b-instruct", "provider": "openrouter"},
     {"key": "qwen3-235b", "model": "qwen/qwen3-235b-a22b-2507", "provider": "openrouter"},
 ]

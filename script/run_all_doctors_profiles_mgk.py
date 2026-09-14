@@ -37,14 +37,14 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = PROJECT_ROOT / "config" / "config_mgk.json"
 PYTHON_BIN = sys.executable
 
-DEFAULT_PATIENT = {"provider": "openai", "model": "gpt-5.5"}
-DEFAULT_JUDGE = {"provider": "openai", "model": "gpt-5.5"}
+DEFAULT_PATIENT = {"provider": "openai", "model": "gpt-5.6-terra"}
+DEFAULT_JUDGE = {"provider": "openai", "model": "gpt-5.6-terra"}
 CONVERSATION_STYLES = ["plain", "verbose", "reserved", "tangent", "pleasing"]
 
 DOCTOR_VARIANTS: list[dict] = [
     {"key": "gpt-5.5", "model": "gpt-5.5", "provider": "openai"},
     {"key": "gpt-5.4", "model": "gpt-5.4", "provider": "openai"},
-    {"key": "gpt-5.4-mini", "model": "gpt-5.4-mini-2026-03-17", "provider": "openai"},
+    {"key": "gpt-5.6-luna", "model": "gpt-5.6-luna", "provider": "openai"},
 ]
 
 # Mirrors app.py's _run_eval_pipeline() order, plus the cross-analysis reporting

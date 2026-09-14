@@ -16,7 +16,7 @@ mean information acquisition score (IAS)):
   - low_inference_low_question
 
 Median thresholds are computed globally across all cases from the four models
-combined (gemini-3.5-flash, gemini-3.1-flash-lite, gpt-5.4-mini-2026-03-17,
+combined (gemini-3.5-flash, gemini-3.1-flash-lite, gpt-5.6-luna,
 qwen3-235b-a22b-2507). For each bucket, the N most "extreme" cases (largest
 distance from the median on the relevant axis/axes) are selected, one output
 markdown file per case, diversified across models.
@@ -37,7 +37,7 @@ OUT_ROOT = BASE_DIR / "case_studies"
 MODELS = [
     "gemini-3.5-flash",
     "gemini-3.1-flash-lite",
-    "gpt-5.4-mini-2026-03-17",
+    "gpt-5.6-luna",
     "qwen3-235b-a22b-2507",
 ]
 

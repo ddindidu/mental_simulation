@@ -17,7 +17,7 @@ Patient and judge are fixed:
 Doctor variants:
   1. gemini-3.1-flash-lite  (provider: gemini)
   2. gemini-3.5-flash        (provider: gemini)
-  3. gpt-5.4-mini-2026-03-17 (provider: openai)
+  3. gpt-5.6-luna (provider: openai)
 """
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ PYTHON_BIN = "/home/jsshin/anaconda3/envs/mental/bin/python3"
 
 DOCTOR_VARIANTS: list[dict] = [
     {"model": "gemini-3.5-flash",               "provider": "gemini"},
-    {"model": "gpt-5.4-mini-2026-03-17",        "provider": "openai"},
+    {"model": "gpt-5.6-luna",        "provider": "openai"},
     {"model": "qwen/qwen3-235b-a22b-2507",      "provider": "openrouter"},
 ]
 
