@@ -1,0 +1,257 @@
+---------- turn 0 | doctor:opening | doctor.opening_user_message() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n1\n\n[Current Candidates]\n(none yet — this is your opening question)\n\n[Dialogue History]\n(none yet — the interview has not started)\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "Elicit the patient's chief complaint and primary reason for seeking care.", "question": "Hello, welcome. What brings you in to see me today?"}
+=====================================
+
+---------- turn 1 | patient:alignment | patient.build_alignment_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Obsessive-Compulsive Disorder. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S065\n  name: Obsessions\n  description: Recurrent and persistent thoughts, urges, or images that are experienced as intrusive and unwanted, and attempts to ignore or suppress them.\n  manifestation: I came in because when I was working on my aunt’s memorial piece, I kept getting these awful, unwanted thoughts that I was going to dishonor her somehow—like one wrong photo placement or color choice would mean I didn’t love her enough—and I couldn’t just brush them off like normal creative doubts.\n- key: S066\n  name: Compulsions\n  description: Repetitive behaviors or mental acts performed in response to an obsession or to prevent anxiety/distress; clearly excessive or not realistically connected.\n  manifestation: I’ll end up rereading the label text, nudging the same objects on the table, and checking the layout photos over and over until it feels ‘settled,’ even though part of me knows it’s already fine and I’m just losing studio time.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: I’m still getting most of my work done, but the extra time I lose in the studio already cost me a grant deadline and made me back out of a gallery talk I had actually wanted to do.\n\n[Patient Info]\n- demographics: Female / 32 / artist_or_related_worker / bachelors\n- chief_complaint_symptom_code: S065\n\n[Dialogue History]\n(this is the start of the consultation)\n\n[Last Question]\nHello, welcome. What brings you in to see me today?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 1\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key": "S065", "name": "Obsessions", "description": "Recurrent and persistent thoughts, urges, or images that are experienced as intrusive and unwanted, and attempts to ignore or suppress them.", "reason": "This is the first reply of the consultation, so I must return the item corresponding to my chief_complaint_symptom_code, which is S065."}
+=====================================
+
+---------- turn 1 | patient:response | patient.build_response_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Obsessive-Compulsive Disorder, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\n(this is the start of the consultation)\n\n[Last Question]\nHello, welcome. What brings you in to see me today?\n\n[Patient Info]\n- demographics: Female / 32 / artist_or_related_worker / bachelors\n- severity: Mild\n\n[Targeted Info]\nname: Obsessions\nmanifestation: \"I came in because when I was working on my aunt’s memorial piece, I kept getting these awful, unwanted thoughts that I was going to dishonor her somehow—like one wrong photo placement or color choice would mean I didn’t love her enough—and I couldn’t just brush them off like normal creative doubts.\"\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+Hi. Well, I came in because... recently I was working on my aunt’s memorial piece, and I just kept getting these awful, unwanted thoughts that I was going to dishonor her somehow. It felt like... like one wrong photo placement or a bad color choice would mean I didn’t love her enough. I'm used to second-guessing my art, but I couldn’t just brush these thoughts off like my normal creative doubts. It was really bothering me, so I figured I should talk to someone.
+=====================================
+
+---------- turn 1 | doctor:inference | doctor.build_inference_prompt() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n1\n\n[Previous Candidates]\n(none — this is your first inference)\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you in to see me today?\n\nPatient: Hi. Well, I came in because... recently I was working on my aunt’s memorial piece, and I just kept getting these awful, unwanted thoughts that I was going to dishonor her somehow. It felt like... like one wrong photo placement or a bad color choice would mean I didn’t love her enough. I'm used to second-guessing my art, but I couldn’t just brush these thoughts off like my normal creative doubts. It was really bothering me, so I figured I should talk to someone.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+```json
+{
+  "candidates": [
+    "F42",
+    "F41.1",
+    "F43.2",
+    "F32"
+  ],
+  "note": "Initial differential based on recurrent intrusive thoughts, magical thinking/guilt, and distress regarding personal performance/loss.",
+  "is_final": false
+}
+```
+=====================================
+
+---------- turn 1 | doctor:followup | doctor.build_questioning_prompt() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n2\n\n[Current Candidates]\nF42, F41.1, F43.2, F32\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you in to see me today?\n\nPatient: Hi. Well, I came in because... recently I was working on my aunt’s memorial piece, and I just kept getting these awful, unwanted thoughts that I was going to dishonor her somehow. It felt like... like one wrong photo placement or a bad color choice would mean I didn’t love her enough. I'm used to second-guessing my art, but I couldn’t just brush these thoughts off like my normal creative doubts. It was really bothering me, so I figured I should talk to someone.\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "Assess for the presence of compulsive behaviors or rituals used to neutralize the distress from the thoughts", "question": "When those thoughts came up, did you feel driven to do certain things repeatedly or follow specific steps to make the anxiety go away?"}
+=====================================
+
+---------- turn 2 | patient:alignment | patient.build_alignment_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Obsessive-Compulsive Disorder. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S065\n  name: Obsessions\n  description: Recurrent and persistent thoughts, urges, or images that are experienced as intrusive and unwanted, and attempts to ignore or suppress them.\n  manifestation: I came in because when I was working on my aunt’s memorial piece, I kept getting these awful, unwanted thoughts that I was going to dishonor her somehow—like one wrong photo placement or color choice would mean I didn’t love her enough—and I couldn’t just brush them off like normal creative doubts.\n- key: S066\n  name: Compulsions\n  description: Repetitive behaviors or mental acts performed in response to an obsession or to prevent anxiety/distress; clearly excessive or not realistically connected.\n  manifestation: I’ll end up rereading the label text, nudging the same objects on the table, and checking the layout photos over and over until it feels ‘settled,’ even though part of me knows it’s already fine and I’m just losing studio time.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: I’m still getting most of my work done, but the extra time I lose in the studio already cost me a grant deadline and made me back out of a gallery talk I had actually wanted to do.\n\n[Patient Info]\n- demographics: Female / 32 / artist_or_related_worker / bachelors\n- chief_complaint_symptom_code: S065\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you in to see me today?\n\nPatient: Hi. Well, I came in because... recently I was working on my aunt’s memorial piece, and I just kept getting these awful, unwanted thoughts that I was going to dishonor her somehow. It felt like... like one wrong photo placement or a bad color choice would mean I didn’t love her enough. I'm used to second-guessing my art, but I couldn’t just brush these thoughts off like my normal creative doubts. It was really bothering me, so I figured I should talk to someone.\n\n[Last Question]\nWhen those thoughts came up, did you feel driven to do certain things repeatedly or follow specific steps to make the anxiety go away?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 2\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key": "S066", "name": "Compulsions", "description": "Repetitive behaviors or mental acts performed in response to an obsession or to prevent anxiety/distress; clearly excessive or not realistically connected.", "reason": "The doctor is asking if I felt driven to do things repeatedly or follow specific steps to reduce anxiety in response to the intrusive thoughts, which directly corresponds to the 'Compulsions' symptom in my profile."}
+=====================================
+
+---------- turn 2 | patient:response | patient.build_response_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Obsessive-Compulsive Disorder, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you in to see me today?\n\nPatient: Hi. Well, I came in because... recently I was working on my aunt’s memorial piece, and I just kept getting these awful, unwanted thoughts that I was going to dishonor her somehow. It felt like... like one wrong photo placement or a bad color choice would mean I didn’t love her enough. I'm used to second-guessing my art, but I couldn’t just brush these thoughts off like my normal creative doubts. It was really bothering me, so I figured I should talk to someone.\n\n[Last Question]\nWhen those thoughts came up, did you feel driven to do certain things repeatedly or follow specific steps to make the anxiety go away?\n\n[Patient Info]\n- demographics: Female / 32 / artist_or_related_worker / bachelors\n- severity: Mild\n\n[Targeted Info]\nname: Compulsions\nmanifestation: \"I’ll end up rereading the label text, nudging the same objects on the table, and checking the layout photos over and over until it feels ‘settled,’ even though part of me knows it’s already fine and I’m just losing studio time.\"\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+Yeah, I do. I'll end up... rereading the label text, or just nudging the same objects around on my work table. I'll check the layout photos over and over again until it finally feels, I don't know, settled to me. It's frustrating because part of me knows it’s already fine, and I’m really just losing studio time by doing it, but I still feel like I have to.
+=====================================
+
+---------- turn 2 | doctor:inference | doctor.build_inference_prompt() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n2\n\n[Previous Candidates]\nF42, F41.1, F43.2, F32\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you in to see me today?\n\nPatient: Hi. Well, I came in because... recently I was working on my aunt’s memorial piece, and I just kept getting these awful, unwanted thoughts that I was going to dishonor her somehow. It felt like... like one wrong photo placement or a bad color choice would mean I didn’t love her enough. I'm used to second-guessing my art, but I couldn’t just brush these thoughts off like my normal creative doubts. It was really bothering me, so I figured I should talk to someone.\n\nDoctor: When those thoughts came up, did you feel driven to do certain things repeatedly or follow specific steps to make the anxiety go away?\n\nPatient: Yeah, I do. I'll end up... rereading the label text, or just nudging the same objects around on my work table. I'll check the layout photos over and over again until it finally feels, I don't know, settled to me. It's frustrating because part of me knows it’s already fine, and I’m really just losing studio time by doing it, but I still feel like I have to.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+```json
+{"candidates": ["F42", "F41.1"], "note": "The presence of repetitive checking and arranging rituals performed to neutralize intrusive, ego-dystonic doubts makes F32 and F43.2 unlikely, leaving OCD (F42) as the primary candidate alongside GAD (F41.1).", "is_final": false}
+```
+=====================================
+
+---------- turn 2 | doctor:followup | doctor.build_questioning_prompt() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n3\n\n[Current Candidates]\nF42, F41.1\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you in to see me today?\n\nPatient: Hi. Well, I came in because... recently I was working on my aunt’s memorial piece, and I just kept getting these awful, unwanted thoughts that I was going to dishonor her somehow. It felt like... like one wrong photo placement or a bad color choice would mean I didn’t love her enough. I'm used to second-guessing my art, but I couldn’t just brush these thoughts off like my normal creative doubts. It was really bothering me, so I figured I should talk to someone.\n\nDoctor: When those thoughts came up, did you feel driven to do certain things repeatedly or follow specific steps to make the anxiety go away?\n\nPatient: Yeah, I do. I'll end up... rereading the label text, or just nudging the same objects around on my work table. I'll check the layout photos over and over again until it finally feels, I don't know, settled to me. It's frustrating because part of me knows it’s already fine, and I’m really just losing studio time by doing it, but I still feel like I have to.\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "Assess for excessive, pervasive worry across multiple everyday domains to differentiate GAD from OCD", "question": "Outside of these specific thoughts and routines with your artwork, do you find yourself constantly worrying about many different everyday areas of life, such as your health, finances, or family?"}
+=====================================
+
+---------- turn 3 | patient:alignment | patient.build_alignment_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Obsessive-Compulsive Disorder. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S065\n  name: Obsessions\n  description: Recurrent and persistent thoughts, urges, or images that are experienced as intrusive and unwanted, and attempts to ignore or suppress them.\n  manifestation: I came in because when I was working on my aunt’s memorial piece, I kept getting these awful, unwanted thoughts that I was going to dishonor her somehow—like one wrong photo placement or color choice would mean I didn’t love her enough—and I couldn’t just brush them off like normal creative doubts.\n- key: S066\n  name: Compulsions\n  description: Repetitive behaviors or mental acts performed in response to an obsession or to prevent anxiety/distress; clearly excessive or not realistically connected.\n  manifestation: I’ll end up rereading the label text, nudging the same objects on the table, and checking the layout photos over and over until it feels ‘settled,’ even though part of me knows it’s already fine and I’m just losing studio time.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: I’m still getting most of my work done, but the extra time I lose in the studio already cost me a grant deadline and made me back out of a gallery talk I had actually wanted to do.\n\n[Patient Info]\n- demographics: Female / 32 / artist_or_related_worker / bachelors\n- chief_complaint_symptom_code: S065\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you in to see me today?\n\nPatient: Hi. Well, I came in because... recently I was working on my aunt’s memorial piece, and I just kept getting these awful, unwanted thoughts that I was going to dishonor her somehow. It felt like... like one wrong photo placement or a bad color choice would mean I didn’t love her enough. I'm used to second-guessing my art, but I couldn’t just brush these thoughts off like my normal creative doubts. It was really bothering me, so I figured I should talk to someone.\n\nDoctor: When those thoughts came up, did you feel driven to do certain things repeatedly or follow specific steps to make the anxiety go away?\n\nPatient: Yeah, I do. I'll end up... rereading the label text, or just nudging the same objects around on my work table. I'll check the layout photos over and over again until it finally feels, I don't know, settled to me. It's frustrating because part of me knows it’s already fine, and I’m really just losing studio time by doing it, but I still feel like I have to.\n\n[Last Question]\nOutside of these specific thoughts and routines with your artwork, do you find yourself constantly worrying about many different everyday areas of life, such as your health, finances, or family?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 3\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key": "None", "name": "None", "description": "None", "reason": "The doctor is asking about Generalized Anxiety Disorder symptoms (excessive worry about everyday things like health, finances, or family), which is not covered in my OCD symptom profile."}
+=====================================
+
+---------- turn 3 | patient:response | patient.build_response_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Obsessive-Compulsive Disorder, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you in to see me today?\n\nPatient: Hi. Well, I came in because... recently I was working on my aunt’s memorial piece, and I just kept getting these awful, unwanted thoughts that I was going to dishonor her somehow. It felt like... like one wrong photo placement or a bad color choice would mean I didn’t love her enough. I'm used to second-guessing my art, but I couldn’t just brush these thoughts off like my normal creative doubts. It was really bothering me, so I figured I should talk to someone.\n\nDoctor: When those thoughts came up, did you feel driven to do certain things repeatedly or follow specific steps to make the anxiety go away?\n\nPatient: Yeah, I do. I'll end up... rereading the label text, or just nudging the same objects around on my work table. I'll check the layout photos over and over again until it finally feels, I don't know, settled to me. It's frustrating because part of me knows it’s already fine, and I’m really just losing studio time by doing it, but I still feel like I have to.\n\n[Last Question]\nOutside of these specific thoughts and routines with your artwork, do you find yourself constantly worrying about many different everyday areas of life, such as your health, finances, or family?\n\n[Patient Info]\n- demographics: Female / 32 / artist_or_related_worker / bachelors\n- severity: Mild\n\n[Targeted Info]\nNone\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+Um, no, not really. I mean, I guess I have normal worries about money sometimes, being an artist and all, but it's not a constant thing. It doesn't take over my day or anything. My health and family are fine. It really is just... this specific thing with my artwork that's been bothering me.
+=====================================
+
+---------- turn 3 | doctor:inference | doctor.build_inference_prompt() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n3\n\n[Previous Candidates]\nF42, F41.1\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you in to see me today?\n\nPatient: Hi. Well, I came in because... recently I was working on my aunt’s memorial piece, and I just kept getting these awful, unwanted thoughts that I was going to dishonor her somehow. It felt like... like one wrong photo placement or a bad color choice would mean I didn’t love her enough. I'm used to second-guessing my art, but I couldn’t just brush these thoughts off like my normal creative doubts. It was really bothering me, so I figured I should talk to someone.\n\nDoctor: When those thoughts came up, did you feel driven to do certain things repeatedly or follow specific steps to make the anxiety go away?\n\nPatient: Yeah, I do. I'll end up... rereading the label text, or just nudging the same objects around on my work table. I'll check the layout photos over and over again until it finally feels, I don't know, settled to me. It's frustrating because part of me knows it’s already fine, and I’m really just losing studio time by doing it, but I still feel like I have to.\n\nDoctor: Outside of these specific thoughts and routines with your artwork, do you find yourself constantly worrying about many different everyday areas of life, such as your health, finances, or family?\n\nPatient: Um, no, not really. I mean, I guess I have normal worries about money sometimes, being an artist and all, but it's not a constant thing. It doesn't take over my day or anything. My health and family are fine. It really is just... this specific thing with my artwork that's been bothering me.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["F42"], "note": "Ruled out F41.1 (generalized anxiety disorder) as the patient denies excessive, pervasive worry across multiple everyday domains; symptoms are characterized by intrusive, distressing thoughts and repetitive compulsive checking/arranging behaviors consistent with obsessive-compulsive disorder.", "is_final": true}
+=====================================
+
+---------- turn 3 | doctor:final | doctor.final_diagnosis_user_payload() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the full interview transcript and the differential diagnosis candidates, write the final diagnosis report.\n\nBoth the \"diagnosis\" and \"candidates\" MUST be ICD-10 codes.\n\n[Field Instructions]\n- diagnosis: The single diagnosis code of ICD-10.\n- candidates: Top 2–3 differential candidates of ICD-10 codes considered until the end.\n- reason: Brief diagnostic rationale.\n- diagnostic_checklist: Structured evidence summary organized by diagnostic criterion type.\n  List only symptom groups that are relevant to your diagnosis, with the symptoms the patient actually confirmed.\n\nOutput Format (JSON only, no other text):\n{\n  \"diagnosis\": \"Final Diagnosis ICD-10 code\",\n  \"candidates\": [\"Disease Code1\", \"Disease Code2\"],\n  \"reason\": \"Brief diagnostic rationale.\",\n  \"diagnostic_checklist\": {\n    \"symptom_groups\": [\n      {\n        \"group\": \"clinical group name (e.g., inattention, manic_episode, psychotic_symptoms)\",\n        \"confirmed_symptoms\": [\"natural language description of each confirmed symptom in this group\"],\n        \"count\": <integer>\n      }\n    ],\n    \"duration_verified\": \"Description of how the duration criterion was established (e.g., 'symptoms present for over 6 months since childhood'), or null if not assessed.\",\n    \"functional_impairment\": <true if functional impairment was confirmed, false if denied, null if not assessed>,\n    \"traumatic_stressor\": <true if a qualifying traumatic stressor was confirmed, null if not applicable or not assessed>,\n    \"psychosocial_stressor\": <true if a qualifying psychosocial stressor was confirmed, null if not applicable or not assessed>,\n    \"additional_requirements\": [\"Each additional criterion that was explicitly verified during the interview (e.g., 'Onset prior to age 12 confirmed')\"]\n  }\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"F42\"]\n\nInterview Transcript: \nDoctor: Hello, welcome. What brings you in to see me today?\n\nPatient: Hi. Well, I came in because... recently I was working on my aunt’s memorial piece, and I just kept getting these awful, unwanted thoughts that I was going to dishonor her somehow. It felt like... like one wrong photo placement or a bad color choice would mean I didn’t love her enough. I'm used to second-guessing my art, but I couldn’t just brush these thoughts off like my normal creative doubts. It was really bothering me, so I figured I should talk to someone.\n\nDoctor: When those thoughts came up, did you feel driven to do certain things repeatedly or follow specific steps to make the anxiety go away?\n\nPatient: Yeah, I do. I'll end up... rereading the label text, or just nudging the same objects around on my work table. I'll check the layout photos over and over again until it finally feels, I don't know, settled to me. It's frustrating because part of me knows it’s already fine, and I’m really just losing studio time by doing it, but I still feel like I have to.\n\nDoctor: Outside of these specific thoughts and routines with your artwork, do you find yourself constantly worrying about many different everyday areas of life, such as your health, finances, or family?\n\nPatient: Um, no, not really. I mean, I guess I have normal worries about money sometimes, being an artist and all, but it's not a constant thing. It doesn't take over my day or anything. My health and family are fine. It really is just... this specific thing with my artwork that's been bothering me."
+  }
+]
+========== OUTPUT [doctor] ==========
+```json
+{
+  "diagnosis": "F42",
+  "candidates": ["F42", "F41.1"],
+  "reason": "The patient exhibits characteristic symptoms of Obsessive-Compulsive Disorder (ICD-10: F42), including intrusive, ego-dystonic obsessional thoughts (fear of dishonoring her aunt or not loving her enough through artistic choices) and repetitive compulsive rituals (rereading labels, repeatedly nudging objects, repeatedly checking layout photos) performed to relieve distress until feeling settled. Generalized Anxiety Disorder (F41.1) was considered but ruled out due to the lack of pervasive worry across multiple life domains.",
+  "diagnostic_checklist": {
+    "symptom_groups": [
+      {
+        "group": "obsessions",
+        "confirmed_symptoms": [
+          "Recurrent, distressing, unwanted thoughts of dishonoring deceased aunt",
+          "Magical thinking connecting minor artistic mistakes with not loving family member enough",
+          "Recognition that the thoughts are excessive and irrational"
+        ],
+        "count": 3
+      },
+      {
+        "group": "compulsions",
+        "confirmed_symptoms": [
+          "Repeatedly rereading label text",
+          "Repetitive nudging and adjusting of objects until feeling settled",
+          "Repeatedly checking layout photos"
+        ],
+        "count": 3
+      }
+    ],
+    "duration_verified": null,
+    "functional_impairment": true,
+    "traumatic_stressor": null,
+    "psychosocial_stressor": true,
+    "additional_requirements": [
+      "Obsessions and compulsions recognized as arising from the patient's own mind",
+      "Compulsive acts are not in themselves enjoyable or functionally productive"
+    ]
+  }
+}
+```
+=====================================
+

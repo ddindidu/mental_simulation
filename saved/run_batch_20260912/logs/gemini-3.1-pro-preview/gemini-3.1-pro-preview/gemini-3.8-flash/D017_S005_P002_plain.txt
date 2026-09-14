@@ -1,0 +1,326 @@
+---------- turn 0 | doctor:opening | doctor.opening_user_message() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n1\n\n[Current Candidates]\n(none yet — this is your opening question)\n\n[Dialogue History]\n(none yet — the interview has not started)\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "Establish the chief complaint and reason for the visit", "question": "Hello, welcome. What brings you into the clinic to see me today?"}
+=====================================
+
+---------- turn 1 | patient:alignment | patient.build_alignment_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Body Dysmorphic Disorder. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S067\n  name: Preoccupation_with_Appearance\n  description: Preoccupation with one or more perceived defects or flaws in physical appearance that are not observable or appear slight to others.\n  manifestation: I’m here because I can’t stop thinking that my hairline and the way my face looks under the restaurant lights make me look old and strange, even when my coworkers tell me they don’t see what I’m talking about.\n- key: S068\n  name: Appearance_Related_Repetitive_Behaviors\n  description: Repetitive behaviors or mental acts performed in response to appearance concerns.\n  manifestation: Before a shift I keep checking the bathroom mirror, taking phone pictures from different angles, combing my hair forward, and replaying how guests might see me until I’m late or too worked up to go out front.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: I’ve been written up at the restaurant because I’m late or miss shifts, and I’ve stopped going to staff photos, gallery events, and hikes because I can’t handle being seen that way.\n\n[Patient Info]\n- demographics: Male / 54 / host_or_hostess_restaurant_lounge_or_coffee_shop / some_college\n- chief_complaint_symptom_code: S067\n\n[Dialogue History]\n(this is the start of the consultation)\n\n[Last Question]\nHello, welcome. What brings you into the clinic to see me today?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 1\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key": "S067", "name": "Preoccupation_with_Appearance", "description": "Preoccupation with one or more perceived defects or flaws in physical appearance that are not observable or appear slight to others.", "reason": "This is the first turn of the consultation, so I must return the chief complaint symptom code (S067)."}
+=====================================
+
+---------- turn 1 | patient:response | patient.build_response_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Body Dysmorphic Disorder, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\n(this is the start of the consultation)\n\n[Last Question]\nHello, welcome. What brings you into the clinic to see me today?\n\n[Patient Info]\n- demographics: Male / 54 / host_or_hostess_restaurant_lounge_or_coffee_shop / some_college\n- severity: Severe\n\n[Targeted Info]\nname: Preoccupation_with_Appearance\nmanifestation: \"I’m here because I can’t stop thinking that my hairline and the way my face looks under the restaurant lights make me look old and strange, even when my coworkers tell me they don’t see what I’m talking about.\"\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+Hi. Well, I'm here because I just can't stop thinking about my appearance. It's my hairline, mostly, and... and just the way my face looks. I work as a host at a restaurant, and under those lights there, I just feel like I look really old and strange. 
+
+It's on my mind all the time. The people I work with tell me they don't see what I'm talking about, but I know what I see, and I just can't seem to get past it.
+=====================================
+
+---------- turn 1 | doctor:inference | doctor.build_inference_prompt() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n1\n\n[Previous Candidates]\n(none — this is your first inference)\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic to see me today?\n\nPatient: Hi. Well, I'm here because I just can't stop thinking about my appearance. It's my hairline, mostly, and... and just the way my face looks. I work as a host at a restaurant, and under those lights there, I just feel like I look really old and strange. \n\nIt's on my mind all the time. The people I work with tell me they don't see what I'm talking about, but I know what I see, and I just can't seem to get past it.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+```json
+{
+  "candidates": [
+    "F45.2",
+    "F42",
+    "F40.1",
+    "F22"
+  ],
+  "note": "Patient presents with pervasive preoccupation with perceived defects in facial appearance and hairline that others do not notice, raising suspicion primarily for body dysmorphic disorder (classified under F45.2 in ICD-10), obsessive-compulsive disorder (F42), social anxiety/phobia (F40.1), or delusional disorder (F22).",
+  "is_final": false
+}
+```
+=====================================
+
+---------- turn 1 | doctor:followup | doctor.build_questioning_prompt() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n2\n\n[Current Candidates]\nF45.2, F42, F40.1, F22\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic to see me today?\n\nPatient: Hi. Well, I'm here because I just can't stop thinking about my appearance. It's my hairline, mostly, and... and just the way my face looks. I work as a host at a restaurant, and under those lights there, I just feel like I look really old and strange. \n\nIt's on my mind all the time. The people I work with tell me they don't see what I'm talking about, but I know what I see, and I just can't seem to get past it.\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "Assess for repetitive behaviors or rituals related to the appearance concern, such as mirror checking or camouflaging.", "question": "Because of these worries about your appearance, do you find yourself repeatedly doing things like checking in mirrors, fixing your hair, or trying to hide your face?"}
+=====================================
+
+---------- turn 2 | patient:alignment | patient.build_alignment_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Body Dysmorphic Disorder. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S067\n  name: Preoccupation_with_Appearance\n  description: Preoccupation with one or more perceived defects or flaws in physical appearance that are not observable or appear slight to others.\n  manifestation: I’m here because I can’t stop thinking that my hairline and the way my face looks under the restaurant lights make me look old and strange, even when my coworkers tell me they don’t see what I’m talking about.\n- key: S068\n  name: Appearance_Related_Repetitive_Behaviors\n  description: Repetitive behaviors or mental acts performed in response to appearance concerns.\n  manifestation: Before a shift I keep checking the bathroom mirror, taking phone pictures from different angles, combing my hair forward, and replaying how guests might see me until I’m late or too worked up to go out front.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: I’ve been written up at the restaurant because I’m late or miss shifts, and I’ve stopped going to staff photos, gallery events, and hikes because I can’t handle being seen that way.\n\n[Patient Info]\n- demographics: Male / 54 / host_or_hostess_restaurant_lounge_or_coffee_shop / some_college\n- chief_complaint_symptom_code: S067\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic to see me today?\n\nPatient: Hi. Well, I'm here because I just can't stop thinking about my appearance. It's my hairline, mostly, and... and just the way my face looks. I work as a host at a restaurant, and under those lights there, I just feel like I look really old and strange. \n\nIt's on my mind all the time. The people I work with tell me they don't see what I'm talking about, but I know what I see, and I just can't seem to get past it.\n\n[Last Question]\nBecause of these worries about your appearance, do you find yourself repeatedly doing things like checking in mirrors, fixing your hair, or trying to hide your face?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 2\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key": "S068", "name": "Appearance_Related_Repetitive_Behaviors", "description": "Repetitive behaviors or mental acts performed in response to appearance concerns.", "reason": "The doctor is directly asking about repetitive behaviors performed in response to appearance concerns, such as checking mirrors, fixing hair, or hiding the face, which matches the S068 profile."}
+=====================================
+
+---------- turn 2 | patient:response | patient.build_response_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Body Dysmorphic Disorder, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic to see me today?\n\nPatient: Hi. Well, I'm here because I just can't stop thinking about my appearance. It's my hairline, mostly, and... and just the way my face looks. I work as a host at a restaurant, and under those lights there, I just feel like I look really old and strange. \n\nIt's on my mind all the time. The people I work with tell me they don't see what I'm talking about, but I know what I see, and I just can't seem to get past it.\n\n[Last Question]\nBecause of these worries about your appearance, do you find yourself repeatedly doing things like checking in mirrors, fixing your hair, or trying to hide your face?\n\n[Patient Info]\n- demographics: Male / 54 / host_or_hostess_restaurant_lounge_or_coffee_shop / some_college\n- severity: Severe\n\n[Targeted Info]\nname: Appearance_Related_Repetitive_Behaviors\nmanifestation: \"Before a shift I keep checking the bathroom mirror, taking phone pictures from different angles, combing my hair forward, and replaying how guests might see me until I’m late or too worked up to go out front.\"\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+Yeah, I do. A lot, actually. Especially right before a shift. I'll just keep checking the bathroom mirror over and over. I even take pictures on my phone from different angles to see how bad it looks, and... and I keep combing my hair forward to try and cover it up. 
+
+I just get stuck replaying how the guests are going to see me when they walk in. It gets to the point where I end up running late, or I just get too worked up to even go out to the front of the restaurant.
+=====================================
+
+---------- turn 2 | doctor:inference | doctor.build_inference_prompt() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n2\n\n[Previous Candidates]\nF45.2, F42, F40.1, F22\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic to see me today?\n\nPatient: Hi. Well, I'm here because I just can't stop thinking about my appearance. It's my hairline, mostly, and... and just the way my face looks. I work as a host at a restaurant, and under those lights there, I just feel like I look really old and strange. \n\nIt's on my mind all the time. The people I work with tell me they don't see what I'm talking about, but I know what I see, and I just can't seem to get past it.\n\nDoctor: Because of these worries about your appearance, do you find yourself repeatedly doing things like checking in mirrors, fixing your hair, or trying to hide your face?\n\nPatient: Yeah, I do. A lot, actually. Especially right before a shift. I'll just keep checking the bathroom mirror over and over. I even take pictures on my phone from different angles to see how bad it looks, and... and I keep combing my hair forward to try and cover it up. \n\nI just get stuck replaying how the guests are going to see me when they walk in. It gets to the point where I end up running late, or I just get too worked up to even go out to the front of the restaurant.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["F45.2", "F22", "F42"], "note": "Patient describes repetitive mirror checking, camouflaging, and taking photos driven by appearance preoccupation, classic for Body Dysmorphic Disorder (classified under F45.2 in ICD-10). Social phobia (F40.1) is ruled out as primary given the specific somatic/appearance focus.", "is_final": false}
+=====================================
+
+---------- turn 2 | doctor:followup | doctor.build_questioning_prompt() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n3\n\n[Current Candidates]\nF45.2, F22, F42\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic to see me today?\n\nPatient: Hi. Well, I'm here because I just can't stop thinking about my appearance. It's my hairline, mostly, and... and just the way my face looks. I work as a host at a restaurant, and under those lights there, I just feel like I look really old and strange. \n\nIt's on my mind all the time. The people I work with tell me they don't see what I'm talking about, but I know what I see, and I just can't seem to get past it.\n\nDoctor: Because of these worries about your appearance, do you find yourself repeatedly doing things like checking in mirrors, fixing your hair, or trying to hide your face?\n\nPatient: Yeah, I do. A lot, actually. Especially right before a shift. I'll just keep checking the bathroom mirror over and over. I even take pictures on my phone from different angles to see how bad it looks, and... and I keep combing my hair forward to try and cover it up. \n\nI just get stuck replaying how the guests are going to see me when they walk in. It gets to the point where I end up running late, or I just get too worked up to even go out to the front of the restaurant.\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "Screen for other obsessive-compulsive symptoms unrelated to appearance to distinguish OCD from body dysmorphic disorder", "question": "Aside from worries about your appearance, do you have other repetitive thoughts or habits that you feel compelled to do, such as repeatedly checking locks, excessive cleaning, or arranging things in a specific way?"}
+=====================================
+
+---------- turn 3 | patient:alignment | patient.build_alignment_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Body Dysmorphic Disorder. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S067\n  name: Preoccupation_with_Appearance\n  description: Preoccupation with one or more perceived defects or flaws in physical appearance that are not observable or appear slight to others.\n  manifestation: I’m here because I can’t stop thinking that my hairline and the way my face looks under the restaurant lights make me look old and strange, even when my coworkers tell me they don’t see what I’m talking about.\n- key: S068\n  name: Appearance_Related_Repetitive_Behaviors\n  description: Repetitive behaviors or mental acts performed in response to appearance concerns.\n  manifestation: Before a shift I keep checking the bathroom mirror, taking phone pictures from different angles, combing my hair forward, and replaying how guests might see me until I’m late or too worked up to go out front.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: I’ve been written up at the restaurant because I’m late or miss shifts, and I’ve stopped going to staff photos, gallery events, and hikes because I can’t handle being seen that way.\n\n[Patient Info]\n- demographics: Male / 54 / host_or_hostess_restaurant_lounge_or_coffee_shop / some_college\n- chief_complaint_symptom_code: S067\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic to see me today?\n\nPatient: Hi. Well, I'm here because I just can't stop thinking about my appearance. It's my hairline, mostly, and... and just the way my face looks. I work as a host at a restaurant, and under those lights there, I just feel like I look really old and strange. \n\nIt's on my mind all the time. The people I work with tell me they don't see what I'm talking about, but I know what I see, and I just can't seem to get past it.\n\nDoctor: Because of these worries about your appearance, do you find yourself repeatedly doing things like checking in mirrors, fixing your hair, or trying to hide your face?\n\nPatient: Yeah, I do. A lot, actually. Especially right before a shift. I'll just keep checking the bathroom mirror over and over. I even take pictures on my phone from different angles to see how bad it looks, and... and I keep combing my hair forward to try and cover it up. \n\nI just get stuck replaying how the guests are going to see me when they walk in. It gets to the point where I end up running late, or I just get too worked up to even go out to the front of the restaurant.\n\n[Last Question]\nAside from worries about your appearance, do you have other repetitive thoughts or habits that you feel compelled to do, such as repeatedly checking locks, excessive cleaning, or arranging things in a specific way?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 3\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key": "None", "name": "None", "description": "None", "reason": "The doctor is asking about symptoms of Obsessive-Compulsive Disorder (OCD), such as checking locks, excessive cleaning, or arranging things, which are not covered by the patient's Body Dysmorphic Disorder symptom profile."}
+=====================================
+
+---------- turn 3 | patient:response | patient.build_response_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Body Dysmorphic Disorder, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic to see me today?\n\nPatient: Hi. Well, I'm here because I just can't stop thinking about my appearance. It's my hairline, mostly, and... and just the way my face looks. I work as a host at a restaurant, and under those lights there, I just feel like I look really old and strange. \n\nIt's on my mind all the time. The people I work with tell me they don't see what I'm talking about, but I know what I see, and I just can't seem to get past it.\n\nDoctor: Because of these worries about your appearance, do you find yourself repeatedly doing things like checking in mirrors, fixing your hair, or trying to hide your face?\n\nPatient: Yeah, I do. A lot, actually. Especially right before a shift. I'll just keep checking the bathroom mirror over and over. I even take pictures on my phone from different angles to see how bad it looks, and... and I keep combing my hair forward to try and cover it up. \n\nI just get stuck replaying how the guests are going to see me when they walk in. It gets to the point where I end up running late, or I just get too worked up to even go out to the front of the restaurant.\n\n[Last Question]\nAside from worries about your appearance, do you have other repetitive thoughts or habits that you feel compelled to do, such as repeatedly checking locks, excessive cleaning, or arranging things in a specific way?\n\n[Patient Info]\n- demographics: Male / 54 / host_or_hostess_restaurant_lounge_or_coffee_shop / some_college\n- severity: Severe\n\n[Targeted Info]\nNone\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+No, not really. I mean, I make sure the door is locked when I leave the house, like anyone else, but it's not something I get stuck on. I don't have to go back and check it over and over or anything like that. It's really just... just the stuff with my hair and my face that takes up all my time and energy. I don't really have any habits with cleaning or organizing things.
+=====================================
+
+---------- turn 3 | doctor:inference | doctor.build_inference_prompt() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n3\n\n[Previous Candidates]\nF45.2, F22, F42\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic to see me today?\n\nPatient: Hi. Well, I'm here because I just can't stop thinking about my appearance. It's my hairline, mostly, and... and just the way my face looks. I work as a host at a restaurant, and under those lights there, I just feel like I look really old and strange. \n\nIt's on my mind all the time. The people I work with tell me they don't see what I'm talking about, but I know what I see, and I just can't seem to get past it.\n\nDoctor: Because of these worries about your appearance, do you find yourself repeatedly doing things like checking in mirrors, fixing your hair, or trying to hide your face?\n\nPatient: Yeah, I do. A lot, actually. Especially right before a shift. I'll just keep checking the bathroom mirror over and over. I even take pictures on my phone from different angles to see how bad it looks, and... and I keep combing my hair forward to try and cover it up. \n\nI just get stuck replaying how the guests are going to see me when they walk in. It gets to the point where I end up running late, or I just get too worked up to even go out to the front of the restaurant.\n\nDoctor: Aside from worries about your appearance, do you have other repetitive thoughts or habits that you feel compelled to do, such as repeatedly checking locks, excessive cleaning, or arranging things in a specific way?\n\nPatient: No, not really. I mean, I make sure the door is locked when I leave the house, like anyone else, but it's not something I get stuck on. I don't have to go back and check it over and over or anything like that. It's really just... just the stuff with my hair and my face that takes up all my time and energy. I don't really have any habits with cleaning or organizing things.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["F45.2", "F22"], "note": "Ruled out F42 as the patient denies other obsessive-compulsive rituals or intrusive thoughts unrelated to appearance.", "is_final": false}
+=====================================
+
+---------- turn 3 | doctor:followup | doctor.build_questioning_prompt() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n4\n\n[Current Candidates]\nF45.2, F22\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic to see me today?\n\nPatient: Hi. Well, I'm here because I just can't stop thinking about my appearance. It's my hairline, mostly, and... and just the way my face looks. I work as a host at a restaurant, and under those lights there, I just feel like I look really old and strange. \n\nIt's on my mind all the time. The people I work with tell me they don't see what I'm talking about, but I know what I see, and I just can't seem to get past it.\n\nDoctor: Because of these worries about your appearance, do you find yourself repeatedly doing things like checking in mirrors, fixing your hair, or trying to hide your face?\n\nPatient: Yeah, I do. A lot, actually. Especially right before a shift. I'll just keep checking the bathroom mirror over and over. I even take pictures on my phone from different angles to see how bad it looks, and... and I keep combing my hair forward to try and cover it up. \n\nI just get stuck replaying how the guests are going to see me when they walk in. It gets to the point where I end up running late, or I just get too worked up to even go out to the front of the restaurant.\n\nDoctor: Aside from worries about your appearance, do you have other repetitive thoughts or habits that you feel compelled to do, such as repeatedly checking locks, excessive cleaning, or arranging things in a specific way?\n\nPatient: No, not really. I mean, I make sure the door is locked when I leave the house, like anyone else, but it's not something I get stuck on. I don't have to go back and check it over and over or anything like that. It's really just... just the stuff with my hair and my face that takes up all my time and energy. I don't really have any habits with cleaning or organizing things.\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "Assess the degree of insight and fixity of the belief to differentiate between an overvalued idea (F45.2) and a delusion (F22).", "question": "Do you ever think that your perception of your appearance might be exaggerated, or are you completely convinced that your hairline and face look as bad as you think?"}
+=====================================
+
+---------- turn 4 | patient:alignment | patient.build_alignment_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Body Dysmorphic Disorder. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S067\n  name: Preoccupation_with_Appearance\n  description: Preoccupation with one or more perceived defects or flaws in physical appearance that are not observable or appear slight to others.\n  manifestation: I’m here because I can’t stop thinking that my hairline and the way my face looks under the restaurant lights make me look old and strange, even when my coworkers tell me they don’t see what I’m talking about.\n- key: S068\n  name: Appearance_Related_Repetitive_Behaviors\n  description: Repetitive behaviors or mental acts performed in response to appearance concerns.\n  manifestation: Before a shift I keep checking the bathroom mirror, taking phone pictures from different angles, combing my hair forward, and replaying how guests might see me until I’m late or too worked up to go out front.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: I’ve been written up at the restaurant because I’m late or miss shifts, and I’ve stopped going to staff photos, gallery events, and hikes because I can’t handle being seen that way.\n\n[Patient Info]\n- demographics: Male / 54 / host_or_hostess_restaurant_lounge_or_coffee_shop / some_college\n- chief_complaint_symptom_code: S067\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic to see me today?\n\nPatient: Hi. Well, I'm here because I just can't stop thinking about my appearance. It's my hairline, mostly, and... and just the way my face looks. I work as a host at a restaurant, and under those lights there, I just feel like I look really old and strange. \n\nIt's on my mind all the time. The people I work with tell me they don't see what I'm talking about, but I know what I see, and I just can't seem to get past it.\n\nDoctor: Because of these worries about your appearance, do you find yourself repeatedly doing things like checking in mirrors, fixing your hair, or trying to hide your face?\n\nPatient: Yeah, I do. A lot, actually. Especially right before a shift. I'll just keep checking the bathroom mirror over and over. I even take pictures on my phone from different angles to see how bad it looks, and... and I keep combing my hair forward to try and cover it up. \n\nI just get stuck replaying how the guests are going to see me when they walk in. It gets to the point where I end up running late, or I just get too worked up to even go out to the front of the restaurant.\n\nDoctor: Aside from worries about your appearance, do you have other repetitive thoughts or habits that you feel compelled to do, such as repeatedly checking locks, excessive cleaning, or arranging things in a specific way?\n\nPatient: No, not really. I mean, I make sure the door is locked when I leave the house, like anyone else, but it's not something I get stuck on. I don't have to go back and check it over and over or anything like that. It's really just... just the stuff with my hair and my face that takes up all my time and energy. I don't really have any habits with cleaning or organizing things.\n\n[Last Question]\nDo you ever think that your perception of your appearance might be exaggerated, or are you completely convinced that your hairline and face look as bad as you think?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 4\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key": "None", "name": "None", "description": "None", "reason": "The doctor is asking about the patient's insight/delusional beliefs regarding their appearance (whether they think their perception might be exaggerated or if they are completely convinced). The symptom profile does not contain an item for 'Insight' or 'Delusional Beliefs' related to the disorder."}
+=====================================
+
+---------- turn 4 | patient:response | patient.build_response_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Body Dysmorphic Disorder, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic to see me today?\n\nPatient: Hi. Well, I'm here because I just can't stop thinking about my appearance. It's my hairline, mostly, and... and just the way my face looks. I work as a host at a restaurant, and under those lights there, I just feel like I look really old and strange. \n\nIt's on my mind all the time. The people I work with tell me they don't see what I'm talking about, but I know what I see, and I just can't seem to get past it.\n\nDoctor: Because of these worries about your appearance, do you find yourself repeatedly doing things like checking in mirrors, fixing your hair, or trying to hide your face?\n\nPatient: Yeah, I do. A lot, actually. Especially right before a shift. I'll just keep checking the bathroom mirror over and over. I even take pictures on my phone from different angles to see how bad it looks, and... and I keep combing my hair forward to try and cover it up. \n\nI just get stuck replaying how the guests are going to see me when they walk in. It gets to the point where I end up running late, or I just get too worked up to even go out to the front of the restaurant.\n\nDoctor: Aside from worries about your appearance, do you have other repetitive thoughts or habits that you feel compelled to do, such as repeatedly checking locks, excessive cleaning, or arranging things in a specific way?\n\nPatient: No, not really. I mean, I make sure the door is locked when I leave the house, like anyone else, but it's not something I get stuck on. I don't have to go back and check it over and over or anything like that. It's really just... just the stuff with my hair and my face that takes up all my time and energy. I don't really have any habits with cleaning or organizing things.\n\n[Last Question]\nDo you ever think that your perception of your appearance might be exaggerated, or are you completely convinced that your hairline and face look as bad as you think?\n\n[Patient Info]\n- demographics: Male / 54 / host_or_hostess_restaurant_lounge_or_coffee_shop / some_college\n- severity: Severe\n\n[Targeted Info]\nNone\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+I'm not really sure. I mean, I guess because my coworkers tell me they don't see it, part of me wonders if... if maybe I'm making it worse in my head. 
+
+But when I actually look in the mirror, it's just so obvious to me. I see exactly how bad it is. So, most of the time, yeah, I'm completely convinced it looks as awful as I think it does. I just can't see it any other way.
+=====================================
+
+---------- turn 4 | doctor:inference | doctor.build_inference_prompt() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n4\n\n[Previous Candidates]\nF45.2, F22\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic to see me today?\n\nPatient: Hi. Well, I'm here because I just can't stop thinking about my appearance. It's my hairline, mostly, and... and just the way my face looks. I work as a host at a restaurant, and under those lights there, I just feel like I look really old and strange. \n\nIt's on my mind all the time. The people I work with tell me they don't see what I'm talking about, but I know what I see, and I just can't seem to get past it.\n\nDoctor: Because of these worries about your appearance, do you find yourself repeatedly doing things like checking in mirrors, fixing your hair, or trying to hide your face?\n\nPatient: Yeah, I do. A lot, actually. Especially right before a shift. I'll just keep checking the bathroom mirror over and over. I even take pictures on my phone from different angles to see how bad it looks, and... and I keep combing my hair forward to try and cover it up. \n\nI just get stuck replaying how the guests are going to see me when they walk in. It gets to the point where I end up running late, or I just get too worked up to even go out to the front of the restaurant.\n\nDoctor: Aside from worries about your appearance, do you have other repetitive thoughts or habits that you feel compelled to do, such as repeatedly checking locks, excessive cleaning, or arranging things in a specific way?\n\nPatient: No, not really. I mean, I make sure the door is locked when I leave the house, like anyone else, but it's not something I get stuck on. I don't have to go back and check it over and over or anything like that. It's really just... just the stuff with my hair and my face that takes up all my time and energy. I don't really have any habits with cleaning or organizing things.\n\nDoctor: Do you ever think that your perception of your appearance might be exaggerated, or are you completely convinced that your hairline and face look as bad as you think?\n\nPatient: I'm not really sure. I mean, I guess because my coworkers tell me they don't see it, part of me wonders if... if maybe I'm making it worse in my head. \n\nBut when I actually look in the mirror, it's just so obvious to me. I see exactly how bad it is. So, most of the time, yeah, I'm completely convinced it looks as awful as I think it does. I just can't see it any other way.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["F45.2"], "note": "Ruled out F22 as the patient exhibits fluctuating insight rather than fixed delusional beliefs.", "is_final": true}
+=====================================
+
+---------- turn 4 | doctor:final | doctor.final_diagnosis_user_payload() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the full interview transcript and the differential diagnosis candidates, write the final diagnosis report.\n\nBoth the \"diagnosis\" and \"candidates\" MUST be ICD-10 codes.\n\n[Field Instructions]\n- diagnosis: The single diagnosis code of ICD-10.\n- candidates: Top 2–3 differential candidates of ICD-10 codes considered until the end.\n- reason: Brief diagnostic rationale.\n- diagnostic_checklist: Structured evidence summary organized by diagnostic criterion type.\n  List only symptom groups that are relevant to your diagnosis, with the symptoms the patient actually confirmed.\n\nOutput Format (JSON only, no other text):\n{\n  \"diagnosis\": \"Final Diagnosis ICD-10 code\",\n  \"candidates\": [\"Disease Code1\", \"Disease Code2\"],\n  \"reason\": \"Brief diagnostic rationale.\",\n  \"diagnostic_checklist\": {\n    \"symptom_groups\": [\n      {\n        \"group\": \"clinical group name (e.g., inattention, manic_episode, psychotic_symptoms)\",\n        \"confirmed_symptoms\": [\"natural language description of each confirmed symptom in this group\"],\n        \"count\": <integer>\n      }\n    ],\n    \"duration_verified\": \"Description of how the duration criterion was established (e.g., 'symptoms present for over 6 months since childhood'), or null if not assessed.\",\n    \"functional_impairment\": <true if functional impairment was confirmed, false if denied, null if not assessed>,\n    \"traumatic_stressor\": <true if a qualifying traumatic stressor was confirmed, null if not applicable or not assessed>,\n    \"psychosocial_stressor\": <true if a qualifying psychosocial stressor was confirmed, null if not applicable or not assessed>,\n    \"additional_requirements\": [\"Each additional criterion that was explicitly verified during the interview (e.g., 'Onset prior to age 12 confirmed')\"]\n  }\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"F45.2\"]\n\nInterview Transcript: \nDoctor: Hello, welcome. What brings you into the clinic to see me today?\n\nPatient: Hi. Well, I'm here because I just can't stop thinking about my appearance. It's my hairline, mostly, and... and just the way my face looks. I work as a host at a restaurant, and under those lights there, I just feel like I look really old and strange. \n\nIt's on my mind all the time. The people I work with tell me they don't see what I'm talking about, but I know what I see, and I just can't seem to get past it.\n\nDoctor: Because of these worries about your appearance, do you find yourself repeatedly doing things like checking in mirrors, fixing your hair, or trying to hide your face?\n\nPatient: Yeah, I do. A lot, actually. Especially right before a shift. I'll just keep checking the bathroom mirror over and over. I even take pictures on my phone from different angles to see how bad it looks, and... and I keep combing my hair forward to try and cover it up. \n\nI just get stuck replaying how the guests are going to see me when they walk in. It gets to the point where I end up running late, or I just get too worked up to even go out to the front of the restaurant.\n\nDoctor: Aside from worries about your appearance, do you have other repetitive thoughts or habits that you feel compelled to do, such as repeatedly checking locks, excessive cleaning, or arranging things in a specific way?\n\nPatient: No, not really. I mean, I make sure the door is locked when I leave the house, like anyone else, but it's not something I get stuck on. I don't have to go back and check it over and over or anything like that. It's really just... just the stuff with my hair and my face that takes up all my time and energy. I don't really have any habits with cleaning or organizing things.\n\nDoctor: Do you ever think that your perception of your appearance might be exaggerated, or are you completely convinced that your hairline and face look as bad as you think?\n\nPatient: I'm not really sure. I mean, I guess because my coworkers tell me they don't see it, part of me wonders if... if maybe I'm making it worse in my head. \n\nBut when I actually look in the mirror, it's just so obvious to me. I see exactly how bad it is. So, most of the time, yeah, I'm completely convinced it looks as awful as I think it does. I just can't see it any other way."
+  }
+]
+========== OUTPUT [doctor] ==========
+```json
+{
+  "diagnosis": "F45.2",
+  "candidates": [
+    "F45.2",
+    "F42"
+  ],
+  "reason": "The patient presents with persistent preoccupation with a perceived defect in appearance (hairline and face) that is unnoticeable or appears slight to others (dysmorphophobia / body dysmorphic disorder, classified under ICD-10 F45.2 Hypochondriacal disorder). This is accompanied by repetitive compulsive behaviors (repeated mirror checking, taking photos at multiple angles, repeatedly combing hair to conceal the perceived flaw) causing significant functional impairment and distress. General obsessive-compulsive rituals unrelated to appearance are absent, ruling out standard OCD (F42).",
+  "diagnostic_checklist": {
+    "symptom_groups": [
+      {
+        "group": "preoccupation_with_appearance",
+        "confirmed_symptoms": [
+          "Preoccupation with perceived defects in hairline and facial appearance",
+          "Persistent belief that they look old and strange despite reassurance from coworkers"
+        ],
+        "count": 2
+      },
+      {
+        "group": "repetitive_behaviors",
+        "confirmed_symptoms": [
+          "Repetitive mirror checking, especially before work shifts",
+          "Taking repeated photos on phone from different angles to inspect appearance",
+          "Repeatedly combing hair forward to camouflage perceived defects"
+        ],
+        "count": 3
+      }
+    ],
+    "duration_verified": null,
+    "functional_impairment": true,
+    "traumatic_stressor": null,
+    "psychosocial_stressor": null,
+    "additional_requirements": [
+      "Absence of general OCD obsessions or compulsions unrelated to appearance"
+    ]
+  }
+}
+```
+=====================================
+

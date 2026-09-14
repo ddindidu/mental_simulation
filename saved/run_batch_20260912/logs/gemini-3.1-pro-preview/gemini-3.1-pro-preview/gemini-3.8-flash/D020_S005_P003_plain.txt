@@ -1,0 +1,248 @@
+---------- turn 0 | doctor:opening | doctor.opening_user_message() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n1\n\n[Current Candidates]\n(none yet — this is your opening question)\n\n[Dialogue History]\n(none yet — the interview has not started)\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "Establish the chief complaint and the reason for the visit", "question": "Hello, welcome. What brings you into the clinic today?"}
+=====================================
+
+---------- turn 1 | patient:alignment | patient.build_alignment_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Adjustment Disorder. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S081\n  name: Stress_Related_Maladaptive_Response\n  description: Emotional or behavioral symptoms appearing in response to an identifiable stressor.\n  manifestation: I came in because ever since they changed my warehouse hours and put in that new inventory system, I feel like I’m falling apart—I'm missing shifts and church commitments, snapping at my family, and some mornings I just sit there in my work boots wondering if I can even face the place anymore.\n- key: additional_requirement_1\n  name: Additional Requirement 1\n  description: Symptoms must develop within 3 months of the onset of the stressor\n  manifestation: I started coming apart within the first few weeks after the warehouse changed my hours and brought in that new inventory system; before that, I was keeping my routine and responsibilities together.\n- key: additional_requirement_2\n  name: Additional Requirement 2\n  description: Within 6 months of the termination of the stressor or its consequences\n  manifestation: The work changes are still going on, and I have not had a real break from the new schedule or its fallout yet.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: My supervisor has documented problems with my reliability and talked to me about medical leave, and I have pulled back from church duties that people counted on me for.\n- key: duration\n  name: Duration\n  description: 5 months\n  manifestation: This has been going on for about five months, ever since the new warehouse schedule and inventory system started.\n\n[Patient Info]\n- demographics: Male / 74 / stocker_or_order_filler / some_college\n- chief_complaint_symptom_code: S081\n\n[Dialogue History]\n(this is the start of the consultation)\n\n[Last Question]\nHello, welcome. What brings you into the clinic today?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 1\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key": "S081", "name": "Stress_Related_Maladaptive_Response", "description": "Emotional or behavioral symptoms appearing in response to an identifiable stressor.", "reason": "This is the first reply of the consultation, so I must return the chief complaint symptom code (S081)."}
+=====================================
+
+---------- turn 1 | patient:response | patient.build_response_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Adjustment Disorder, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\n(this is the start of the consultation)\n\n[Last Question]\nHello, welcome. What brings you into the clinic today?\n\n[Patient Info]\n- demographics: Male / 74 / stocker_or_order_filler / some_college\n- severity: Severe\n\n[Targeted Info]\nname: Stress_Related_Maladaptive_Response\nmanifestation: \"I came in because ever since they changed my warehouse hours and put in that new inventory system, I feel like I’m falling apart—I'm missing shifts and church commitments, snapping at my family, and some mornings I just sit there in my work boots wondering if I can even face the place anymore.\"\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+I came in because... well, things at work have been really rough lately. They changed my hours at the warehouse and brought in this whole new inventory system, and ever since then, I just feel like I'm falling apart. It's getting bad. I'm missing my shifts, I'm skipping out on my church commitments, and I've been snapping at my family a lot. Some mornings, I just sit there on the edge of the bed in my work boots, just staring, wondering if I can even face going into that place anymore. It's just too much.
+=====================================
+
+---------- turn 1 | doctor:inference | doctor.build_inference_prompt() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n1\n\n[Previous Candidates]\n(none — this is your first inference)\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic today?\n\nPatient: I came in because... well, things at work have been really rough lately. They changed my hours at the warehouse and brought in this whole new inventory system, and ever since then, I just feel like I'm falling apart. It's getting bad. I'm missing my shifts, I'm skipping out on my church commitments, and I've been snapping at my family a lot. Some mornings, I just sit there on the edge of the bed in my work boots, just staring, wondering if I can even face going into that place anymore. It's just too much.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+```json
+{
+  "candidates": [
+    "F43.2",
+    "F32",
+    "F41.1",
+    "F41.2"
+  ],
+  "note": "Initial presentation following a work-related stressor with functional impairment, irritability, and depressive/anxious features suggests adjustment disorder, depressive episode, or anxiety disorders.",
+  "is_final": false
+}
+```
+=====================================
+
+---------- turn 1 | doctor:followup | doctor.build_questioning_prompt() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n2\n\n[Current Candidates]\nF43.2, F32, F41.1, F41.2\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic today?\n\nPatient: I came in because... well, things at work have been really rough lately. They changed my hours at the warehouse and brought in this whole new inventory system, and ever since then, I just feel like I'm falling apart. It's getting bad. I'm missing my shifts, I'm skipping out on my church commitments, and I've been snapping at my family a lot. Some mornings, I just sit there on the edge of the bed in my work boots, just staring, wondering if I can even face going into that place anymore. It's just too much.\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "Assess for the core depressive symptom of pervasive depressed mood to help differentiate major depression from adjustment disorder or anxiety disorders.", "question": "Most days, have you been feeling down, depressed, or hopeless for most of the day?"}
+=====================================
+
+---------- turn 2 | patient:alignment | patient.build_alignment_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Adjustment Disorder. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S081\n  name: Stress_Related_Maladaptive_Response\n  description: Emotional or behavioral symptoms appearing in response to an identifiable stressor.\n  manifestation: I came in because ever since they changed my warehouse hours and put in that new inventory system, I feel like I’m falling apart—I'm missing shifts and church commitments, snapping at my family, and some mornings I just sit there in my work boots wondering if I can even face the place anymore.\n- key: additional_requirement_1\n  name: Additional Requirement 1\n  description: Symptoms must develop within 3 months of the onset of the stressor\n  manifestation: I started coming apart within the first few weeks after the warehouse changed my hours and brought in that new inventory system; before that, I was keeping my routine and responsibilities together.\n- key: additional_requirement_2\n  name: Additional Requirement 2\n  description: Within 6 months of the termination of the stressor or its consequences\n  manifestation: The work changes are still going on, and I have not had a real break from the new schedule or its fallout yet.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: My supervisor has documented problems with my reliability and talked to me about medical leave, and I have pulled back from church duties that people counted on me for.\n- key: duration\n  name: Duration\n  description: 5 months\n  manifestation: This has been going on for about five months, ever since the new warehouse schedule and inventory system started.\n\n[Patient Info]\n- demographics: Male / 74 / stocker_or_order_filler / some_college\n- chief_complaint_symptom_code: S081\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic today?\n\nPatient: I came in because... well, things at work have been really rough lately. They changed my hours at the warehouse and brought in this whole new inventory system, and ever since then, I just feel like I'm falling apart. It's getting bad. I'm missing my shifts, I'm skipping out on my church commitments, and I've been snapping at my family a lot. Some mornings, I just sit there on the edge of the bed in my work boots, just staring, wondering if I can even face going into that place anymore. It's just too much.\n\n[Last Question]\nMost days, have you been feeling down, depressed, or hopeless for most of the day?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 2\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key": "None", "name": "None", "description": "None", "reason": "The doctor is asking about symptoms of depression (feeling down, depressed, or hopeless), which is not covered in my symptom profile."}
+=====================================
+
+---------- turn 2 | patient:response | patient.build_response_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Adjustment Disorder, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic today?\n\nPatient: I came in because... well, things at work have been really rough lately. They changed my hours at the warehouse and brought in this whole new inventory system, and ever since then, I just feel like I'm falling apart. It's getting bad. I'm missing my shifts, I'm skipping out on my church commitments, and I've been snapping at my family a lot. Some mornings, I just sit there on the edge of the bed in my work boots, just staring, wondering if I can even face going into that place anymore. It's just too much.\n\n[Last Question]\nMost days, have you been feeling down, depressed, or hopeless for most of the day?\n\n[Patient Info]\n- demographics: Male / 74 / stocker_or_order_filler / some_college\n- severity: Severe\n\n[Targeted Info]\nNone\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+No, I wouldn't really say I feel depressed or hopeless. I'm not walking around sad all day or crying or anything like that. It's... well, I just feel incredibly stressed and overwhelmed by what's going on at the warehouse. When I'm not thinking about the job, I feel alright, I guess. It's really just the pressure of all those changes that's getting to me, not so much a depressed feeling.
+=====================================
+
+---------- turn 2 | doctor:inference | doctor.build_inference_prompt() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n2\n\n[Previous Candidates]\nF43.2, F32, F41.1, F41.2\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic today?\n\nPatient: I came in because... well, things at work have been really rough lately. They changed my hours at the warehouse and brought in this whole new inventory system, and ever since then, I just feel like I'm falling apart. It's getting bad. I'm missing my shifts, I'm skipping out on my church commitments, and I've been snapping at my family a lot. Some mornings, I just sit there on the edge of the bed in my work boots, just staring, wondering if I can even face going into that place anymore. It's just too much.\n\nDoctor: Most days, have you been feeling down, depressed, or hopeless for most of the day?\n\nPatient: No, I wouldn't really say I feel depressed or hopeless. I'm not walking around sad all day or crying or anything like that. It's... well, I just feel incredibly stressed and overwhelmed by what's going on at the warehouse. When I'm not thinking about the job, I feel alright, I guess. It's really just the pressure of all those changes that's getting to me, not so much a depressed feeling.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["F43.2", "F41.1"], "note": "Ruled out F32 and F41.2 as the patient explicitly denies pervasive depressed mood, hopelessness, or persistent sadness, noting mood is fine when not thinking about work.", "is_final": false}
+=====================================
+
+---------- turn 2 | doctor:followup | doctor.build_questioning_prompt() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n3\n\n[Current Candidates]\nF43.2, F41.1\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic today?\n\nPatient: I came in because... well, things at work have been really rough lately. They changed my hours at the warehouse and brought in this whole new inventory system, and ever since then, I just feel like I'm falling apart. It's getting bad. I'm missing my shifts, I'm skipping out on my church commitments, and I've been snapping at my family a lot. Some mornings, I just sit there on the edge of the bed in my work boots, just staring, wondering if I can even face going into that place anymore. It's just too much.\n\nDoctor: Most days, have you been feeling down, depressed, or hopeless for most of the day?\n\nPatient: No, I wouldn't really say I feel depressed or hopeless. I'm not walking around sad all day or crying or anything like that. It's... well, I just feel incredibly stressed and overwhelmed by what's going on at the warehouse. When I'm not thinking about the job, I feel alright, I guess. It's really just the pressure of all those changes that's getting to me, not so much a depressed feeling.\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "Assess whether anxiety is generalized across multiple everyday domains or confined to the work stressor", "question": "Besides work, do you find yourself constantly worrying about other everyday areas of your life, like your family, health, or finances?"}
+=====================================
+
+---------- turn 3 | patient:alignment | patient.build_alignment_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Adjustment Disorder. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S081\n  name: Stress_Related_Maladaptive_Response\n  description: Emotional or behavioral symptoms appearing in response to an identifiable stressor.\n  manifestation: I came in because ever since they changed my warehouse hours and put in that new inventory system, I feel like I’m falling apart—I'm missing shifts and church commitments, snapping at my family, and some mornings I just sit there in my work boots wondering if I can even face the place anymore.\n- key: additional_requirement_1\n  name: Additional Requirement 1\n  description: Symptoms must develop within 3 months of the onset of the stressor\n  manifestation: I started coming apart within the first few weeks after the warehouse changed my hours and brought in that new inventory system; before that, I was keeping my routine and responsibilities together.\n- key: additional_requirement_2\n  name: Additional Requirement 2\n  description: Within 6 months of the termination of the stressor or its consequences\n  manifestation: The work changes are still going on, and I have not had a real break from the new schedule or its fallout yet.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: My supervisor has documented problems with my reliability and talked to me about medical leave, and I have pulled back from church duties that people counted on me for.\n- key: duration\n  name: Duration\n  description: 5 months\n  manifestation: This has been going on for about five months, ever since the new warehouse schedule and inventory system started.\n\n[Patient Info]\n- demographics: Male / 74 / stocker_or_order_filler / some_college\n- chief_complaint_symptom_code: S081\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic today?\n\nPatient: I came in because... well, things at work have been really rough lately. They changed my hours at the warehouse and brought in this whole new inventory system, and ever since then, I just feel like I'm falling apart. It's getting bad. I'm missing my shifts, I'm skipping out on my church commitments, and I've been snapping at my family a lot. Some mornings, I just sit there on the edge of the bed in my work boots, just staring, wondering if I can even face going into that place anymore. It's just too much.\n\nDoctor: Most days, have you been feeling down, depressed, or hopeless for most of the day?\n\nPatient: No, I wouldn't really say I feel depressed or hopeless. I'm not walking around sad all day or crying or anything like that. It's... well, I just feel incredibly stressed and overwhelmed by what's going on at the warehouse. When I'm not thinking about the job, I feel alright, I guess. It's really just the pressure of all those changes that's getting to me, not so much a depressed feeling.\n\n[Last Question]\nBesides work, do you find yourself constantly worrying about other everyday areas of your life, like your family, health, or finances?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 3\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key": "None", "name": "None", "description": "None", "reason": "The doctor is asking about Generalized Anxiety Disorder symptoms (worrying about everyday areas like family, health, or finances), which is not covered by any of the symptom profiles provided for this Adjustment Disorder patient."}
+=====================================
+
+---------- turn 3 | patient:response | patient.build_response_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Adjustment Disorder, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic today?\n\nPatient: I came in because... well, things at work have been really rough lately. They changed my hours at the warehouse and brought in this whole new inventory system, and ever since then, I just feel like I'm falling apart. It's getting bad. I'm missing my shifts, I'm skipping out on my church commitments, and I've been snapping at my family a lot. Some mornings, I just sit there on the edge of the bed in my work boots, just staring, wondering if I can even face going into that place anymore. It's just too much.\n\nDoctor: Most days, have you been feeling down, depressed, or hopeless for most of the day?\n\nPatient: No, I wouldn't really say I feel depressed or hopeless. I'm not walking around sad all day or crying or anything like that. It's... well, I just feel incredibly stressed and overwhelmed by what's going on at the warehouse. When I'm not thinking about the job, I feel alright, I guess. It's really just the pressure of all those changes that's getting to me, not so much a depressed feeling.\n\n[Last Question]\nBesides work, do you find yourself constantly worrying about other everyday areas of your life, like your family, health, or finances?\n\n[Patient Info]\n- demographics: Male / 74 / stocker_or_order_filler / some_college\n- severity: Severe\n\n[Targeted Info]\nNone\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+No, not really. I mean, my family is fine, health is okay for my age, and the bills are getting paid. It's really just the job. That's the only thing that's got me tied up in knots right now.
+=====================================
+
+---------- turn 3 | doctor:inference | doctor.build_inference_prompt() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n3\n\n[Previous Candidates]\nF43.2, F41.1\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic today?\n\nPatient: I came in because... well, things at work have been really rough lately. They changed my hours at the warehouse and brought in this whole new inventory system, and ever since then, I just feel like I'm falling apart. It's getting bad. I'm missing my shifts, I'm skipping out on my church commitments, and I've been snapping at my family a lot. Some mornings, I just sit there on the edge of the bed in my work boots, just staring, wondering if I can even face going into that place anymore. It's just too much.\n\nDoctor: Most days, have you been feeling down, depressed, or hopeless for most of the day?\n\nPatient: No, I wouldn't really say I feel depressed or hopeless. I'm not walking around sad all day or crying or anything like that. It's... well, I just feel incredibly stressed and overwhelmed by what's going on at the warehouse. When I'm not thinking about the job, I feel alright, I guess. It's really just the pressure of all those changes that's getting to me, not so much a depressed feeling.\n\nDoctor: Besides work, do you find yourself constantly worrying about other everyday areas of your life, like your family, health, or finances?\n\nPatient: No, not really. I mean, my family is fine, health is okay for my age, and the bills are getting paid. It's really just the job. That's the only thing that's got me tied up in knots right now.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["F43.2"], "note": "Ruled out F41.1 because excessive worry is confined strictly to the work stressor rather than generalized to multiple life domains.", "is_final": true}
+=====================================
+
+---------- turn 3 | doctor:final | doctor.final_diagnosis_user_payload() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the full interview transcript and the differential diagnosis candidates, write the final diagnosis report.\n\nBoth the \"diagnosis\" and \"candidates\" MUST be ICD-10 codes.\n\n[Field Instructions]\n- diagnosis: The single diagnosis code of ICD-10.\n- candidates: Top 2–3 differential candidates of ICD-10 codes considered until the end.\n- reason: Brief diagnostic rationale.\n- diagnostic_checklist: Structured evidence summary organized by diagnostic criterion type.\n  List only symptom groups that are relevant to your diagnosis, with the symptoms the patient actually confirmed.\n\nOutput Format (JSON only, no other text):\n{\n  \"diagnosis\": \"Final Diagnosis ICD-10 code\",\n  \"candidates\": [\"Disease Code1\", \"Disease Code2\"],\n  \"reason\": \"Brief diagnostic rationale.\",\n  \"diagnostic_checklist\": {\n    \"symptom_groups\": [\n      {\n        \"group\": \"clinical group name (e.g., inattention, manic_episode, psychotic_symptoms)\",\n        \"confirmed_symptoms\": [\"natural language description of each confirmed symptom in this group\"],\n        \"count\": <integer>\n      }\n    ],\n    \"duration_verified\": \"Description of how the duration criterion was established (e.g., 'symptoms present for over 6 months since childhood'), or null if not assessed.\",\n    \"functional_impairment\": <true if functional impairment was confirmed, false if denied, null if not assessed>,\n    \"traumatic_stressor\": <true if a qualifying traumatic stressor was confirmed, null if not applicable or not assessed>,\n    \"psychosocial_stressor\": <true if a qualifying psychosocial stressor was confirmed, null if not applicable or not assessed>,\n    \"additional_requirements\": [\"Each additional criterion that was explicitly verified during the interview (e.g., 'Onset prior to age 12 confirmed')\"]\n  }\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"F43.2\"]\n\nInterview Transcript: \nDoctor: Hello, welcome. What brings you into the clinic today?\n\nPatient: I came in because... well, things at work have been really rough lately. They changed my hours at the warehouse and brought in this whole new inventory system, and ever since then, I just feel like I'm falling apart. It's getting bad. I'm missing my shifts, I'm skipping out on my church commitments, and I've been snapping at my family a lot. Some mornings, I just sit there on the edge of the bed in my work boots, just staring, wondering if I can even face going into that place anymore. It's just too much.\n\nDoctor: Most days, have you been feeling down, depressed, or hopeless for most of the day?\n\nPatient: No, I wouldn't really say I feel depressed or hopeless. I'm not walking around sad all day or crying or anything like that. It's... well, I just feel incredibly stressed and overwhelmed by what's going on at the warehouse. When I'm not thinking about the job, I feel alright, I guess. It's really just the pressure of all those changes that's getting to me, not so much a depressed feeling.\n\nDoctor: Besides work, do you find yourself constantly worrying about other everyday areas of your life, like your family, health, or finances?\n\nPatient: No, not really. I mean, my family is fine, health is okay for my age, and the bills are getting paid. It's really just the job. That's the only thing that's got me tied up in knots right now."
+  }
+]
+========== OUTPUT [doctor] ==========
+```json
+{
+  "diagnosis": "F43.2",
+  "candidates": [
+    "F43.2"
+  ],
+  "reason": "The patient developed clinically significant emotional and behavioral symptoms (feeling overwhelmed, irritability, avoidance of work shifts and church activities) in direct response to an identifiable psychosocial stressor (workplace hours and inventory system changes). Pervasive depressive and generalized anxiety disorders were ruled out.",
+  "diagnostic_checklist": {
+    "symptom_groups": [
+      {
+        "group": "stress_response_and_emotional_disturbance",
+        "confirmed_symptoms": [
+          "Feeling overwhelmed and stressed by workplace changes",
+          "Irritability and snapping at family members",
+          "Difficulty facing going into work"
+        ],
+        "count": 3
+      }
+    ],
+    "duration_verified": "Symptoms arose following recent workplace schedule and system changes.",
+    "functional_impairment": true,
+    "traumatic_stressor": null,
+    "psychosocial_stressor": true,
+    "additional_requirements": [
+      "Absence of pervasive depressed mood or generalized anxiety across multiple domains",
+      "Impairment in occupational and social functioning confirmed"
+    ]
+  }
+}
+```
+=====================================
+

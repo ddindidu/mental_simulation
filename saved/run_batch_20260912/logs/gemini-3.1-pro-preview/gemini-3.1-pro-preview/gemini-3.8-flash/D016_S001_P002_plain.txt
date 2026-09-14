@@ -1,0 +1,257 @@
+---------- turn 0 | doctor:opening | doctor.opening_user_message() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n1\n\n[Current Candidates]\n(none yet — this is your opening question)\n\n[Dialogue History]\n(none yet — the interview has not started)\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "Determine the patient's chief complaint and reason for visit", "question": "Hello, welcome. What brings you into the clinic today?"}
+=====================================
+
+---------- turn 1 | patient:alignment | patient.build_alignment_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Obsessive-Compulsive Disorder. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S065\n  name: Obsessions\n  description: Recurrent and persistent thoughts, urges, or images that are experienced as intrusive and unwanted, and attempts to ignore or suppress them.\n  manifestation: I came in because I keep getting these nagging thoughts that I forgot something important, like leaving my aunt’s medicine out wrong or not setting up my classroom materials safely, and even when I know I probably handled it, the doubt keeps popping back into my head.\n- key: S066\n  name: Compulsions\n  description: Repetitive behaviors or mental acts performed in response to an obsession or to prevent anxiety/distress; clearly excessive or not realistically connected.\n  manifestation: Before I leave the house or my classroom, I’ll go back over the same things a few times—checking the pill organizer, the stove, my lesson plans, or silently replaying what I did—until I feel calm enough to move on, even though it makes me run late sometimes.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: I’m still getting through work and family commitments, but my mornings take longer and I sometimes arrive at school feeling rushed or behind before the day even starts. Lesson prep and my evening journaling don’t feel as smooth or restorative as they used to.\n\n[Patient Info]\n- demographics: Female / 31 / elementary_or_middle_school_teacher / some_college\n- chief_complaint_symptom_code: S065\n\n[Dialogue History]\n(this is the start of the consultation)\n\n[Last Question]\nHello, welcome. What brings you into the clinic today?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 1\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key": "S065", "name": "Obsessions", "description": "Recurrent and persistent thoughts, urges, or images that are experienced as intrusive and unwanted, and attempts to ignore or suppress them.", "reason": "This is the first reply of the consultation, so I must return the item corresponding to the chief_complaint_symptom_code, which is S065."}
+=====================================
+
+---------- turn 1 | patient:response | patient.build_response_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Obsessive-Compulsive Disorder, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\n(this is the start of the consultation)\n\n[Last Question]\nHello, welcome. What brings you into the clinic today?\n\n[Patient Info]\n- demographics: Female / 31 / elementary_or_middle_school_teacher / some_college\n- severity: Mild\n\n[Targeted Info]\nname: Obsessions\nmanifestation: \"I came in because I keep getting these nagging thoughts that I forgot something important, like leaving my aunt’s medicine out wrong or not setting up my classroom materials safely, and even when I know I probably handled it, the doubt keeps popping back into my head.\"\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+Hi. Well, I came in because I keep getting these nagging thoughts that I forgot something important. It's... like I'll worry that I left my aunt’s medicine out wrong, or that I didn't set up my classroom materials safely for my students. And the frustrating part is, even when I know I probably handled it fine, that doubt just keeps popping back into my head.
+=====================================
+
+---------- turn 1 | doctor:inference | doctor.build_inference_prompt() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n1\n\n[Previous Candidates]\n(none — this is your first inference)\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic today?\n\nPatient: Hi. Well, I came in because I keep getting these nagging thoughts that I forgot something important. It's... like I'll worry that I left my aunt’s medicine out wrong, or that I didn't set up my classroom materials safely for my students. And the frustrating part is, even when I know I probably handled it fine, that doubt just keeps popping back into my head.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["F42", "F41.1", "F41.9"], "note": "Patient presents with persistent intrusive doubts/worries regarding safety and responsibility, pointing toward OCD vs. generalized anxiety disorder.", "is_final": false}
+=====================================
+
+---------- turn 1 | doctor:followup | doctor.build_questioning_prompt() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n2\n\n[Current Candidates]\nF42, F41.1, F41.9\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic today?\n\nPatient: Hi. Well, I came in because I keep getting these nagging thoughts that I forgot something important. It's... like I'll worry that I left my aunt’s medicine out wrong, or that I didn't set up my classroom materials safely for my students. And the frustrating part is, even when I know I probably handled it fine, that doubt just keeps popping back into my head.\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "Determine whether the patient performs repetitive checking or neutralizing behaviors in response to these doubts to evaluate for compulsions (F42).", "question": "When those doubts pop up, do you feel an urge to repeatedly check things, like going back to verify the medicine or classroom materials, to ease that feeling?"}
+=====================================
+
+---------- turn 2 | patient:alignment | patient.build_alignment_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Obsessive-Compulsive Disorder. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S065\n  name: Obsessions\n  description: Recurrent and persistent thoughts, urges, or images that are experienced as intrusive and unwanted, and attempts to ignore or suppress them.\n  manifestation: I came in because I keep getting these nagging thoughts that I forgot something important, like leaving my aunt’s medicine out wrong or not setting up my classroom materials safely, and even when I know I probably handled it, the doubt keeps popping back into my head.\n- key: S066\n  name: Compulsions\n  description: Repetitive behaviors or mental acts performed in response to an obsession or to prevent anxiety/distress; clearly excessive or not realistically connected.\n  manifestation: Before I leave the house or my classroom, I’ll go back over the same things a few times—checking the pill organizer, the stove, my lesson plans, or silently replaying what I did—until I feel calm enough to move on, even though it makes me run late sometimes.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: I’m still getting through work and family commitments, but my mornings take longer and I sometimes arrive at school feeling rushed or behind before the day even starts. Lesson prep and my evening journaling don’t feel as smooth or restorative as they used to.\n\n[Patient Info]\n- demographics: Female / 31 / elementary_or_middle_school_teacher / some_college\n- chief_complaint_symptom_code: S065\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic today?\n\nPatient: Hi. Well, I came in because I keep getting these nagging thoughts that I forgot something important. It's... like I'll worry that I left my aunt’s medicine out wrong, or that I didn't set up my classroom materials safely for my students. And the frustrating part is, even when I know I probably handled it fine, that doubt just keeps popping back into my head.\n\n[Last Question]\nWhen those doubts pop up, do you feel an urge to repeatedly check things, like going back to verify the medicine or classroom materials, to ease that feeling?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 2\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key": "S066", "name": "Compulsions", "description": "Repetitive behaviors or mental acts performed in response to an obsession or to prevent anxiety/distress; clearly excessive or not realistically connected.", "reason": "The doctor is directly asking about repetitive checking behaviors in response to the nagging thoughts (obsessions), which corresponds to the 'Compulsions' symptom profile."}
+=====================================
+
+---------- turn 2 | patient:response | patient.build_response_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Obsessive-Compulsive Disorder, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic today?\n\nPatient: Hi. Well, I came in because I keep getting these nagging thoughts that I forgot something important. It's... like I'll worry that I left my aunt’s medicine out wrong, or that I didn't set up my classroom materials safely for my students. And the frustrating part is, even when I know I probably handled it fine, that doubt just keeps popping back into my head.\n\n[Last Question]\nWhen those doubts pop up, do you feel an urge to repeatedly check things, like going back to verify the medicine or classroom materials, to ease that feeling?\n\n[Patient Info]\n- demographics: Female / 31 / elementary_or_middle_school_teacher / some_college\n- severity: Mild\n\n[Targeted Info]\nname: Compulsions\nmanifestation: \"Before I leave the house or my classroom, I’ll go back over the same things a few times—checking the pill organizer, the stove, my lesson plans, or silently replaying what I did—until I feel calm enough to move on, even though it makes me run late sometimes.\"\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+Yeah, I do. Um, before I leave the house or my classroom, I’ll usually go back over the same things a few times. Like, I'll check the pill organizer, or the stove... or at work, my lesson plans. Sometimes I just silently replay what I did in my head to make sure I handled it right. 
+
+I basically keep checking or thinking about it until I finally feel calm enough to just move on. It’s... well, it makes me run late sometimes, which is pretty annoying.
+=====================================
+
+---------- turn 2 | doctor:inference | doctor.build_inference_prompt() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n2\n\n[Previous Candidates]\nF42, F41.1, F41.9\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic today?\n\nPatient: Hi. Well, I came in because I keep getting these nagging thoughts that I forgot something important. It's... like I'll worry that I left my aunt’s medicine out wrong, or that I didn't set up my classroom materials safely for my students. And the frustrating part is, even when I know I probably handled it fine, that doubt just keeps popping back into my head.\n\nDoctor: When those doubts pop up, do you feel an urge to repeatedly check things, like going back to verify the medicine or classroom materials, to ease that feeling?\n\nPatient: Yeah, I do. Um, before I leave the house or my classroom, I’ll usually go back over the same things a few times. Like, I'll check the pill organizer, or the stove... or at work, my lesson plans. Sometimes I just silently replay what I did in my head to make sure I handled it right. \n\nI basically keep checking or thinking about it until I finally feel calm enough to just move on. It’s... well, it makes me run late sometimes, which is pretty annoying.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+```json
+{
+  "candidates": [
+    "F42",
+    "F41.1"
+  ],
+  "note": "Presence of repetitive checking rituals and mental review to neutralize doubts strongly supports obsessive-compulsive disorder, ruling out unspecified anxiety disorder (F41.9).",
+  "is_final": false
+}
+```
+=====================================
+
+---------- turn 2 | doctor:followup | doctor.build_questioning_prompt() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n3\n\n[Current Candidates]\nF42, F41.1\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic today?\n\nPatient: Hi. Well, I came in because I keep getting these nagging thoughts that I forgot something important. It's... like I'll worry that I left my aunt’s medicine out wrong, or that I didn't set up my classroom materials safely for my students. And the frustrating part is, even when I know I probably handled it fine, that doubt just keeps popping back into my head.\n\nDoctor: When those doubts pop up, do you feel an urge to repeatedly check things, like going back to verify the medicine or classroom materials, to ease that feeling?\n\nPatient: Yeah, I do. Um, before I leave the house or my classroom, I’ll usually go back over the same things a few times. Like, I'll check the pill organizer, or the stove... or at work, my lesson plans. Sometimes I just silently replay what I did in my head to make sure I handled it right. \n\nI basically keep checking or thinking about it until I finally feel calm enough to just move on. It’s... well, it makes me run late sometimes, which is pretty annoying.\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "Determine if excessive worry extends across multiple everyday life domains characteristic of generalized anxiety disorder", "question": "Aside from these specific concerns about checking and safety, do you find yourself constantly worrying about a wide variety of other everyday topics, like your finances, personal health, or general future?"}
+=====================================
+
+---------- turn 3 | patient:alignment | patient.build_alignment_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Obsessive-Compulsive Disorder. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S065\n  name: Obsessions\n  description: Recurrent and persistent thoughts, urges, or images that are experienced as intrusive and unwanted, and attempts to ignore or suppress them.\n  manifestation: I came in because I keep getting these nagging thoughts that I forgot something important, like leaving my aunt’s medicine out wrong or not setting up my classroom materials safely, and even when I know I probably handled it, the doubt keeps popping back into my head.\n- key: S066\n  name: Compulsions\n  description: Repetitive behaviors or mental acts performed in response to an obsession or to prevent anxiety/distress; clearly excessive or not realistically connected.\n  manifestation: Before I leave the house or my classroom, I’ll go back over the same things a few times—checking the pill organizer, the stove, my lesson plans, or silently replaying what I did—until I feel calm enough to move on, even though it makes me run late sometimes.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: I’m still getting through work and family commitments, but my mornings take longer and I sometimes arrive at school feeling rushed or behind before the day even starts. Lesson prep and my evening journaling don’t feel as smooth or restorative as they used to.\n\n[Patient Info]\n- demographics: Female / 31 / elementary_or_middle_school_teacher / some_college\n- chief_complaint_symptom_code: S065\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic today?\n\nPatient: Hi. Well, I came in because I keep getting these nagging thoughts that I forgot something important. It's... like I'll worry that I left my aunt’s medicine out wrong, or that I didn't set up my classroom materials safely for my students. And the frustrating part is, even when I know I probably handled it fine, that doubt just keeps popping back into my head.\n\nDoctor: When those doubts pop up, do you feel an urge to repeatedly check things, like going back to verify the medicine or classroom materials, to ease that feeling?\n\nPatient: Yeah, I do. Um, before I leave the house or my classroom, I’ll usually go back over the same things a few times. Like, I'll check the pill organizer, or the stove... or at work, my lesson plans. Sometimes I just silently replay what I did in my head to make sure I handled it right. \n\nI basically keep checking or thinking about it until I finally feel calm enough to just move on. It’s... well, it makes me run late sometimes, which is pretty annoying.\n\n[Last Question]\nAside from these specific concerns about checking and safety, do you find yourself constantly worrying about a wide variety of other everyday topics, like your finances, personal health, or general future?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 3\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key": "None", "name": "None", "description": "None", "reason": "The doctor is asking about Generalized Anxiety Disorder symptoms (excessive worry about various everyday topics like finances, health, or the future), which is not covered by my Obsessive-Compulsive Disorder symptom profile."}
+=====================================
+
+---------- turn 3 | patient:response | patient.build_response_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Obsessive-Compulsive Disorder, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic today?\n\nPatient: Hi. Well, I came in because I keep getting these nagging thoughts that I forgot something important. It's... like I'll worry that I left my aunt’s medicine out wrong, or that I didn't set up my classroom materials safely for my students. And the frustrating part is, even when I know I probably handled it fine, that doubt just keeps popping back into my head.\n\nDoctor: When those doubts pop up, do you feel an urge to repeatedly check things, like going back to verify the medicine or classroom materials, to ease that feeling?\n\nPatient: Yeah, I do. Um, before I leave the house or my classroom, I’ll usually go back over the same things a few times. Like, I'll check the pill organizer, or the stove... or at work, my lesson plans. Sometimes I just silently replay what I did in my head to make sure I handled it right. \n\nI basically keep checking or thinking about it until I finally feel calm enough to just move on. It’s... well, it makes me run late sometimes, which is pretty annoying.\n\n[Last Question]\nAside from these specific concerns about checking and safety, do you find yourself constantly worrying about a wide variety of other everyday topics, like your finances, personal health, or general future?\n\n[Patient Info]\n- demographics: Female / 31 / elementary_or_middle_school_teacher / some_college\n- severity: Mild\n\n[Targeted Info]\nNone\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+No, not really. Um, I mean, I think about my budget or regular life stuff sometimes, just like anyone else, but I wouldn't say I constantly worry about them. It's really just those specific things I mentioned... the checking, and making sure I didn't leave something unsafe or mess up at work. Outside of that, like with my health or the future, I feel pretty okay.
+=====================================
+
+---------- turn 3 | doctor:inference | doctor.build_inference_prompt() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n3\n\n[Previous Candidates]\nF42, F41.1\n\n[Dialogue History]\nDoctor: Hello, welcome. What brings you into the clinic today?\n\nPatient: Hi. Well, I came in because I keep getting these nagging thoughts that I forgot something important. It's... like I'll worry that I left my aunt’s medicine out wrong, or that I didn't set up my classroom materials safely for my students. And the frustrating part is, even when I know I probably handled it fine, that doubt just keeps popping back into my head.\n\nDoctor: When those doubts pop up, do you feel an urge to repeatedly check things, like going back to verify the medicine or classroom materials, to ease that feeling?\n\nPatient: Yeah, I do. Um, before I leave the house or my classroom, I’ll usually go back over the same things a few times. Like, I'll check the pill organizer, or the stove... or at work, my lesson plans. Sometimes I just silently replay what I did in my head to make sure I handled it right. \n\nI basically keep checking or thinking about it until I finally feel calm enough to just move on. It’s... well, it makes me run late sometimes, which is pretty annoying.\n\nDoctor: Aside from these specific concerns about checking and safety, do you find yourself constantly worrying about a wide variety of other everyday topics, like your finances, personal health, or general future?\n\nPatient: No, not really. Um, I mean, I think about my budget or regular life stuff sometimes, just like anyone else, but I wouldn't say I constantly worry about them. It's really just those specific things I mentioned... the checking, and making sure I didn't leave something unsafe or mess up at work. Outside of that, like with my health or the future, I feel pretty okay.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["F42"], "note": "Ruled out F41.1 (generalized anxiety disorder) as patient denies pervasive excessive worry about everyday events outside the specific obsessional doubts and checking behaviors.", "is_final": true}
+=====================================
+
+---------- turn 3 | doctor:final | doctor.final_diagnosis_user_payload() | model=gemini-3.8-flash ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the full interview transcript and the differential diagnosis candidates, write the final diagnosis report.\n\nBoth the \"diagnosis\" and \"candidates\" MUST be ICD-10 codes.\n\n[Field Instructions]\n- diagnosis: The single diagnosis code of ICD-10.\n- candidates: Top 2–3 differential candidates of ICD-10 codes considered until the end.\n- reason: Brief diagnostic rationale.\n- diagnostic_checklist: Structured evidence summary organized by diagnostic criterion type.\n  List only symptom groups that are relevant to your diagnosis, with the symptoms the patient actually confirmed.\n\nOutput Format (JSON only, no other text):\n{\n  \"diagnosis\": \"Final Diagnosis ICD-10 code\",\n  \"candidates\": [\"Disease Code1\", \"Disease Code2\"],\n  \"reason\": \"Brief diagnostic rationale.\",\n  \"diagnostic_checklist\": {\n    \"symptom_groups\": [\n      {\n        \"group\": \"clinical group name (e.g., inattention, manic_episode, psychotic_symptoms)\",\n        \"confirmed_symptoms\": [\"natural language description of each confirmed symptom in this group\"],\n        \"count\": <integer>\n      }\n    ],\n    \"duration_verified\": \"Description of how the duration criterion was established (e.g., 'symptoms present for over 6 months since childhood'), or null if not assessed.\",\n    \"functional_impairment\": <true if functional impairment was confirmed, false if denied, null if not assessed>,\n    \"traumatic_stressor\": <true if a qualifying traumatic stressor was confirmed, null if not applicable or not assessed>,\n    \"psychosocial_stressor\": <true if a qualifying psychosocial stressor was confirmed, null if not applicable or not assessed>,\n    \"additional_requirements\": [\"Each additional criterion that was explicitly verified during the interview (e.g., 'Onset prior to age 12 confirmed')\"]\n  }\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"F42\"]\n\nInterview Transcript: \nDoctor: Hello, welcome. What brings you into the clinic today?\n\nPatient: Hi. Well, I came in because I keep getting these nagging thoughts that I forgot something important. It's... like I'll worry that I left my aunt’s medicine out wrong, or that I didn't set up my classroom materials safely for my students. And the frustrating part is, even when I know I probably handled it fine, that doubt just keeps popping back into my head.\n\nDoctor: When those doubts pop up, do you feel an urge to repeatedly check things, like going back to verify the medicine or classroom materials, to ease that feeling?\n\nPatient: Yeah, I do. Um, before I leave the house or my classroom, I’ll usually go back over the same things a few times. Like, I'll check the pill organizer, or the stove... or at work, my lesson plans. Sometimes I just silently replay what I did in my head to make sure I handled it right. \n\nI basically keep checking or thinking about it until I finally feel calm enough to just move on. It’s... well, it makes me run late sometimes, which is pretty annoying.\n\nDoctor: Aside from these specific concerns about checking and safety, do you find yourself constantly worrying about a wide variety of other everyday topics, like your finances, personal health, or general future?\n\nPatient: No, not really. Um, I mean, I think about my budget or regular life stuff sometimes, just like anyone else, but I wouldn't say I constantly worry about them. It's really just those specific things I mentioned... the checking, and making sure I didn't leave something unsafe or mess up at work. Outside of that, like with my health or the future, I feel pretty okay."
+  }
+]
+========== OUTPUT [doctor] ==========
+```json
+{
+  "diagnosis": "F42",
+  "candidates": [
+    "F42",
+    "F41.1"
+  ],
+  "reason": "The patient presents with recurrent, intrusive doubts and worries about safety and responsibility (obsessions) that drive repetitive checking behaviors and mental replaying (compulsions) to relieve distress, causing functional impairment (running late). Generalized anxiety was ruled out as worries are circumscribed to these specific themes.",
+  "diagnostic_checklist": {
+    "symptom_groups": [
+      {
+        "group": "obsessions",
+        "confirmed_symptoms": [
+          "Recurrent, intrusive doubts about leaving medication out wrong or not setting up classroom materials safely",
+          "Persistent doubts that re-emerge despite recognizing things were likely handled properly"
+        ],
+        "count": 2
+      },
+      {
+        "group": "compulsions",
+        "confirmed_symptoms": [
+          "Repetitive checking of items (pill organizer, stove, lesson plans)",
+          "Mental acts such as silently replaying actions to ensure they were done correctly",
+          "Performing rituals repeatedly until feeling calm enough to move on"
+        ],
+        "count": 3
+      }
+    ],
+    "duration_verified": null,
+    "functional_impairment": true,
+    "traumatic_stressor": null,
+    "psychosocial_stressor": null,
+    "additional_requirements": [
+      "Patient recognizes doubts are excessive/irrational but feels compelled to neutralize them",
+      "Absence of generalized excessive worry across other domains (e.g., health, finances, general future)"
+    ]
+  }
+}
+```
+=====================================
+
