@@ -1,0 +1,230 @@
+---------- turn 0 | doctor:opening | doctor.opening_user_message() | model=gemini-3.1-flash-lite ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n1\n\n[Current Candidates]\n(none yet — this is your opening question)\n\n[Dialogue History]\n(none yet — the interview has not started)\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "Establish rapport and identify the patient's primary reason for seeking psychiatric evaluation.", "question": "Hello. I'm Dr. Smith. What brings you in to see me today?"}
+=====================================
+
+---------- turn 1 | patient:alignment | patient.build_alignment_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Adjustment Disorder. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S081\n  name: Stress_Related_Maladaptive_Response\n  description: Emotional or behavioral symptoms appearing in response to an identifiable stressor.\n  manifestation: Ever since my choir friend passed so suddenly, I just haven't been myself—I cry over the potluck lists, get all worked up about calls I used to handle easy, and I've started missing church planning things I never would have missed before.\n- key: additional_requirement_1\n  name: Additional Requirement 1\n  description: Symptoms must develop within 3 months of the onset of the stressor\n  manifestation: My friend died just about a month ago, and it was only after that sudden loss that I started falling apart with the church planning.\n- key: additional_requirement_2\n  name: Additional Requirement 2\n  description: Within 6 months of the termination of the stressor or its consequences\n  manifestation: This is all still tied to her death and the luncheon we were supposed to finish together; it has not been going on for months and months after things settled.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: I have had to let other church members take over calls, lists, and parts of the luncheon because I am not keeping up the way I always did before.\n- key: duration\n  name: Duration\n  description: 1 month\n  manifestation: This has been going on for about a month, since my close choir friend died.\n\n[Patient Info]\n- demographics: Female / 63 / not_in_workforce / high_school\n- chief_complaint_symptom_code: S081\n\n[Dialogue History]\n(this is the start of the consultation)\n\n[Last Question]\nHello. I'm Dr. Smith. What brings you in to see me today?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 1\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key": "S081", "name": "Stress_Related_Maladaptive_Response", "description": "Emotional or behavioral symptoms appearing in response to an identifiable stressor.", "reason": "This is the first reply of the consultation, so I must return the chief complaint symptom code (S081)."}
+=====================================
+
+---------- turn 1 | patient:response | patient.build_response_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Adjustment Disorder, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\n(this is the start of the consultation)\n\n[Last Question]\nHello. I'm Dr. Smith. What brings you in to see me today?\n\n[Patient Info]\n- demographics: Female / 63 / not_in_workforce / high_school\n- severity: Moderate\n\n[Targeted Info]\nname: Stress_Related_Maladaptive_Response\nmanifestation: \"Ever since my choir friend passed so suddenly, I just haven't been myself—I cry over the potluck lists, get all worked up about calls I used to handle easy, and I've started missing church planning things I never would have missed before.\"\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+Hello, Dr. Smith. Well, I'm here because... I just haven't been myself lately. 
+
+Ever since a good friend of mine from choir passed away so suddenly, I've just been having a really hard time handling things. I find myself crying over silly things, like the church potluck lists, and I get all worked up about phone calls that I used to handle easy. I've even started missing our church planning meetings, and... well, I never would have missed those before. I just don't feel right.
+=====================================
+
+---------- turn 1 | doctor:inference | doctor.build_inference_prompt() | model=gemini-3.1-flash-lite ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n1\n\n[Previous Candidates]\n(none — this is your first inference)\n\n[Dialogue History]\nDoctor: Hello. I'm Dr. Smith. What brings you in to see me today?\n\nPatient: Hello, Dr. Smith. Well, I'm here because... I just haven't been myself lately. \n\nEver since a good friend of mine from choir passed away so suddenly, I've just been having a really hard time handling things. I find myself crying over silly things, like the church potluck lists, and I get all worked up about phone calls that I used to handle easy. I've even started missing our church planning meetings, and... well, I never would have missed those before. I just don't feel right.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["F43.2", "F32.9", "F41.1", "F43.1"], "note": "Based on the patient's recent bereavement and subsequent functional impairment, I am considering adjustment disorder, major depressive disorder, generalized anxiety disorder, and post-traumatic stress disorder as initial diagnostic possibilities.", "is_final": false}
+=====================================
+
+---------- turn 1 | doctor:followup | doctor.build_questioning_prompt() | model=gemini-3.1-flash-lite ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n2\n\n[Current Candidates]\nF43.2, F32.9, F41.1, F43.1\n\n[Dialogue History]\nDoctor: Hello. I'm Dr. Smith. What brings you in to see me today?\n\nPatient: Hello, Dr. Smith. Well, I'm here because... I just haven't been myself lately. \n\nEver since a good friend of mine from choir passed away so suddenly, I've just been having a really hard time handling things. I find myself crying over silly things, like the church potluck lists, and I get all worked up about phone calls that I used to handle easy. I've even started missing our church planning meetings, and... well, I never would have missed those before. I just don't feel right.\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "Determine if the patient is experiencing intrusive thoughts, flashbacks, or avoidance behaviors specifically related to the traumatic event to differentiate between PTSD (F43.1) and Adjustment Disorder (F43.2).", "question": "When you are alone, do you find yourself having unwanted, vivid memories or nightmares about your friend's passing?"}
+=====================================
+
+---------- turn 2 | patient:alignment | patient.build_alignment_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Adjustment Disorder. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S081\n  name: Stress_Related_Maladaptive_Response\n  description: Emotional or behavioral symptoms appearing in response to an identifiable stressor.\n  manifestation: Ever since my choir friend passed so suddenly, I just haven't been myself—I cry over the potluck lists, get all worked up about calls I used to handle easy, and I've started missing church planning things I never would have missed before.\n- key: additional_requirement_1\n  name: Additional Requirement 1\n  description: Symptoms must develop within 3 months of the onset of the stressor\n  manifestation: My friend died just about a month ago, and it was only after that sudden loss that I started falling apart with the church planning.\n- key: additional_requirement_2\n  name: Additional Requirement 2\n  description: Within 6 months of the termination of the stressor or its consequences\n  manifestation: This is all still tied to her death and the luncheon we were supposed to finish together; it has not been going on for months and months after things settled.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: I have had to let other church members take over calls, lists, and parts of the luncheon because I am not keeping up the way I always did before.\n- key: duration\n  name: Duration\n  description: 1 month\n  manifestation: This has been going on for about a month, since my close choir friend died.\n\n[Patient Info]\n- demographics: Female / 63 / not_in_workforce / high_school\n- chief_complaint_symptom_code: S081\n\n[Dialogue History]\nDoctor: Hello. I'm Dr. Smith. What brings you in to see me today?\n\nPatient: Hello, Dr. Smith. Well, I'm here because... I just haven't been myself lately. \n\nEver since a good friend of mine from choir passed away so suddenly, I've just been having a really hard time handling things. I find myself crying over silly things, like the church potluck lists, and I get all worked up about phone calls that I used to handle easy. I've even started missing our church planning meetings, and... well, I never would have missed those before. I just don't feel right.\n\n[Last Question]\nWhen you are alone, do you find yourself having unwanted, vivid memories or nightmares about your friend's passing?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 2\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key": "None", "name": "None", "description": "None", "reason": "The doctor is asking about PTSD symptoms (unwanted, vivid memories or nightmares), which are not covered in the patient's symptom profile."}
+=====================================
+
+---------- turn 2 | patient:response | patient.build_response_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Adjustment Disorder, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\nDoctor: Hello. I'm Dr. Smith. What brings you in to see me today?\n\nPatient: Hello, Dr. Smith. Well, I'm here because... I just haven't been myself lately. \n\nEver since a good friend of mine from choir passed away so suddenly, I've just been having a really hard time handling things. I find myself crying over silly things, like the church potluck lists, and I get all worked up about phone calls that I used to handle easy. I've even started missing our church planning meetings, and... well, I never would have missed those before. I just don't feel right.\n\n[Last Question]\nWhen you are alone, do you find yourself having unwanted, vivid memories or nightmares about your friend's passing?\n\n[Patient Info]\n- demographics: Female / 63 / not_in_workforce / high_school\n- severity: Moderate\n\n[Targeted Info]\nNone\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+No, I wouldn't say that. I mean, I think about her a lot, of course... but I don't have bad dreams about her passing, or, you know, memories that just pop up out of nowhere and feel really vivid like that. It's more just... feeling really sad and overwhelmed. But no, no nightmares or anything.
+=====================================
+
+---------- turn 2 | doctor:inference | doctor.build_inference_prompt() | model=gemini-3.1-flash-lite ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n2\n\n[Previous Candidates]\nF43.2, F32.9, F41.1, F43.1\n\n[Dialogue History]\nDoctor: Hello. I'm Dr. Smith. What brings you in to see me today?\n\nPatient: Hello, Dr. Smith. Well, I'm here because... I just haven't been myself lately. \n\nEver since a good friend of mine from choir passed away so suddenly, I've just been having a really hard time handling things. I find myself crying over silly things, like the church potluck lists, and I get all worked up about phone calls that I used to handle easy. I've even started missing our church planning meetings, and... well, I never would have missed those before. I just don't feel right.\n\nDoctor: When you are alone, do you find yourself having unwanted, vivid memories or nightmares about your friend's passing?\n\nPatient: No, I wouldn't say that. I mean, I think about her a lot, of course... but I don't have bad dreams about her passing, or, you know, memories that just pop up out of nowhere and feel really vivid like that. It's more just... feeling really sad and overwhelmed. But no, no nightmares or anything.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["F43.2", "F32.9", "F41.1"], "note": "Ruled out F43.1 (PTSD) because the patient denies the intrusive symptoms (flashbacks, nightmares) required for that diagnosis.", "is_final": false}
+=====================================
+
+---------- turn 2 | doctor:followup | doctor.build_questioning_prompt() | model=gemini-3.1-flash-lite ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n3\n\n[Current Candidates]\nF43.2, F32.9, F41.1\n\n[Dialogue History]\nDoctor: Hello. I'm Dr. Smith. What brings you in to see me today?\n\nPatient: Hello, Dr. Smith. Well, I'm here because... I just haven't been myself lately. \n\nEver since a good friend of mine from choir passed away so suddenly, I've just been having a really hard time handling things. I find myself crying over silly things, like the church potluck lists, and I get all worked up about phone calls that I used to handle easy. I've even started missing our church planning meetings, and... well, I never would have missed those before. I just don't feel right.\n\nDoctor: When you are alone, do you find yourself having unwanted, vivid memories or nightmares about your friend's passing?\n\nPatient: No, I wouldn't say that. I mean, I think about her a lot, of course... but I don't have bad dreams about her passing, or, you know, memories that just pop up out of nowhere and feel really vivid like that. It's more just... feeling really sad and overwhelmed. But no, no nightmares or anything.\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "Determine if the patient is experiencing a pervasive loss of interest or pleasure (anhedonia) in all activities, which would point more strongly toward Major Depressive Disorder (F32.9) rather than an Adjustment Disorder (F43.2) or Generalized Anxiety Disorder (F41.1).", "question": "Aside from the church meetings, have you noticed that you no longer enjoy or take pleasure in other hobbies or activities you used to find fun?"}
+=====================================
+
+---------- turn 3 | patient:alignment | patient.build_alignment_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Adjustment Disorder. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S081\n  name: Stress_Related_Maladaptive_Response\n  description: Emotional or behavioral symptoms appearing in response to an identifiable stressor.\n  manifestation: Ever since my choir friend passed so suddenly, I just haven't been myself—I cry over the potluck lists, get all worked up about calls I used to handle easy, and I've started missing church planning things I never would have missed before.\n- key: additional_requirement_1\n  name: Additional Requirement 1\n  description: Symptoms must develop within 3 months of the onset of the stressor\n  manifestation: My friend died just about a month ago, and it was only after that sudden loss that I started falling apart with the church planning.\n- key: additional_requirement_2\n  name: Additional Requirement 2\n  description: Within 6 months of the termination of the stressor or its consequences\n  manifestation: This is all still tied to her death and the luncheon we were supposed to finish together; it has not been going on for months and months after things settled.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: I have had to let other church members take over calls, lists, and parts of the luncheon because I am not keeping up the way I always did before.\n- key: duration\n  name: Duration\n  description: 1 month\n  manifestation: This has been going on for about a month, since my close choir friend died.\n\n[Patient Info]\n- demographics: Female / 63 / not_in_workforce / high_school\n- chief_complaint_symptom_code: S081\n\n[Dialogue History]\nDoctor: Hello. I'm Dr. Smith. What brings you in to see me today?\n\nPatient: Hello, Dr. Smith. Well, I'm here because... I just haven't been myself lately. \n\nEver since a good friend of mine from choir passed away so suddenly, I've just been having a really hard time handling things. I find myself crying over silly things, like the church potluck lists, and I get all worked up about phone calls that I used to handle easy. I've even started missing our church planning meetings, and... well, I never would have missed those before. I just don't feel right.\n\nDoctor: When you are alone, do you find yourself having unwanted, vivid memories or nightmares about your friend's passing?\n\nPatient: No, I wouldn't say that. I mean, I think about her a lot, of course... but I don't have bad dreams about her passing, or, you know, memories that just pop up out of nowhere and feel really vivid like that. It's more just... feeling really sad and overwhelmed. But no, no nightmares or anything.\n\n[Last Question]\nAside from the church meetings, have you noticed that you no longer enjoy or take pleasure in other hobbies or activities you used to find fun?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 3\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key": "None", "name": "None", "description": "None", "reason": "The doctor is asking about anhedonia (loss of pleasure/interest in other hobbies or activities), which is a symptom of Major Depressive Disorder, but this is not covered in the patient's symptom profile."}
+=====================================
+
+---------- turn 3 | patient:response | patient.build_response_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Adjustment Disorder, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\nDoctor: Hello. I'm Dr. Smith. What brings you in to see me today?\n\nPatient: Hello, Dr. Smith. Well, I'm here because... I just haven't been myself lately. \n\nEver since a good friend of mine from choir passed away so suddenly, I've just been having a really hard time handling things. I find myself crying over silly things, like the church potluck lists, and I get all worked up about phone calls that I used to handle easy. I've even started missing our church planning meetings, and... well, I never would have missed those before. I just don't feel right.\n\nDoctor: When you are alone, do you find yourself having unwanted, vivid memories or nightmares about your friend's passing?\n\nPatient: No, I wouldn't say that. I mean, I think about her a lot, of course... but I don't have bad dreams about her passing, or, you know, memories that just pop up out of nowhere and feel really vivid like that. It's more just... feeling really sad and overwhelmed. But no, no nightmares or anything.\n\n[Last Question]\nAside from the church meetings, have you noticed that you no longer enjoy or take pleasure in other hobbies or activities you used to find fun?\n\n[Patient Info]\n- demographics: Female / 63 / not_in_workforce / high_school\n- severity: Moderate\n\n[Targeted Info]\nNone\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+No, I haven't really noticed that. I mean... I still like doing my usual things around the house. I still enjoy working in my garden and reading my books. 
+
+It's really just the church activities that I've been backing away from. I think maybe because that's where we spent so much time together, so it's just harder to be there. But as for my other hobbies... no, I still find them enjoyable.
+=====================================
+
+---------- turn 3 | doctor:inference | doctor.build_inference_prompt() | model=gemini-3.1-flash-lite ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n3\n\n[Previous Candidates]\nF43.2, F32.9, F41.1\n\n[Dialogue History]\nDoctor: Hello. I'm Dr. Smith. What brings you in to see me today?\n\nPatient: Hello, Dr. Smith. Well, I'm here because... I just haven't been myself lately. \n\nEver since a good friend of mine from choir passed away so suddenly, I've just been having a really hard time handling things. I find myself crying over silly things, like the church potluck lists, and I get all worked up about phone calls that I used to handle easy. I've even started missing our church planning meetings, and... well, I never would have missed those before. I just don't feel right.\n\nDoctor: When you are alone, do you find yourself having unwanted, vivid memories or nightmares about your friend's passing?\n\nPatient: No, I wouldn't say that. I mean, I think about her a lot, of course... but I don't have bad dreams about her passing, or, you know, memories that just pop up out of nowhere and feel really vivid like that. It's more just... feeling really sad and overwhelmed. But no, no nightmares or anything.\n\nDoctor: Aside from the church meetings, have you noticed that you no longer enjoy or take pleasure in other hobbies or activities you used to find fun?\n\nPatient: No, I haven't really noticed that. I mean... I still like doing my usual things around the house. I still enjoy working in my garden and reading my books. \n\nIt's really just the church activities that I've been backing away from. I think maybe because that's where we spent so much time together, so it's just harder to be there. But as for my other hobbies... no, I still find them enjoyable.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["F43.2"], "note": "The patient denies anhedonia (ruling out F32.9) and denies symptoms of generalized anxiety such as excessive worry about multiple domains (ruling out F41.1). The presentation is consistent with an adjustment disorder triggered by the bereavement.", "is_final": true}
+=====================================
+
+---------- turn 3 | doctor:final | doctor.final_diagnosis_user_payload() | model=gemini-3.1-flash-lite ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the full interview transcript and the differential diagnosis candidates, write the final diagnosis report.\n\nBoth the \"diagnosis\" and \"candidates\" MUST be ICD-10 codes.\n\n[Field Instructions]\n- diagnosis: The single diagnosis code of ICD-10.\n- candidates: Top 2–3 differential candidates of ICD-10 codes considered until the end.\n- reason: Brief diagnostic rationale.\n- diagnostic_checklist: Structured evidence summary organized by diagnostic criterion type.\n  List only symptom groups that are relevant to your diagnosis, with the symptoms the patient actually confirmed.\n\nOutput Format (JSON only, no other text):\n{\n  \"diagnosis\": \"Final Diagnosis ICD-10 code\",\n  \"candidates\": [\"Disease Code1\", \"Disease Code2\"],\n  \"reason\": \"Brief diagnostic rationale.\",\n  \"diagnostic_checklist\": {\n    \"symptom_groups\": [\n      {\n        \"group\": \"clinical group name (e.g., inattention, manic_episode, psychotic_symptoms)\",\n        \"confirmed_symptoms\": [\"natural language description of each confirmed symptom in this group\"],\n        \"count\": <integer>\n      }\n    ],\n    \"duration_verified\": \"Description of how the duration criterion was established (e.g., 'symptoms present for over 6 months since childhood'), or null if not assessed.\",\n    \"functional_impairment\": <true if functional impairment was confirmed, false if denied, null if not assessed>,\n    \"traumatic_stressor\": <true if a qualifying traumatic stressor was confirmed, null if not applicable or not assessed>,\n    \"psychosocial_stressor\": <true if a qualifying psychosocial stressor was confirmed, null if not applicable or not assessed>,\n    \"additional_requirements\": [\"Each additional criterion that was explicitly verified during the interview (e.g., 'Onset prior to age 12 confirmed')\"]\n  }\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"F43.2\"]\n\nInterview Transcript: \nDoctor: Hello. I'm Dr. Smith. What brings you in to see me today?\n\nPatient: Hello, Dr. Smith. Well, I'm here because... I just haven't been myself lately. \n\nEver since a good friend of mine from choir passed away so suddenly, I've just been having a really hard time handling things. I find myself crying over silly things, like the church potluck lists, and I get all worked up about phone calls that I used to handle easy. I've even started missing our church planning meetings, and... well, I never would have missed those before. I just don't feel right.\n\nDoctor: When you are alone, do you find yourself having unwanted, vivid memories or nightmares about your friend's passing?\n\nPatient: No, I wouldn't say that. I mean, I think about her a lot, of course... but I don't have bad dreams about her passing, or, you know, memories that just pop up out of nowhere and feel really vivid like that. It's more just... feeling really sad and overwhelmed. But no, no nightmares or anything.\n\nDoctor: Aside from the church meetings, have you noticed that you no longer enjoy or take pleasure in other hobbies or activities you used to find fun?\n\nPatient: No, I haven't really noticed that. I mean... I still like doing my usual things around the house. I still enjoy working in my garden and reading my books. \n\nIt's really just the church activities that I've been backing away from. I think maybe because that's where we spent so much time together, so it's just harder to be there. But as for my other hobbies... no, I still find them enjoyable."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "diagnosis": "F43.2",
+  "candidates": ["F43.2"],
+  "reason": "The patient exhibits emotional and behavioral symptoms (crying, anxiety, social withdrawal) in clear response to an identifiable psychosocial stressor (the sudden death of a friend) occurring within the last few months. The symptoms do not meet the criteria for Major Depressive Disorder (no loss of interest in other hobbies) or Post-Traumatic Stress Disorder (no intrusive memories or nightmares).",
+  "diagnostic_checklist": {
+    "symptom_groups": [
+      {
+        "group": "emotional and behavioral symptoms",
+        "confirmed_symptoms": ["crying over minor triggers", "anxiety regarding routine tasks", "avoidance of specific social settings related to the stressor"],
+        "count": 3
+      }
+    ],
+    "duration_verified": "Symptoms began 'ever since' the friend's sudden passing, which is recent.",
+    "functional_impairment": true,
+    "traumatic_stressor": false,
+    "psychosocial_stressor": true,
+    "additional_requirements": ["Absence of criteria for other specific disorders (e.g., PTSD, MDD)"]
+  }
+}
+=====================================
+
