@@ -1,0 +1,312 @@
+---------- turn 0 | doctor:opening | doctor.opening_user_message() | model=anthropic/claude-sonnet-5 ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n1\n\n[Current Candidates]\n(none yet — this is your opening question)\n\n[Dialogue History]\n(none yet — the interview has not started)\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "Identify the primary reason for the visit today", "question": "Hello, welcome in. Before we begin, can you tell me what brings you in to see me today?"}
+=====================================
+
+---------- turn 1 | patient:alignment | patient.build_alignment_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Specific Phobia. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S064\n  name: Phobic_Avoidance_Endure\n  description: The phobic object or situation is actively avoided or endured with intense fear or anxiety.\n  manifestation: I’m here because I’ve gotten to where I plan my whole summer around avoiding wasps, even giving up my garden jobs at church and making my husband unload things by the back porch if I hear buzzing.\n- key: S062\n  name: Specific_Phobic_Fear\n  description: Marked fear or anxiety about a specific object or situation that is out of proportion to the actual danger. (Note: In children, may be expressed by crying, tantrums, freezing, or clinging).\n  manifestation: I know a wasp is just a little insect and most folks would swat it away, but to me it feels like something terrible is about to happen if one gets anywhere near me.\n- key: S063\n  name: Immediate_Fear/Anxiety_Response\n  description: The phobic object or situation almost always provokes immediate fear or anxiety.\n  manifestation: The second I hear that sharp buzzing by the porch or see one hovering near the flowers, my heart jumps, my hands shake, and I feel like I have to get inside right away.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: I’ve had to step back from the church gardening group and stopped hosting garden days, which used to be a big part of how I stayed connected with people. At home, my husband has taken over porch and garden tasks I used to handle myself.\n- key: duration\n  name: Duration\n  description: 2 years and 5 months\n  manifestation: This has been going on since the remodel uncovered that wasp nest, about two years and five months ago.\n\n[Patient Info]\n- demographics: Female / 57 / not_in_workforce / high_school\n- chief_complaint_symptom_code: S064\n\n[Dialogue History]\n(this is the start of the consultation)\n\n[Last Question]\nHello, welcome in. Before we begin, can you tell me what brings you in to see me today?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 1\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key": "S064", "name": "Phobic_Avoidance_Endure", "description": "The phobic object or situation is actively avoided or endured with intense fear or anxiety.", "reason": "This is the first turn of the consultation, so I must return the chief complaint symptom code, which is S064."}
+=====================================
+
+---------- turn 1 | patient:response | patient.build_response_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Specific Phobia, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\n(this is the start of the consultation)\n\n[Last Question]\nHello, welcome in. Before we begin, can you tell me what brings you in to see me today?\n\n[Patient Info]\n- demographics: Female / 57 / not_in_workforce / high_school\n- severity: Moderate\n\n[Targeted Info]\nname: Phobic_Avoidance_Endure\nmanifestation: \"I’m here because I’ve gotten to where I plan my whole summer around avoiding wasps, even giving up my garden jobs at church and making my husband unload things by the back porch if I hear buzzing.\"\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+I'm here because I've gotten to the point where I plan my whole summer around avoiding wasps. It's just... it's too much. I even gave up my gardening jobs at the church because of it. And if I hear buzzing near the back porch, I make my husband unload everything from the car. I just can't be out there.
+=====================================
+
+---------- turn 1 | doctor:inference | doctor.build_inference_prompt() | model=anthropic/claude-sonnet-5 ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n1\n\n[Previous Candidates]\n(none — this is your first inference)\n\n[Dialogue History]\nDoctor: Hello, welcome in. Before we begin, can you tell me what brings you in to see me today?\n\nPatient: I'm here because I've gotten to the point where I plan my whole summer around avoiding wasps. It's just... it's too much. I even gave up my gardening jobs at the church because of it. And if I hear buzzing near the back porch, I make my husband unload everything from the car. I just can't be out there.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["F40.218"], "note": "Initial presentation describes a marked, circumscribed fear of wasps leading to avoidance behavior and functional impairment (giving up gardening job, avoiding porch), consistent with specific phobia, animal type. Other anxiety or OCD-spectrum disorders are less likely given the focal, situational nature of the fear, but further history is needed to rule out broader anxiety disorders.", "is_final": false}
+=====================================
+
+---------- turn 1 | doctor:followup | doctor.build_questioning_prompt() | model=anthropic/claude-sonnet-5 ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n2\n\n[Current Candidates]\nF40.218\n\n[Dialogue History]\nDoctor: Hello, welcome in. Before we begin, can you tell me what brings you in to see me today?\n\nPatient: I'm here because I've gotten to the point where I plan my whole summer around avoiding wasps. It's just... it's too much. I even gave up my gardening jobs at the church because of it. And if I hear buzzing near the back porch, I make my husband unload everything from the car. I just can't be out there.\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "Determine how long the patient has experienced this intense fear/avoidance of wasps, to assess whether it meets the duration criterion for a specific phobia", "question": "How long have you been dealing with this level of fear and avoidance around wasps?"}
+=====================================
+
+---------- turn 2 | patient:alignment | patient.build_alignment_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Specific Phobia. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S064\n  name: Phobic_Avoidance_Endure\n  description: The phobic object or situation is actively avoided or endured with intense fear or anxiety.\n  manifestation: I’m here because I’ve gotten to where I plan my whole summer around avoiding wasps, even giving up my garden jobs at church and making my husband unload things by the back porch if I hear buzzing.\n- key: S062\n  name: Specific_Phobic_Fear\n  description: Marked fear or anxiety about a specific object or situation that is out of proportion to the actual danger. (Note: In children, may be expressed by crying, tantrums, freezing, or clinging).\n  manifestation: I know a wasp is just a little insect and most folks would swat it away, but to me it feels like something terrible is about to happen if one gets anywhere near me.\n- key: S063\n  name: Immediate_Fear/Anxiety_Response\n  description: The phobic object or situation almost always provokes immediate fear or anxiety.\n  manifestation: The second I hear that sharp buzzing by the porch or see one hovering near the flowers, my heart jumps, my hands shake, and I feel like I have to get inside right away.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: I’ve had to step back from the church gardening group and stopped hosting garden days, which used to be a big part of how I stayed connected with people. At home, my husband has taken over porch and garden tasks I used to handle myself.\n- key: duration\n  name: Duration\n  description: 2 years and 5 months\n  manifestation: This has been going on since the remodel uncovered that wasp nest, about two years and five months ago.\n\n[Patient Info]\n- demographics: Female / 57 / not_in_workforce / high_school\n- chief_complaint_symptom_code: S064\n\n[Dialogue History]\nDoctor: Hello, welcome in. Before we begin, can you tell me what brings you in to see me today?\n\nPatient: I'm here because I've gotten to the point where I plan my whole summer around avoiding wasps. It's just... it's too much. I even gave up my gardening jobs at the church because of it. And if I hear buzzing near the back porch, I make my husband unload everything from the car. I just can't be out there.\n\n[Last Question]\nHow long have you been dealing with this level of fear and avoidance around wasps?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 2\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key": "duration", "name": "Duration", "description": "2 years and 5 months", "reason": "The doctor's question 'How long have you been dealing with this level of fear and avoidance around wasps?' directly asks about the duration of the symptoms."}
+=====================================
+
+---------- turn 2 | patient:response | patient.build_response_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Specific Phobia, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\nDoctor: Hello, welcome in. Before we begin, can you tell me what brings you in to see me today?\n\nPatient: I'm here because I've gotten to the point where I plan my whole summer around avoiding wasps. It's just... it's too much. I even gave up my gardening jobs at the church because of it. And if I hear buzzing near the back porch, I make my husband unload everything from the car. I just can't be out there.\n\n[Last Question]\nHow long have you been dealing with this level of fear and avoidance around wasps?\n\n[Patient Info]\n- demographics: Female / 57 / not_in_workforce / high_school\n- severity: Moderate\n\n[Targeted Info]\nname: Duration\nmanifestation: \"This has been going on since the remodel uncovered that wasp nest, about two years and five months ago.\"\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+Well, it's been going on since the remodel on the house uncovered a wasp nest. That was... I'd say about two years and five months ago. It's just been like this ever since then.
+=====================================
+
+---------- turn 2 | doctor:inference | doctor.build_inference_prompt() | model=anthropic/claude-sonnet-5 ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n2\n\n[Previous Candidates]\nF40.218\n\n[Dialogue History]\nDoctor: Hello, welcome in. Before we begin, can you tell me what brings you in to see me today?\n\nPatient: I'm here because I've gotten to the point where I plan my whole summer around avoiding wasps. It's just... it's too much. I even gave up my gardening jobs at the church because of it. And if I hear buzzing near the back porch, I make my husband unload everything from the car. I just can't be out there.\n\nDoctor: How long have you been dealing with this level of fear and avoidance around wasps?\n\nPatient: Well, it's been going on since the remodel on the house uncovered a wasp nest. That was... I'd say about two years and five months ago. It's just been like this ever since then.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["F40.218"], "note": "", "is_final": false}
+=====================================
+
+---------- turn 2 | doctor:followup | doctor.build_questioning_prompt() | model=anthropic/claude-sonnet-5 ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n3\n\n[Current Candidates]\nF40.218\n\n[Dialogue History]\nDoctor: Hello, welcome in. Before we begin, can you tell me what brings you in to see me today?\n\nPatient: I'm here because I've gotten to the point where I plan my whole summer around avoiding wasps. It's just... it's too much. I even gave up my gardening jobs at the church because of it. And if I hear buzzing near the back porch, I make my husband unload everything from the car. I just can't be out there.\n\nDoctor: How long have you been dealing with this level of fear and avoidance around wasps?\n\nPatient: Well, it's been going on since the remodel on the house uncovered a wasp nest. That was... I'd say about two years and five months ago. It's just been like this ever since then.\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "Assess immediate physiological/panic response upon wasp exposure", "question": "When you actually see or hear a wasp nearby, what happens in your body—do you notice things like a racing heart, sweating, or shortness of breath?"}
+=====================================
+
+---------- turn 3 | patient:alignment | patient.build_alignment_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Specific Phobia. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S064\n  name: Phobic_Avoidance_Endure\n  description: The phobic object or situation is actively avoided or endured with intense fear or anxiety.\n  manifestation: I’m here because I’ve gotten to where I plan my whole summer around avoiding wasps, even giving up my garden jobs at church and making my husband unload things by the back porch if I hear buzzing.\n- key: S062\n  name: Specific_Phobic_Fear\n  description: Marked fear or anxiety about a specific object or situation that is out of proportion to the actual danger. (Note: In children, may be expressed by crying, tantrums, freezing, or clinging).\n  manifestation: I know a wasp is just a little insect and most folks would swat it away, but to me it feels like something terrible is about to happen if one gets anywhere near me.\n- key: S063\n  name: Immediate_Fear/Anxiety_Response\n  description: The phobic object or situation almost always provokes immediate fear or anxiety.\n  manifestation: The second I hear that sharp buzzing by the porch or see one hovering near the flowers, my heart jumps, my hands shake, and I feel like I have to get inside right away.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: I’ve had to step back from the church gardening group and stopped hosting garden days, which used to be a big part of how I stayed connected with people. At home, my husband has taken over porch and garden tasks I used to handle myself.\n- key: duration\n  name: Duration\n  description: 2 years and 5 months\n  manifestation: This has been going on since the remodel uncovered that wasp nest, about two years and five months ago.\n\n[Patient Info]\n- demographics: Female / 57 / not_in_workforce / high_school\n- chief_complaint_symptom_code: S064\n\n[Dialogue History]\nDoctor: Hello, welcome in. Before we begin, can you tell me what brings you in to see me today?\n\nPatient: I'm here because I've gotten to the point where I plan my whole summer around avoiding wasps. It's just... it's too much. I even gave up my gardening jobs at the church because of it. And if I hear buzzing near the back porch, I make my husband unload everything from the car. I just can't be out there.\n\nDoctor: How long have you been dealing with this level of fear and avoidance around wasps?\n\nPatient: Well, it's been going on since the remodel on the house uncovered a wasp nest. That was... I'd say about two years and five months ago. It's just been like this ever since then.\n\n[Last Question]\nWhen you actually see or hear a wasp nearby, what happens in your body—do you notice things like a racing heart, sweating, or shortness of breath?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 3\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key": "S063", "name": "Immediate_Fear/Anxiety_Response", "description": "The phobic object or situation almost always provokes immediate fear or anxiety.", "reason": "The doctor's question asks what happens in the patient's body (e.g., racing heart, sweating) immediately upon seeing or hearing a wasp, which corresponds to the immediate fear/anxiety response provoked by the phobic object."}
+=====================================
+
+---------- turn 3 | patient:response | patient.build_response_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Specific Phobia, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\nDoctor: Hello, welcome in. Before we begin, can you tell me what brings you in to see me today?\n\nPatient: I'm here because I've gotten to the point where I plan my whole summer around avoiding wasps. It's just... it's too much. I even gave up my gardening jobs at the church because of it. And if I hear buzzing near the back porch, I make my husband unload everything from the car. I just can't be out there.\n\nDoctor: How long have you been dealing with this level of fear and avoidance around wasps?\n\nPatient: Well, it's been going on since the remodel on the house uncovered a wasp nest. That was... I'd say about two years and five months ago. It's just been like this ever since then.\n\n[Last Question]\nWhen you actually see or hear a wasp nearby, what happens in your body—do you notice things like a racing heart, sweating, or shortness of breath?\n\n[Patient Info]\n- demographics: Female / 57 / not_in_workforce / high_school\n- severity: Moderate\n\n[Targeted Info]\nname: Immediate_Fear/Anxiety_Response\nmanifestation: \"The second I hear that sharp buzzing by the porch or see one hovering near the flowers, my heart jumps, my hands shake, and I feel like I have to get inside right away.\"\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+Yes, exactly. The second I hear that sharp buzzing by the porch, or if I see one hovering near the flowers... my heart just jumps right into my throat. My hands start shaking, and I just get this overwhelming feeling that I have to get inside right away. I just panic.
+=====================================
+
+---------- turn 3 | doctor:inference | doctor.build_inference_prompt() | model=anthropic/claude-sonnet-5 ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n3\n\n[Previous Candidates]\nF40.218\n\n[Dialogue History]\nDoctor: Hello, welcome in. Before we begin, can you tell me what brings you in to see me today?\n\nPatient: I'm here because I've gotten to the point where I plan my whole summer around avoiding wasps. It's just... it's too much. I even gave up my gardening jobs at the church because of it. And if I hear buzzing near the back porch, I make my husband unload everything from the car. I just can't be out there.\n\nDoctor: How long have you been dealing with this level of fear and avoidance around wasps?\n\nPatient: Well, it's been going on since the remodel on the house uncovered a wasp nest. That was... I'd say about two years and five months ago. It's just been like this ever since then.\n\nDoctor: When you actually see or hear a wasp nearby, what happens in your body—do you notice things like a racing heart, sweating, or shortness of breath?\n\nPatient: Yes, exactly. The second I hear that sharp buzzing by the porch, or if I see one hovering near the flowers... my heart just jumps right into my throat. My hands start shaking, and I just get this overwhelming feeling that I have to get inside right away. I just panic.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["F40.218"], "note": "Patient reports specific, situational fear of wasps with autonomic symptoms (racing heart, shaking, panic) triggered by exposure/anticipation, lasting >6 months (2.5 years), with significant avoidance behavior impacting functioning (giving up gardening). This is consistent with specific phobia, animal type (wasps). No new information contradicts this diagnosis; still need to confirm absence of broader anxiety/panic disorder features and rule out other conditions.", "is_final": false}
+=====================================
+
+---------- turn 3 | doctor:followup | doctor.build_questioning_prompt() | model=anthropic/claude-sonnet-5 ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n4\n\n[Current Candidates]\nF40.218\n\n[Dialogue History]\nDoctor: Hello, welcome in. Before we begin, can you tell me what brings you in to see me today?\n\nPatient: I'm here because I've gotten to the point where I plan my whole summer around avoiding wasps. It's just... it's too much. I even gave up my gardening jobs at the church because of it. And if I hear buzzing near the back porch, I make my husband unload everything from the car. I just can't be out there.\n\nDoctor: How long have you been dealing with this level of fear and avoidance around wasps?\n\nPatient: Well, it's been going on since the remodel on the house uncovered a wasp nest. That was... I'd say about two years and five months ago. It's just been like this ever since then.\n\nDoctor: When you actually see or hear a wasp nearby, what happens in your body—do you notice things like a racing heart, sweating, or shortness of breath?\n\nPatient: Yes, exactly. The second I hear that sharp buzzing by the porch, or if I see one hovering near the flowers... my heart just jumps right into my throat. My hands start shaking, and I just get this overwhelming feeling that I have to get inside right away. I just panic.\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "Determine whether the fear and avoidance are limited specifically to wasps/stinging insects, or whether similar anxiety occurs in other unrelated situations (to rule out broader anxiety disorder)", "question": "Aside from wasps or other stinging insects, do you experience this same kind of intense fear or panic in other situations that aren't related to insects?"}
+=====================================
+
+---------- turn 4 | patient:alignment | patient.build_alignment_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Specific Phobia. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S064\n  name: Phobic_Avoidance_Endure\n  description: The phobic object or situation is actively avoided or endured with intense fear or anxiety.\n  manifestation: I’m here because I’ve gotten to where I plan my whole summer around avoiding wasps, even giving up my garden jobs at church and making my husband unload things by the back porch if I hear buzzing.\n- key: S062\n  name: Specific_Phobic_Fear\n  description: Marked fear or anxiety about a specific object or situation that is out of proportion to the actual danger. (Note: In children, may be expressed by crying, tantrums, freezing, or clinging).\n  manifestation: I know a wasp is just a little insect and most folks would swat it away, but to me it feels like something terrible is about to happen if one gets anywhere near me.\n- key: S063\n  name: Immediate_Fear/Anxiety_Response\n  description: The phobic object or situation almost always provokes immediate fear or anxiety.\n  manifestation: The second I hear that sharp buzzing by the porch or see one hovering near the flowers, my heart jumps, my hands shake, and I feel like I have to get inside right away.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: I’ve had to step back from the church gardening group and stopped hosting garden days, which used to be a big part of how I stayed connected with people. At home, my husband has taken over porch and garden tasks I used to handle myself.\n- key: duration\n  name: Duration\n  description: 2 years and 5 months\n  manifestation: This has been going on since the remodel uncovered that wasp nest, about two years and five months ago.\n\n[Patient Info]\n- demographics: Female / 57 / not_in_workforce / high_school\n- chief_complaint_symptom_code: S064\n\n[Dialogue History]\nDoctor: Hello, welcome in. Before we begin, can you tell me what brings you in to see me today?\n\nPatient: I'm here because I've gotten to the point where I plan my whole summer around avoiding wasps. It's just... it's too much. I even gave up my gardening jobs at the church because of it. And if I hear buzzing near the back porch, I make my husband unload everything from the car. I just can't be out there.\n\nDoctor: How long have you been dealing with this level of fear and avoidance around wasps?\n\nPatient: Well, it's been going on since the remodel on the house uncovered a wasp nest. That was... I'd say about two years and five months ago. It's just been like this ever since then.\n\nDoctor: When you actually see or hear a wasp nearby, what happens in your body—do you notice things like a racing heart, sweating, or shortness of breath?\n\nPatient: Yes, exactly. The second I hear that sharp buzzing by the porch, or if I see one hovering near the flowers... my heart just jumps right into my throat. My hands start shaking, and I just get this overwhelming feeling that I have to get inside right away. I just panic.\n\n[Last Question]\nAside from wasps or other stinging insects, do you experience this same kind of intense fear or panic in other situations that aren't related to insects?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 4\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key": "None", "name": "None", "description": "None", "reason": "The doctor is asking if I experience intense fear or panic in other situations unrelated to insects, which is inquiring about other potential phobias or panic disorder. My symptom profile only covers my specific phobia of wasps (Specific_Phobic_Fear, Immediate_Fear/Anxiety_Response, Phobic_Avoidance_Endure, Functional Impairment, and Duration). None of these items address fear in other, unrelated situations."}
+=====================================
+
+---------- turn 4 | patient:response | patient.build_response_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Specific Phobia, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\nDoctor: Hello, welcome in. Before we begin, can you tell me what brings you in to see me today?\n\nPatient: I'm here because I've gotten to the point where I plan my whole summer around avoiding wasps. It's just... it's too much. I even gave up my gardening jobs at the church because of it. And if I hear buzzing near the back porch, I make my husband unload everything from the car. I just can't be out there.\n\nDoctor: How long have you been dealing with this level of fear and avoidance around wasps?\n\nPatient: Well, it's been going on since the remodel on the house uncovered a wasp nest. That was... I'd say about two years and five months ago. It's just been like this ever since then.\n\nDoctor: When you actually see or hear a wasp nearby, what happens in your body—do you notice things like a racing heart, sweating, or shortness of breath?\n\nPatient: Yes, exactly. The second I hear that sharp buzzing by the porch, or if I see one hovering near the flowers... my heart just jumps right into my throat. My hands start shaking, and I just get this overwhelming feeling that I have to get inside right away. I just panic.\n\n[Last Question]\nAside from wasps or other stinging insects, do you experience this same kind of intense fear or panic in other situations that aren't related to insects?\n\n[Patient Info]\n- demographics: Female / 57 / not_in_workforce / high_school\n- severity: Moderate\n\n[Targeted Info]\nNone\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+No, it's really just the wasps. I don't get that feeling with anything else. I mean, I don't like heights or speaking in front of people, but I don't panic or start shaking like I do with the wasps. It's just them.
+=====================================
+
+---------- turn 4 | doctor:inference | doctor.build_inference_prompt() | model=anthropic/claude-sonnet-5 ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n4\n\n[Previous Candidates]\nF40.218\n\n[Dialogue History]\nDoctor: Hello, welcome in. Before we begin, can you tell me what brings you in to see me today?\n\nPatient: I'm here because I've gotten to the point where I plan my whole summer around avoiding wasps. It's just... it's too much. I even gave up my gardening jobs at the church because of it. And if I hear buzzing near the back porch, I make my husband unload everything from the car. I just can't be out there.\n\nDoctor: How long have you been dealing with this level of fear and avoidance around wasps?\n\nPatient: Well, it's been going on since the remodel on the house uncovered a wasp nest. That was... I'd say about two years and five months ago. It's just been like this ever since then.\n\nDoctor: When you actually see or hear a wasp nearby, what happens in your body—do you notice things like a racing heart, sweating, or shortness of breath?\n\nPatient: Yes, exactly. The second I hear that sharp buzzing by the porch, or if I see one hovering near the flowers... my heart just jumps right into my throat. My hands start shaking, and I just get this overwhelming feeling that I have to get inside right away. I just panic.\n\nDoctor: Aside from wasps or other stinging insects, do you experience this same kind of intense fear or panic in other situations that aren't related to insects?\n\nPatient: No, it's really just the wasps. I don't get that feeling with anything else. I mean, I don't like heights or speaking in front of people, but I don't panic or start shaking like I do with the wasps. It's just them.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["F40.218"], "note": "Patient confirms fear is isolated to wasps/stinging insects only, with no panic response to other feared situations (heights, public speaking), ruling out broader anxiety disorders or other phobia subtypes. Physiological symptoms (tachycardia, trembling, urge to flee), avoidance behavior, and >6 month duration confirm specific phobia, animal subtype.", "is_final": true}
+=====================================
+
+---------- turn 4 | doctor:final | doctor.final_diagnosis_user_payload() | model=anthropic/claude-sonnet-5 ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the full interview transcript and the differential diagnosis candidates, write the final diagnosis report.\n\nBoth the \"diagnosis\" and \"candidates\" MUST be ICD-10 codes.\n\n[Field Instructions]\n- diagnosis: The single diagnosis code of ICD-10.\n- candidates: Top 2–3 differential candidates of ICD-10 codes considered until the end.\n- reason: Brief diagnostic rationale.\n- diagnostic_checklist: Structured evidence summary organized by diagnostic criterion type.\n  List only symptom groups that are relevant to your diagnosis, with the symptoms the patient actually confirmed.\n\nOutput Format (JSON only, no other text):\n{\n  \"diagnosis\": \"Final Diagnosis ICD-10 code\",\n  \"candidates\": [\"Disease Code1\", \"Disease Code2\"],\n  \"reason\": \"Brief diagnostic rationale.\",\n  \"diagnostic_checklist\": {\n    \"symptom_groups\": [\n      {\n        \"group\": \"clinical group name (e.g., inattention, manic_episode, psychotic_symptoms)\",\n        \"confirmed_symptoms\": [\"natural language description of each confirmed symptom in this group\"],\n        \"count\": <integer>\n      }\n    ],\n    \"duration_verified\": \"Description of how the duration criterion was established (e.g., 'symptoms present for over 6 months since childhood'), or null if not assessed.\",\n    \"functional_impairment\": <true if functional impairment was confirmed, false if denied, null if not assessed>,\n    \"traumatic_stressor\": <true if a qualifying traumatic stressor was confirmed, null if not applicable or not assessed>,\n    \"psychosocial_stressor\": <true if a qualifying psychosocial stressor was confirmed, null if not applicable or not assessed>,\n    \"additional_requirements\": [\"Each additional criterion that was explicitly verified during the interview (e.g., 'Onset prior to age 12 confirmed')\"]\n  }\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"F40.218\"]\n\nInterview Transcript: \nDoctor: Hello, welcome in. Before we begin, can you tell me what brings you in to see me today?\n\nPatient: I'm here because I've gotten to the point where I plan my whole summer around avoiding wasps. It's just... it's too much. I even gave up my gardening jobs at the church because of it. And if I hear buzzing near the back porch, I make my husband unload everything from the car. I just can't be out there.\n\nDoctor: How long have you been dealing with this level of fear and avoidance around wasps?\n\nPatient: Well, it's been going on since the remodel on the house uncovered a wasp nest. That was... I'd say about two years and five months ago. It's just been like this ever since then.\n\nDoctor: When you actually see or hear a wasp nearby, what happens in your body—do you notice things like a racing heart, sweating, or shortness of breath?\n\nPatient: Yes, exactly. The second I hear that sharp buzzing by the porch, or if I see one hovering near the flowers... my heart just jumps right into my throat. My hands start shaking, and I just get this overwhelming feeling that I have to get inside right away. I just panic.\n\nDoctor: Aside from wasps or other stinging insects, do you experience this same kind of intense fear or panic in other situations that aren't related to insects?\n\nPatient: No, it's really just the wasps. I don't get that feeling with anything else. I mean, I don't like heights or speaking in front of people, but I don't panic or start shaking like I do with the wasps. It's just them."
+  }
+]
+========== OUTPUT [doctor] ==========
+```json
+{
+  "diagnosis": "F40.218",
+  "candidates": ["F40.218", "F41.0", "F40.10"],
+  "reason": "The patient exhibits a marked, persistent, and excessive fear specifically triggered by wasps/stinging insects, with immediate physiological anxiety response (racing heart, shaking hands, panic) upon exposure to the cue (sight or sound of wasps). This fear leads to active avoidance behavior (quitting gardening, having husband unload the car) and is disproportionate to actual danger. The fear has persisted for over 2 years, is circumscribed to this specific stimulus (she denies similar panic with heights or public speaking, ruling out broader anxiety or social phobia), and causes clear functional impairment (loss of valued volunteer activity, lifestyle restriction). This presentation is consistent with a specific phobia, animal subtype (insects), rather than panic disorder (attacks are situationally bound, not spontaneous) or social anxiety disorder (no significant social fear reported).",
+  "diagnostic_checklist": {
+    "symptom_groups": [
+      {
+        "group": "specific_phobia_criteria",
+        "confirmed_symptoms": [
+          "Marked fear/anxiety about a specific object (wasps/stinging insects)",
+          "Immediate fear response upon exposure to the phobic stimulus (racing heart, shaking hands, panic)",
+          "Active avoidance of the stimulus (avoiding gardening, having husband unload car, avoiding porch)",
+          "Fear is out of proportion to actual danger posed by the situation",
+          "Fear is persistent, present for over 2 years",
+          "Fear causes significant functional impairment (gave up gardening/volunteer work at church)"
+        ],
+        "count": 6
+      },
+      {
+        "group": "differentiating_features",
+        "confirmed_symptoms": [
+          "Fear/panic response is limited to wasps and does not generalize to other stimuli or situations",
+          "Denies similar panic attacks with heights or public speaking (mild dislike only, not phobic level)",
+          "No mention of spontaneous, unexpected panic attacks unrelated to the insect trigger"
+        ],
+        "count": 3
+      }
+    ],
+    "duration_verified": "Symptoms have been present continuously for approximately 2 years and 5 months, since a wasp nest was uncovered during a home remodel.",
+    "functional_impairment": true,
+    "traumatic_stressor": true,
+    "psychosocial_stressor": null,
+    "additional_requirements": [
+      "Fear is cue-specific (wasps/stinging insects) and not part of a broader anxiety disorder",
+      "Avoidance behavior confirmed (giving up church gardening duties, requiring husband to unload car)",
+      "Onset linked to a specific precipitating event (discovery of wasp nest during remodel)"
+    ]
+  }
+}
+```
+=====================================
+

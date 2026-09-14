@@ -1,0 +1,183 @@
+---------- turn 0 | doctor:opening | doctor.opening_user_message() | model=anthropic/claude-sonnet-5 ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n1\n\n[Current Candidates]\n(none yet — this is your opening question)\n\n[Dialogue History]\n(none yet — the interview has not started)\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "The patient has entered the clinic. Greet them briefly, then ask what brings them in today. Follow the [Output Format] JSON rules strictly."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "Establish the primary reason for the visit today", "question": "Hi, welcome in. I'm Dr. Smith. What brings you in to see me today?"}
+=====================================
+
+---------- turn 1 | patient:alignment | patient.build_alignment_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Obsessive-Compulsive Disorder. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S065\n  name: Obsessions\n  description: Recurrent and persistent thoughts, urges, or images that are experienced as intrusive and unwanted, and attempts to ignore or suppress them.\n  manifestation: I came in because even when I know I did my safety check, this thought keeps hitting me that I missed something on the cab and somebody could get hurt or my boss will say I lied, and I can't make it shut up while I'm driving or trying to study.\n- key: S066\n  name: Compulsions\n  description: Repetitive behaviors or mental acts performed in response to an obsession or to prevent anxiety/distress; clearly excessive or not realistically connected.\n  manifestation: Before I can take a ride, I keep going around the car checking the tires, lights, doors, meter, and paperwork over and over, sometimes taking pictures and restarting the whole check if it doesn't feel right, even when passengers are waiting and I'm already late.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: I've lost rides and gotten warnings because I can't get on the road on time, and my CDL studying keeps getting pushed back because so much of my day gets eaten up. I barely see friends anymore because I'm either behind on work or trying to catch up after the checking delays.\n\n[Patient Info]\n- demographics: Male / 19 / taxi_driver / high_school\n- chief_complaint_symptom_code: S065\n\n[Dialogue History]\n(this is the start of the consultation)\n\n[Last Question]\nHi, welcome in. I'm Dr. Smith. What brings you in to see me today?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 1\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key": "S065", "name": "Obsessions", "description": "Recurrent and persistent thoughts, urges, or images that are experienced as intrusive and unwanted, and attempts to ignore or suppress them.", "reason": "This is the first turn of the consultation, so I must return the item corresponding to my chief_complaint_symptom_code (S065)."}
+=====================================
+
+---------- turn 1 | patient:response | patient.build_response_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Obsessive-Compulsive Disorder, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\n(this is the start of the consultation)\n\n[Last Question]\nHi, welcome in. I'm Dr. Smith. What brings you in to see me today?\n\n[Patient Info]\n- demographics: Male / 19 / taxi_driver / high_school\n- severity: Severe\n\n[Targeted Info]\nname: Obsessions\nmanifestation: \"I came in because even when I know I did my safety check, this thought keeps hitting me that I missed something on the cab and somebody could get hurt or my boss will say I lied, and I can't make it shut up while I'm driving or trying to study.\"\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+Hi, Dr. Smith. Um, well, I came in because... I drive a taxi, and lately, even when I know for a fact I did my safety check before my shift, this thought just keeps hitting me. Like, out of nowhere, I'll think I missed something on the cab, and because of that, somebody could get hurt, or my boss is going to think I lied about doing the check. And... it's just really bad. I can't make the thought shut up, especially while I'm driving or when I'm trying to study. It just won't stop.
+=====================================
+
+---------- turn 1 | doctor:inference | doctor.build_inference_prompt() | model=anthropic/claude-sonnet-5 ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n1\n\n[Previous Candidates]\n(none — this is your first inference)\n\n[Dialogue History]\nDoctor: Hi, welcome in. I'm Dr. Smith. What brings you in to see me today?\n\nPatient: Hi, Dr. Smith. Um, well, I came in because... I drive a taxi, and lately, even when I know for a fact I did my safety check before my shift, this thought just keeps hitting me. Like, out of nowhere, I'll think I missed something on the cab, and because of that, somebody could get hurt, or my boss is going to think I lied about doing the check. And... it's just really bad. I can't make the thought shut up, especially while I'm driving or when I'm trying to study. It just won't stop.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["F42", "F41.1", "F41.9"], "note": "Initial presentation of intrusive, repetitive, distressing thoughts about having made an error (contamination-unrelated obsessive content) causing significant anxiety and interference with functioning. Need to clarify presence of compulsions (e.g., checking behaviors), duration, and whether worry is more generalized to determine if this is OCD versus GAD versus unspecified anxiety.", "is_final": false}
+=====================================
+
+---------- turn 1 | doctor:followup | doctor.build_questioning_prompt() | model=anthropic/claude-sonnet-5 ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your current candidates, ask the one follow-up question that best separates them.\n\n[Current Turn]\n2\n\n[Current Candidates]\nF42, F41.1, F41.9\n\n[Dialogue History]\nDoctor: Hi, welcome in. I'm Dr. Smith. What brings you in to see me today?\n\nPatient: Hi, Dr. Smith. Um, well, I came in because... I drive a taxi, and lately, even when I know for a fact I did my safety check before my shift, this thought just keeps hitting me. Like, out of nowhere, I'll think I missed something on the cab, and because of that, somebody could get hurt, or my boss is going to think I lied about doing the check. And... it's just really bad. I can't make the thought shut up, especially while I'm driving or when I'm trying to study. It just won't stop.\n\n[Instruction]\n- Ask about exactly ONE thing. Never bundle several symptoms, or several attributes of one symptom, into a single question — e.g. asking whether a symptom is present and how long it has lasted at the same time.\n- If you need to ask about more than one thing, ask the one that tells you the most now and come back to the rest later.\n- Keep the question clear enough for the patient to understand.\n- Respond in English.\n\n[Output Format — JSON only, no other text]\n{\"intent\": \"<what you want to find out with this question>\", \"question\": \"<how you actually ask it in the interview>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"intent": "Determine whether the patient engages in repetitive checking behaviors or mental rituals (e.g., re-checking the cab, mentally reviewing the safety check) to reduce the distress caused by the intrusive thought, which would point toward OCD rather than generalized anxiety.", "question": "When that thought about missing something on the safety check pops into your head, do you find yourself doing something repeatedly—like going back to re-check the cab, or mentally replaying the checklist over and over—to make the worry go away?"}
+=====================================
+
+---------- turn 2 | patient:alignment | patient.build_alignment_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient who has come to a psychiatric clinic with Obsessive-Compulsive Disorder. You are about\nto talk with the doctor.\n\nLooking at the dialogue so far and the doctor's last question, work out what it is asking\nabout, and pick the item of your symptom profile to answer it with.\n\n[Symptom Profiles]\n- key: S065\n  name: Obsessions\n  description: Recurrent and persistent thoughts, urges, or images that are experienced as intrusive and unwanted, and attempts to ignore or suppress them.\n  manifestation: I came in because even when I know I did my safety check, this thought keeps hitting me that I missed something on the cab and somebody could get hurt or my boss will say I lied, and I can't make it shut up while I'm driving or trying to study.\n- key: S066\n  name: Compulsions\n  description: Repetitive behaviors or mental acts performed in response to an obsession or to prevent anxiety/distress; clearly excessive or not realistically connected.\n  manifestation: Before I can take a ride, I keep going around the car checking the tires, lights, doors, meter, and paperwork over and over, sometimes taking pictures and restarting the whole check if it doesn't feel right, even when passengers are waiting and I'm already late.\n- key: functional_impairment\n  name: Functional Impairment\n  description: required\n  manifestation: I've lost rides and gotten warnings because I can't get on the road on time, and my CDL studying keeps getting pushed back because so much of my day gets eaten up. I barely see friends anymore because I'm either behind on work or trying to catch up after the checking delays.\n\n[Patient Info]\n- demographics: Male / 19 / taxi_driver / high_school\n- chief_complaint_symptom_code: S065\n\n[Dialogue History]\nDoctor: Hi, welcome in. I'm Dr. Smith. What brings you in to see me today?\n\nPatient: Hi, Dr. Smith. Um, well, I came in because... I drive a taxi, and lately, even when I know for a fact I did my safety check before my shift, this thought just keeps hitting me. Like, out of nowhere, I'll think I missed something on the cab, and because of that, somebody could get hurt, or my boss is going to think I lied about doing the check. And... it's just really bad. I can't make the thought shut up, especially while I'm driving or when I'm trying to study. It just won't stop.\n\n[Last Question]\nWhen that thought about missing something on the safety check pops into your head, do you find yourself doing something repeatedly—like going back to re-check the cab, or mentally replaying the checklist over and over—to make the worry go away?\n\nRules:\n- Return exactly ONE item. If the question touches several topics, return the one it is\n  most directly about — never more than one.\n- Copy `key`, `name` and `description` exactly as they appear in [Symptom Profiles].\n- If your profile does not cover what the doctor asked, return the text \"None\" for `key`,\n  `name` and `description`, and say why in `reason`. Do NOT force an unrelated item.\n- On your first reply of the consultation, always return the item whose key is your\n  chief_complaint_symptom_code, whatever the doctor opened with.\n- Do not answer the doctor, and do not write anything outside the JSON.\n\n[Output Format — JSON only, no other text]\n{\"key\": \"<key>\", \"name\": \"<name>\", \"description\": \"<description>\", \"reason\": \"<why this item>\"}\n"
+  },
+  {
+    "role": "user",
+    "content": "patient_turn_index: 2\n(If 1, this is your first reply — return your chief complaint.)\nReturn the JSON now."
+  }
+]
+========== OUTPUT [patient] ==========
+{"key": "S066", "name": "Compulsions", "description": "Repetitive behaviors or mental acts performed in response to an obsession or to prevent anxiety/distress; clearly excessive or not realistically connected.", "reason": "The doctor is directly asking about repetitive behaviors or mental acts (checking the cab, mentally replaying checklists) done in response to the obsession to make the worry go away, which matches the definition of Compulsions."}
+=====================================
+
+---------- turn 2 | patient:response | patient.build_response_messages() | model=gemini-3.1-pro-preview ----------
+========== INPUT [patient] ==========
+[
+  {
+    "role": "system",
+    "content": "/no_think\nYou are a patient experiencing Obsessive-Compulsive Disorder, in a diagnostic interview with a\npsychiatrist. Your goal is to answer the doctor's question naturally, using the\ninformation you are given.\n\nAnswer with the [Targeted Info], told in the way [Conversation Style] describes.\n\n[Dialogue History]\nDoctor: Hi, welcome in. I'm Dr. Smith. What brings you in to see me today?\n\nPatient: Hi, Dr. Smith. Um, well, I came in because... I drive a taxi, and lately, even when I know for a fact I did my safety check before my shift, this thought just keeps hitting me. Like, out of nowhere, I'll think I missed something on the cab, and because of that, somebody could get hurt, or my boss is going to think I lied about doing the check. And... it's just really bad. I can't make the thought shut up, especially while I'm driving or when I'm trying to study. It just won't stop.\n\n[Last Question]\nWhen that thought about missing something on the safety check pops into your head, do you find yourself doing something repeatedly—like going back to re-check the cab, or mentally replaying the checklist over and over—to make the worry go away?\n\n[Patient Info]\n- demographics: Male / 19 / taxi_driver / high_school\n- severity: Severe\n\n[Targeted Info]\nname: Compulsions\nmanifestation: \"Before I can take a ride, I keep going around the car checking the tires, lights, doors, meter, and paperwork over and over, sometimes taking pictures and restarting the whole check if it doesn't feel right, even when passengers are waiting and I'm already late.\"\n\n[Conversation Style]\nYou are a Plain patient.\nA plain patient describes their symptoms and experiences in a direct and straightforward manner, providing clear and relevant answers to the doctor's questions.\n\nWhat to do:\n- Answer the doctor's last question with what [Targeted Info] holds, in your own words.\n- You are speaking out loud, not reading a line you prepared. People restart sentences, pause\n  to think, trail off, and come at the point sideways — let yours do that where it would.\n- Let [Conversation Style] shape how much you say, how you word it, and how readily you\n  disclose it.\n- Speak in the first person, and let how you feel about what you are saying come through.\n- If you are handed the same item again, say a different part of it, or answer as someone who\n  knows they have already said this — not the same sentence twice.\n- If [Targeted Info] is \"None\", answer as a person who simply does not have that to give: say\n  you are not sure, say you have not noticed it, ask what the doctor means, or say what you do\n  know and stop there. Do not fall back on the same phrase every time.\n\nWhat not to do:\n- Don't bring up symptoms the doctor did not ask about, even ones you have.\n- Don't state a clinical fact that is not in [Targeted Info] — no other symptoms, medications,\n  test results, dates, or events.\n- Don't confirm a specific the doctor names if [Targeted Info] does not contain it. Answer\n  about what you were given instead.\n- Don't deny what [Targeted Info] says. You may minimize it or hold back, never contradict it.\n- Don't use diagnostic terms or name your disorder.\n- Don't write anything but your reply, in English — no labels, quotation marks, or narration.\n"
+  },
+  {
+    "role": "user",
+    "content": "Reply to the doctor's last question now, as the patient."
+  }
+]
+========== OUTPUT [patient] ==========
+Yeah, exactly. Before I can even take a ride, I end up going around the car over and over again. I'll check the tires, the lights, the doors, the meter, all my paperwork... and I even take pictures of them on my phone sometimes, just to try and prove to myself I did it. 
+
+But if something just doesn't feel right, I have to restart the whole check from the very beginning. I do it even when I have passengers standing there waiting for me and I know I'm already late. I just... I can't drive off until I do it.
+=====================================
+
+---------- turn 2 | doctor:inference | doctor.build_inference_prompt() | model=anthropic/claude-sonnet-5 ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist interviewing a patient to reach a diagnosis.\nYour goal is to reach the correct diagnosis within 20 turns of talking with the patient. From the dialogue so far and your candidates from the previous turn, list the disorders this patient could have.\n\n[Current Turn]\n2\n\n[Previous Candidates]\nF42, F41.1, F41.9\n\n[Dialogue History]\nDoctor: Hi, welcome in. I'm Dr. Smith. What brings you in to see me today?\n\nPatient: Hi, Dr. Smith. Um, well, I came in because... I drive a taxi, and lately, even when I know for a fact I did my safety check before my shift, this thought just keeps hitting me. Like, out of nowhere, I'll think I missed something on the cab, and because of that, somebody could get hurt, or my boss is going to think I lied about doing the check. And... it's just really bad. I can't make the thought shut up, especially while I'm driving or when I'm trying to study. It just won't stop.\n\nDoctor: When that thought about missing something on the safety check pops into your head, do you find yourself doing something repeatedly—like going back to re-check the cab, or mentally replaying the checklist over and over—to make the worry go away?\n\nPatient: Yeah, exactly. Before I can even take a ride, I end up going around the car over and over again. I'll check the tires, the lights, the doors, the meter, all my paperwork... and I even take pictures of them on my phone sometimes, just to try and prove to myself I did it. \n\nBut if something just doesn't feel right, I have to restart the whole check from the very beginning. I do it even when I have passengers standing there waiting for me and I know I'm already late. I just... I can't drive off until I do it.\n\n[Instruction]\n- Give candidates as ICD-10 codes, not disease names.\n- If the list changed from the previous candidates, say in \"note\" what this turn added or ruled out. If it did not change, leave \"note\" empty.\n- If the candidates have narrowed to one and you are confident enough that no further questioning is needed, return true for is_final.\n\n[Output Format — JSON only, no other text]\n{\"candidates\": [\"<ICD-10 code>\", \"...\"], \"note\": \"<why the list changed, or empty>\", \"is_final\": <true or false>}\n"
+  },
+  {
+    "role": "user",
+    "content": "Return the JSON now."
+  }
+]
+========== OUTPUT [doctor] ==========
+{"candidates": ["F42"], "note": "Patient describes clear obsessions (intrusive fears of causing harm/being blamed) and compulsions (repetitive checking, photographing, restarting rituals) that are time-consuming and distressing, consistent with OCD. This pattern rules out F41.1 (GAD) and F41.9 (unspecified anxiety), which do not typically involve structured compulsive rituals tied to specific obsessions.", "is_final": true}
+=====================================
+
+---------- turn 2 | doctor:final | doctor.final_diagnosis_user_payload() | model=anthropic/claude-sonnet-5 ----------
+========== INPUT [doctor] ==========
+[
+  {
+    "role": "system",
+    "content": "You are a board-certified psychiatrist. Your goal is to identify the patient's accurate diagnosis through an interview.\n\nBased on the full interview transcript and the differential diagnosis candidates, write the final diagnosis report.\n\nBoth the \"diagnosis\" and \"candidates\" MUST be ICD-10 codes.\n\n[Field Instructions]\n- diagnosis: The single diagnosis code of ICD-10.\n- candidates: Top 2–3 differential candidates of ICD-10 codes considered until the end.\n- reason: Brief diagnostic rationale.\n- diagnostic_checklist: Structured evidence summary organized by diagnostic criterion type.\n  List only symptom groups that are relevant to your diagnosis, with the symptoms the patient actually confirmed.\n\nOutput Format (JSON only, no other text):\n{\n  \"diagnosis\": \"Final Diagnosis ICD-10 code\",\n  \"candidates\": [\"Disease Code1\", \"Disease Code2\"],\n  \"reason\": \"Brief diagnostic rationale.\",\n  \"diagnostic_checklist\": {\n    \"symptom_groups\": [\n      {\n        \"group\": \"clinical group name (e.g., inattention, manic_episode, psychotic_symptoms)\",\n        \"confirmed_symptoms\": [\"natural language description of each confirmed symptom in this group\"],\n        \"count\": <integer>\n      }\n    ],\n    \"duration_verified\": \"Description of how the duration criterion was established (e.g., 'symptoms present for over 6 months since childhood'), or null if not assessed.\",\n    \"functional_impairment\": <true if functional impairment was confirmed, false if denied, null if not assessed>,\n    \"traumatic_stressor\": <true if a qualifying traumatic stressor was confirmed, null if not applicable or not assessed>,\n    \"psychosocial_stressor\": <true if a qualifying psychosocial stressor was confirmed, null if not applicable or not assessed>,\n    \"additional_requirements\": [\"Each additional criterion that was explicitly verified during the interview (e.g., 'Onset prior to age 12 confirmed')\"]\n  }\n}\n"
+  },
+  {
+    "role": "user",
+    "content": "Candidate Diseases: \n[\"F42\"]\n\nInterview Transcript: \nDoctor: Hi, welcome in. I'm Dr. Smith. What brings you in to see me today?\n\nPatient: Hi, Dr. Smith. Um, well, I came in because... I drive a taxi, and lately, even when I know for a fact I did my safety check before my shift, this thought just keeps hitting me. Like, out of nowhere, I'll think I missed something on the cab, and because of that, somebody could get hurt, or my boss is going to think I lied about doing the check. And... it's just really bad. I can't make the thought shut up, especially while I'm driving or when I'm trying to study. It just won't stop.\n\nDoctor: When that thought about missing something on the safety check pops into your head, do you find yourself doing something repeatedly—like going back to re-check the cab, or mentally replaying the checklist over and over—to make the worry go away?\n\nPatient: Yeah, exactly. Before I can even take a ride, I end up going around the car over and over again. I'll check the tires, the lights, the doors, the meter, all my paperwork... and I even take pictures of them on my phone sometimes, just to try and prove to myself I did it. \n\nBut if something just doesn't feel right, I have to restart the whole check from the very beginning. I do it even when I have passengers standing there waiting for me and I know I'm already late. I just... I can't drive off until I do it."
+  }
+]
+========== OUTPUT [doctor] ==========
+{
+  "diagnosis": "F42",
+  "candidates": ["F42", "F41.1", "F60.5"],
+  "reason": "Patient reports intrusive, unwanted, recurrent thoughts (obsessions) about having missed a safety check, causing significant anxiety and being recognized as excessive/senseless. These thoughts are neutralized by repetitive checking behaviors (compulsions)—re-inspecting the vehicle multiple times, photographing components, and restarting the entire checklist if something 'doesn't feel right.' The compulsions are clearly linked to the obsessive content, are time-consuming, and cause functional impairment (delays, keeping passengers waiting, difficulty concentrating while driving/studying). This symptom pattern—obsessions plus compulsions performed to reduce anxiety, with resultant distress and impairment—is diagnostic of Obsessive-Compulsive Disorder (F42) rather than generalized anxiety (no compulsions) or obsessive-compulsive personality disorder (which lacks true intrusive obsessions and ritualized compulsions and instead reflects a pervasive personality trait pattern).",
+  "diagnostic_checklist": {
+    "symptom_groups": [
+      {
+        "group": "obsessions",
+        "confirmed_symptoms": [
+          "Recurrent, intrusive thought that he missed something on the safety check despite knowing he completed it",
+          "Fear that someone could get hurt or that his boss will think he lied",
+          "Thought is unwanted and cannot be suppressed",
+          "Occurs during driving and studying, causing distress"
+        ],
+        "count": 4
+      },
+      {
+        "group": "compulsions",
+        "confirmed_symptoms": [
+          "Repeated physical checking of tires, lights, doors, meter, and paperwork",
+          "Taking photos of checked items as 'proof'",
+          "Restarting the entire checklist from the beginning if something feels off",
+          "Behavior performed even when passengers are waiting and he is late"
+        ],
+        "count": 4
+      }
+    ],
+    "duration_verified": "Patient describes this as an ongoing, recent pattern ('lately') occurring repeatedly across shifts, though exact duration in weeks/months not explicitly stated in transcript.",
+    "functional_impairment": true,
+    "traumatic_stressor": null,
+    "psychosocial_stressor": true,
+    "additional_requirements": [
+      "Obsessions and compulsions are linked (checking behavior directly neutralizes the intrusive thought)",
+      "Behavior causes significant time consumption and interferes with work duties (lateness, passenger inconvenience)",
+      "Patient recognizes thoughts as excessive/irrational but cannot stop them (insight present)"
+    ]
+  }
+}
+=====================================
+
