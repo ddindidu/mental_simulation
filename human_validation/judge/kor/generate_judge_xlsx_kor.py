@@ -194,6 +194,14 @@ def write_section_header(ws, row, text):
     return row + 1
 
 
+def write_two_col_header(ws, row, left_text, right_text):
+    ws.cell(row=row, column=1, value=left_text).font = SECTION_FONT
+    ws.cell(row=row, column=2, value=right_text).font = SECTION_FONT
+    for col in (1, 2):
+        ws.cell(row=row, column=col).fill = SECTION_FILL
+    return row + 1
+
+
 def build_workbook(case: KoCaseData) -> Workbook:
     wb = Workbook()
     ws = wb.active
@@ -238,7 +246,7 @@ def build_workbook(case: KoCaseData) -> Workbook:
         row += 1
     row += 1
 
-    row = write_section_header(ws, row, "최종 진단 및 진단 체크리스트")
+    row = write_two_col_header(ws, row, "환자 증상 프로필", "최종 진단 및 진단 체크리스트")
     section_start_row = row
 
     checklist_cell = ws.cell(row=section_start_row, column=2, value=case.checklist_text_ko())
