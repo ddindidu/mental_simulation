@@ -9,6 +9,7 @@ disorder/symptom-name glossary come from pre-translated JSON produced by
 translation agents (see /tmp scratchpad — not part of the repo).
 """
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -25,6 +26,8 @@ TRANSLATED_DIR = Path(
 )
 OUT_DIR = Path(__file__).resolve().parent
 FONT_NAME = "Malgun Gothic"
+
+TIER_LABEL_RE = re.compile(r"(?:고확률|높은확률|중간확률|저확률):\s*")
 
 GLOSSARY = json.load(open(TRANSLATED_DIR / "_glossary_ko.json", encoding="utf-8"))
 DISORDERS_KO = GLOSSARY["disorders"]
@@ -75,6 +78,16 @@ class KoCaseData(CaseData):
         employment = parts[2].replace("_", " ") if len(parts) > 2 else ""
         education = EDUCATION_KO.get(parts[3], parts[3]) if len(parts) > 3 else ""
         additional = ", ".join(crit.get("additional_requirements", []) or [])
+
+        sampled_codes = feats.get("sampled_symptoms") or []
+        symptom_lines = []
+        for code in sampled_codes:
+            s = SYMPTOMS_KO.get(code)
+            if s:
+                symptom_lines.append(f"  - {code} {s['name']}: {s['description']}")
+            else:
+                symptom_lines.append(f"  - {code}")
+
         lines = [
             f"진단명: {dname_ko(cp.get('disease_code'))} ({cp.get('disease_code')})",
             f"인구통계: 성별 {gender} / 나이 {age} / 직업상태 {employment} / 최종학력 {education}",
@@ -85,6 +98,9 @@ class KoCaseData(CaseData):
             f"주호소 증상 코드: {pi.get('chief_complaint_symptom_code')}",
             "",
             f"배경 서술: {self.ko.get('stressor')}",
+            "",
+            "표집된 증상 목록:",
+            *symptom_lines,
         ]
         return "\n".join(str(l) for l in lines)
 
@@ -122,24 +138,32 @@ class KoCaseData(CaseData):
             f"({eff.get('final_diagnosis_id')}, ICD: {eff.get('final_diagnosis')})"
         )
 
-    def checklist_rows_ko(self):
+    @staticmethod
+    def _score_label_ko(value):
+        if value == 1.0:
+            return "있음"
+        if value == 0.0:
+            return "없음"
+        return str(value)
+
+    def checklist_text_ko(self):
         dr = self.diagnostic_reasoning
-        rows = [
-            f"지속 기간 요건 — 점수: {dr.get('duration_score')}",
-            f"기능적 손상 요건 — 점수: {dr.get('functional_impairment_score')}",
-            f"추가 요건 — 점수: {dr.get('additional_requirements_score')}",
+        parts = [
+            self.final_diagnosis_text_ko(),
+            f"지속 기간 요건: {self._score_label_ko(dr.get('duration_score'))}",
+            f"기능적 손상 요건: {self._score_label_ko(dr.get('functional_impairment_score'))}",
+            f"추가 요건: {self._score_label_ko(dr.get('additional_requirements_score'))}",
         ]
         for grp in dr.get("symptom_criterion_evaluations") or []:
-            matched = "; ".join(symptom_desc_ko(d) for d in (grp.get("matched_symptom_descriptions") or [])) or "(없음)"
-            missing = "; ".join(symptom_desc_ko(d) for d in (grp.get("missing_required_symptoms") or [])) or "(없음)"
-            rows.append(
+            matched_items = [symptom_desc_ko(d) for d in (grp.get("matched_symptom_descriptions") or [])]
+            matched = "\n".join(f"  - {d}" for d in matched_items) if matched_items else "  (없음)"
+            parts.append(
                 f"체크리스트 그룹: {grp.get('group')} "
                 f"(관계={grp.get('relation')}, 요구개수={grp.get('min_count_required')}, "
                 f"충족개수={grp.get('valid_symptom_count')}, 커버리지={grp.get('symptom_coverage_score')})\n"
-                f"  확인된 근거: {matched}\n"
-                f"  누락: {missing}"
+                f"확인된 근거:\n{matched}"
             )
-        return rows
+        return "\n\n".join(parts)
 
 
 METRIC_LABELS_KO = [
@@ -195,12 +219,6 @@ def build_workbook(case: KoCaseData) -> Workbook:
         row += 1
     row += 1
 
-    row = write_section_header(ws, row, "환자 프로필")
-    cell = ws.cell(row=row, column=1, value=case.patient_profile_text_ko())
-    cell.font = BODY_FONT
-    cell.alignment = WRAP_TOP
-    row += 2
-
     row = write_section_header(ws, row, "대화문")
     transcript_start_row = row
     for turn, question, response, candidates in case.turns_ko():
@@ -214,23 +232,27 @@ def build_workbook(case: KoCaseData) -> Workbook:
         c.alignment = WRAP_TOP
         row += 1
 
-        c = ws.cell(row=row, column=2, value=f"[{turn}번째 턴 · 의사의 감별진단] {candidates}")
+        c = ws.cell(row=row, column=2, value=f"[{turn}번째 턴 · 의사의 감별진단] {TIER_LABEL_RE.sub('', candidates)}")
         c.font = BODY_FONT
         c.alignment = WRAP_TOP
         row += 1
     row += 1
 
     row = write_section_header(ws, row, "최종 진단 및 진단 체크리스트")
-    c = ws.cell(row=row, column=1, value=case.final_diagnosis_text_ko())
-    c.font = LABEL_FONT
-    c.alignment = WRAP_TOP
-    row += 1
+    section_start_row = row
 
-    for entry in case.checklist_rows_ko():
-        c = ws.cell(row=row, column=1, value=entry)
-        c.font = BODY_FONT
-        c.alignment = WRAP_TOP
-        row += 1
+    checklist_cell = ws.cell(row=section_start_row, column=2, value=case.checklist_text_ko())
+    checklist_cell.font = BODY_FONT
+    checklist_cell.alignment = WRAP_TOP
+    section_end_row = section_start_row
+
+    profile_cell = ws.cell(row=section_start_row, column=1, value=case.patient_profile_text_ko())
+    profile_cell.font = BODY_FONT
+    profile_cell.alignment = WRAP_TOP
+    if section_end_row > section_start_row:
+        ws.merge_cells(start_row=section_start_row, start_column=1, end_row=section_end_row, end_column=1)
+
+    row = section_end_row + 1
 
     ws.freeze_panes = f"A{transcript_start_row}"
     return wb
