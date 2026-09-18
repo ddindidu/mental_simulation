@@ -56,7 +56,7 @@ MODELS = [
     "gemini-3.1-flash-lite",
     "gemini-3.5-flash",
     "gpt-5.4",
-    "gpt-5.4-mini-2026-03-17",
+    "gpt-5.6-luna",
     "llama-3.3-70b-instruct",
     "qwen3-235b-a22b-2507",
 ]
@@ -64,7 +64,7 @@ MODEL_LABELS = {
     "gemini-3.1-flash-lite":      "Gemini 3.1 Lite",
     "gemini-3.5-flash":           "Gemini 3.5 Flash",
     "gpt-5.4":                    "GPT-5.4",
-    "gpt-5.4-mini-2026-03-17":    "GPT-5.4 Mini",
+    "gpt-5.6-luna":               "GPT-5.6 Luna",
     "llama-3.3-70b-instruct":     "Llama 3.3 70B",
     "qwen3-235b-a22b-2507":       "Qwen3 235B",
 }

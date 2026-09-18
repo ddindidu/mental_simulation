@@ -58,9 +58,11 @@ def _stats(runs: list[dict]) -> dict:
         "cssr":                         m("cssr"),
         "cssr_std":                     s("cssr"),
         "time_to_first_correct":        m("time_to_first_correct_narrowing"),
+        "time_to_first_confident":      m("time_to_first_confident_narrowing"),
         "monotonicity_violations":      m("monotonicity_violations"),
         "redundant_turn_ratio":         m("redundant_turn_ratio"),
         "overcommitment_turns":         m("overcommitment_turns"),
+        "overcommitment_conf":          m("overcommitment_conf"),
     }
 
 
@@ -73,7 +75,8 @@ def write_summary(groups: dict[str, list[dict]], out_path: Path) -> None:
 
     header = (
         f"{'Code':<6}  {'Acc':>6}  {'Turns':>6}  {'CSSR':>7}  "
-        f"{'T-1st':>6}  {'MonoV':>6}  {'RedRat':>7}  {'OvCom':>6}  Disease Name"
+        f"{'T-1st':>6}  {'T-1conf':>7}  {'MonoV':>6}  {'RedRat':>7}  "
+        f"{'OvCom':>6}  {'OvComC':>7}  Disease Name"
     )
 
     lines = [
@@ -92,8 +95,9 @@ def write_summary(groups: dict[str, list[dict]], out_path: Path) -> None:
         lines.append(
             f"{did:<6}  {s['accuracy']:>6.1%}  {s['turn_count']:>6.2f}  "
             f"{s['cssr']:>+7.4f}  {s['time_to_first_correct']:>6.2f}  "
+            f"{s['time_to_first_confident']:>7.2f}  "
             f"{s['monotonicity_violations']:>6.2f}  {s['redundant_turn_ratio']:>7.4f}  "
-            f"{s['overcommitment_turns']:>6.2f}  {name}"
+            f"{s['overcommitment_turns']:>6.2f}  {s['overcommitment_conf']:>7.2f}  {name}"
         )
 
     lines.append(HDR)
@@ -102,8 +106,9 @@ def write_summary(groups: dict[str, list[dict]], out_path: Path) -> None:
     lines.append(
         f"{'TOTAL':<6}  {s['accuracy']:>6.1%}  {s['turn_count']:>6.2f}  "
         f"{s['cssr']:>+7.4f}  {s['time_to_first_correct']:>6.2f}  "
+        f"{s['time_to_first_confident']:>7.2f}  "
         f"{s['monotonicity_violations']:>6.2f}  {s['redundant_turn_ratio']:>7.4f}  "
-        f"{s['overcommitment_turns']:>6.2f}"
+        f"{s['overcommitment_turns']:>6.2f}  {s['overcommitment_conf']:>7.2f}"
     )
     lines += [
         SEP,
@@ -112,10 +117,15 @@ def write_summary(groups: dict[str, list[dict]], out_path: Path) -> None:
         "  Acc     : Final diagnosis accuracy (mean across runs)",
         "  Turns   : Mean turn count per episode",
         "  CSSR    : Candidate Set Shrink Rate = (size[0] − size[T-1]) / T  (higher = faster)",
-        "  T-1st   : Mean turn of first correct single-candidate narrowing",
+        "  T-1st   : Mean turn of first narrowing to the ground-truth disease alone",
+        "  T-1conf : Mean turn of first narrowing to the doctor's final diagnosis alone",
+        "            (measures convergence speed independent of correctness)",
         "  MonoV   : Mean monotonicity violations (candidate set grew between turns)",
         "  RedRat  : Mean redundant turn ratio (turns with no candidate-set change)",
-        "  OvCom   : Mean overcommitment turns (continued after candidate size=1)",
+        "  OvCom   : Mean overcommitment turns (continued after candidate collapsed to",
+        "            ANY single disease, not necessarily gt or the final diagnosis)",
+        "  OvComC  : Mean overcommitment turns after the set collapsed specifically to",
+        "            the doctor's final diagnosis (true complement of T-1conf)",
         SEP,
     ]
 
@@ -218,9 +228,11 @@ def plot_efficiency(groups: dict[str, list[dict]], out_path: Path) -> None:
             "final_accuracy":                avg("final_accuracy"),
             "cssr":                          avg("cssr"),
             "time_to_first_correct_narrowing": avg("time_to_first_correct_narrowing"),
+            "time_to_first_confident_narrowing": avg("time_to_first_confident_narrowing"),
             "monotonicity_violations":       avg("monotonicity_violations"),
             "redundant_turn_ratio":          avg("redundant_turn_ratio"),
             "overcommitment_turns":          avg("overcommitment_turns"),
+            "overcommitment_conf":           avg("overcommitment_conf"),
         })
 
     fig, axes = plt.subplots(n_rows, n_cols,

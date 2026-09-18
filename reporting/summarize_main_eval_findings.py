@@ -42,26 +42,33 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 from utils.paths import ANALYSIS_ROOT, LOGS_ROOT, RESULTS_ROOT
 
 MODEL_ORDER = [
-    "gemini-3.1-flash-lite",
-    "gemini-3.5-flash",
     "gpt-5.4",
-    "gpt-5.4-mini-2026-03-17",
+    "gpt-5.6-luna",
+    "gemini-3.5-flash",
+    "gemini-3.1-flash-lite",
+    "claude-sonnet-5",
+    "claude-haiku-4.5",
     "llama-3.3-70b-instruct",
     "qwen3-235b-a22b-2507",
 ]
 MODEL_LABELS = {
-    "gemini-3.1-flash-lite":   "Gemini 3.1 Lite",
-    "gemini-3.5-flash":        "Gemini 3.5 Flash",
     "gpt-5.4":                 "GPT-5.4",
-    "gpt-5.4-mini-2026-03-17": "GPT-5.4 Mini",
+    "gpt-5.6-luna": "GPT-5.6 Luna",
+    "gemini-3.5-flash":        "Gemini 3.5 Flash",
+    "gemini-3.1-flash-lite":   "Gemini 3.1 Lite",
+    "claude-sonnet-5":     "Claude Sonnet 5",
+    "claude-haiku-4.5":    "Claude Haiku 4.5",
     "llama-3.3-70b-instruct":  "Llama 3.3 70B",
     "qwen3-235b-a22b-2507":    "Qwen3 235B",
 }
+
 MODEL_COLORS = {
+    "gpt-5.4":                 "#C94040",
+    "gpt-5.6-luna": "#3AA89C",
     "gemini-3.1-flash-lite":   "#4580C4",
     "gemini-3.5-flash":        "#F07C35",
-    "gpt-5.4":                 "#C94040",
-    "gpt-5.4-mini-2026-03-17": "#3AA89C",
+    "claude-sonnet-5":     "#D9A03C",
+    "claude-haiku-4.5":    "#A0A0A0",   
     "llama-3.3-70b-instruct":  "#5BA04E",
     "qwen3-235b-a22b-2507":    "#9B6ABE",
 }
