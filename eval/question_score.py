@@ -288,34 +288,42 @@ class LLMJudgeMapper(QuestionSymptomMapper):
         "Output ONLY valid JSON — no explanation, no markdown."
     )
 
-    def __init__(self, max_tokens: int = 4096, prefilter_k: int = _LLM_PREFILTER_K):
+    def __init__(
+        self,
+        max_tokens: int = 4096,
+        prefilter_k: int = _LLM_PREFILTER_K,
+        cache: dict[str, list[str]] | None = None,
+    ):
         self.max_tokens = max_tokens
         self.prefilter_k = prefilter_k
+        # question_text -> symptom_ids. This judgment is a pure function of
+        # the question text and the (static) symptom catalogue — it does not
+        # depend on which episode/turn/patient the question came from, so a
+        # question seen before (even in a different run) never needs a fresh
+        # LLM call. Caller owns persistence (see evaluate_question.py); pass
+        # None to disable caching.
+        self._cache = cache
 
-    def map(self, question: str, all_symptoms: dict) -> list[str]:
-        # Step 1: cosine pre-filter to top-K candidates
+    def build_prompt(self, question: str, all_symptoms: dict) -> str:
+        """Pure function of (question, catalogue) — shared by the synchronous
+        .map() call and the batch path (evaluate_question_batch.py)."""
         top_ids = _cosine_prefilter.top_k(question, all_symptoms, k=self.prefilter_k)
         candidate_text = "\n".join(
             f"[{sid}] {all_symptoms[sid]['name']}: {all_symptoms[sid].get('description','')}"
             for sid in top_ids
         )
-        user_msg = (
+        return (
             f"DOCTOR'S QUESTION:\n{question}\n\n"
             f"CANDIDATE SYMPTOMS (top {self.prefilter_k} by semantic similarity):\n"
             f"{candidate_text}\n\n"
             f'Reply ONLY with JSON: {{"symptom_ids": ["S001", ...]}}\n'
             f"Include only IDs from the candidate list above that the question clearly targets."
         )
-        raw = _llm_chat(
-            [
-                {"role": "system", "content": self._SYSTEM},
-                {"role": "user",   "content": user_msg},
-            ],
-            max_new_tokens=self.max_tokens,
-            role="judge",
-            phase="question_symptom_map",
-            source="question_score.map",
-        ).strip()
+
+    @staticmethod
+    def parse_response(raw: str, all_symptoms: dict) -> list[str]:
+        """Pure function — shared by the sync and batch paths."""
+        raw = (raw or "").strip()
         raw = re.sub(r"^```[a-z]*\n?", "", raw)
         raw = re.sub(r"\n?```$",       "", raw)
         m = re.search(r"\{.*\}", raw, re.DOTALL)
@@ -327,6 +335,29 @@ class LLMJudgeMapper(QuestionSymptomMapper):
             return [s for s in ids if isinstance(s, str) and s in all_symptoms]
         except json.JSONDecodeError:
             return []
+
+    def map(self, question: str, all_symptoms: dict) -> list[str]:
+        if self._cache is not None and question in self._cache:
+            return self._cache[question]
+
+        user_msg = self.build_prompt(question, all_symptoms)
+        raw = _llm_chat(
+            [
+                {"role": "system", "content": self._SYSTEM},
+                {"role": "user",   "content": user_msg},
+            ],
+            max_new_tokens=self.max_tokens,
+            role="judge",
+            phase="question_symptom_map",
+            source="question_score.map",
+        )
+        result = self.parse_response(raw, all_symptoms)
+        if not result and not re.search(r"\{.*\}", (raw or ""), re.DOTALL):
+            return result  # parse miss — don't cache (see __init__ docstring)
+
+        if self._cache is not None:
+            self._cache[question] = result
+        return result
 
 
 class HybridMapper(QuestionSymptomMapper):

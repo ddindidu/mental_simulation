@@ -41,6 +41,8 @@ def _parse_args() -> argparse.Namespace:
                    help="Results dir (default: results/<run_dir>)")
     p.add_argument("--logs",    type=Path, default=None,
                    help="Logs dir (default: logs/<run_dir>)")
+    p.add_argument("--style", default=None,
+                   help="Only process logs whose filename ends in _<style> (e.g. 'plain').")
     return p.parse_args()
 
 
@@ -59,8 +61,14 @@ def _setup() -> tuple:
 
 # ── Log parsing ───────────────────────────────────────────────────────────────
 
-def _extract_final_doctor_block(log_file: Path) -> dict | None:
-    """Return parsed JSON from the last doctor OUTPUT block that contains 'diagnosis'."""
+def _extract_final_doctor_block_from_txt(log_file: Path) -> dict | None:
+    """Return parsed JSON from the last doctor OUTPUT block that contains 'diagnosis'.
+
+    .txt-only fallback for logs written before doctor.finalize_doctor_memory()
+    started persisting diagnostic_checklist into doctor_memory (see
+    _extract_final_doctor_block below) — those episodes have the checklist
+    only in the raw transcript, never in the .json log.
+    """
     text = log_file.read_text(encoding="utf-8")
     blocks = re.findall(
         r"={10} OUTPUT \[doctor\] ={10}\n(.*?)\n={37}",
@@ -87,6 +95,38 @@ def _extract_final_doctor_block(log_file: Path) -> dict | None:
                     pass
             continue
     return None
+
+
+def _extract_final_doctor_block(log_file: Path) -> dict | None:
+    """
+    Return the final diagnosis block ({diagnosis, candidates, reason,
+    diagnostic_checklist}) for one episode.
+
+    Reads doctor_memory.final_diagnosis from the .json log first. Falls back
+    to regex-parsing the .txt transcript's last doctor OUTPUT block only when
+    the .json's diagnostic_checklist is missing (logs written before
+    doctor.finalize_doctor_memory() started persisting it) — this keeps
+    pre-fix episodes scorable without needing a full resimulation.
+    """
+    json_path = log_file.with_suffix(".json")
+    final_diag: dict | None = None
+    if json_path.exists():
+        try:
+            data = json.loads(json_path.read_text(encoding="utf-8"))
+            final_diag = data.get("doctor_memory", {}).get("final_diagnosis")
+        except (json.JSONDecodeError, OSError):
+            final_diag = None
+
+    if final_diag and final_diag.get("diagnostic_checklist") is not None:
+        return final_diag
+
+    txt_path = log_file.with_suffix(".txt")
+    if txt_path.exists():
+        txt_block = _extract_final_doctor_block_from_txt(txt_path)
+        if txt_block is not None:
+            return txt_block
+
+    return final_diag
 
 
 def _gt_id(log_name: str) -> str | None:
@@ -190,35 +230,38 @@ def main() -> None:
     sym_names  = load_symptom_names()
 
     log_files = sorted(
-        logs_dir.glob("*.txt"),
+        logs_dir.glob("*.json"),
         key=lambda p: _log_sort_key(p.stem),
     )
+    if args.style:
+        log_files = [p for p in log_files if p.stem.endswith(f"_{args.style}")]
     if not log_files:
         print(f"No log files found in {logs_dir}", file=sys.stderr)
         sys.exit(1)
 
-    # Cache: a log's final doctor block never changes once written, so a
-    # previously-scored episode can be reused as-is — this avoids re-running
-    # the judge LLM call (judge_checklist) on episodes already scored in an
-    # earlier invocation of this script.
     out_path = results_dir / "diagnostic_reasoning_eval.json"
-    cached: dict[str, dict] = {}
-    if out_path.exists():
+
+    # Scalar cache: judge_checklist() only ever sees the doctor's own
+    # self-reported checklist text + the GT's non-symptom requirements — it
+    # never depends on the patient-side symptom extraction, so a
+    # (checklist, GT) pairing seen before never needs a fresh LLM call. Keyed
+    # by content hash (see score_diagnostic_reasoning._scalar_cache_key), not
+    # by log_file name — this is what makes it safe to reuse even after
+    # results/<log>_result.json changes (e.g. a symptom-extraction fix):
+    # every episode's algorithmic symptom-group score is recomputed fresh
+    # every run (it's free, no LLM), only the scalar LLM call is cached.
+    scalar_cache_path = results_dir / "diagnostic_reasoning_scalar_cache.json"
+    scalar_cache: dict[str, dict] = {}
+    if scalar_cache_path.exists():
         try:
-            cached = {e["log_file"]: e for e in json.loads(out_path.read_text(encoding="utf-8"))}
+            scalar_cache = json.loads(scalar_cache_path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
-            cached = {}
+            scalar_cache = {}
 
     episode_results: list[dict] = []
     skipped = 0
-    n_cached = 0
 
     for log_file in log_files:
-        if log_file.stem in cached:
-            episode_results.append(cached[log_file.stem])
-            n_cached += 1
-            continue
-
         gt = _gt_id(log_file.stem)
         if not gt:
             continue
@@ -252,6 +295,7 @@ def main() -> None:
             llm_chat              = _llm_chat,
             cumulative_confirmed  = final_confirmed,
             cumulative_denied     = final_denied,
+            scalar_cache          = scalar_cache,
         )
 
         episode_results.append({
@@ -289,8 +333,12 @@ def main() -> None:
         encoding="utf-8",
     )
     print(f"Saved → {out_path}")
-    if n_cached:
-        print(f"({n_cached} episodes reused from cache, no judge LLM call)")
+
+    scalar_cache_path.write_text(
+        json.dumps(scalar_cache, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    print(f"Saved scalar judge cache ({len(scalar_cache)} entries) → {scalar_cache_path}")
+
     if skipped:
         print(f"({skipped} episodes skipped)")
 

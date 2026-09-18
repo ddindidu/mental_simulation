@@ -33,6 +33,7 @@ Public API:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -312,18 +313,40 @@ def _format_doctor_checklist_scalar(doctor_checklist: dict | str | None) -> str:
     return "\n".join(parts) if parts else "(Empty checklist)"
 
 
+def _scalar_cache_key(doctor_text: str, gt_scalar_text: str) -> str:
+    h = hashlib.sha256()
+    h.update(doctor_text.encode("utf-8"))
+    h.update(b"\x00")
+    h.update(gt_scalar_text.encode("utf-8"))
+    return h.hexdigest()
+
+
 def judge_checklist(
     doctor_checklist: dict | str | None,
     gt_scalar_text: str,
     llm_chat: Callable,
+    cache: dict[str, dict] | None = None,
 ) -> dict:
     """
     Call the scalar-only LLM judge (duration / functional impairment /
     stressors / additional requirements); return parsed judgment dict (or
     error dict). `gt_scalar_text` must come from build_gt_scalar_text() —
     symptom-group text is no longer part of this judge's input.
+
+    `cache` is a pure-function cache keyed by a hash of (doctor's formatted
+    scalar checklist text, GT scalar text) — this judge call is entirely
+    about the doctor's own self-reported checklist, so it never depends on
+    the patient-side symptom extraction; a (checklist, GT) pairing seen
+    before never needs a fresh LLM call. Caller owns persistence; pass None
+    to disable caching. A parse-error result is never cached (so a transient
+    failure gets retried next time, not remembered as permanent).
     """
     doctor_text = _format_doctor_checklist_scalar(doctor_checklist)
+
+    cache_key = _scalar_cache_key(doctor_text, gt_scalar_text) if cache is not None else None
+    if cache_key is not None and cache_key in cache:
+        return cache[cache_key]
+
     user_msg = _JUDGE_TEMPLATE.format(gt_text=gt_scalar_text, doctor_text=doctor_text)
 
     messages = [
@@ -341,9 +364,13 @@ def judge_checklist(
     if not m:
         return {"_parse_error": True, "_raw": (raw or "")[:500]}
     try:
-        return json.loads(m.group())
+        result = json.loads(m.group())
     except json.JSONDecodeError:
         return {"_parse_error": True, "_raw": (raw or "")[:500]}
+
+    if cache_key is not None:
+        cache[cache_key] = result
+    return result
 
 
 # ── Scoring ───────────────────────────────────────────────────────────────────
@@ -511,6 +538,7 @@ def score_episode(
     llm_chat: Callable,
     cumulative_confirmed: set[str] | None = None,
     cumulative_denied: set[str] | None = None,
+    scalar_cache: dict[str, dict] | None = None,
 ) -> dict:
     """
     Full pipeline for one episode — HYBRID scoring:
@@ -535,7 +563,7 @@ def score_episode(
     )
 
     gt_scalar_text  = build_gt_scalar_text(disease_id, criteria)
-    scalar_judgment = judge_checklist(doctor_checklist, gt_scalar_text, llm_chat)
+    scalar_judgment = judge_checklist(doctor_checklist, gt_scalar_text, llm_chat, cache=scalar_cache)
 
     judgment = {**scalar_judgment, "criterion_evaluations": criterion_evaluations}
     scores   = compute_score(judgment, disease_id, criteria)

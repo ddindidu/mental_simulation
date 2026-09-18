@@ -49,33 +49,20 @@ def load_disorder_map() -> tuple[dict[str, str], dict[str, str]]:
 
 
 def extract_final_diagnosis(log_file: Path) -> str | None:
-    """Return the doctor's final diagnosis string, or None if missing."""
-    text = log_file.read_text(encoding="utf-8")
-    blocks = re.findall(
-        r"={10} OUTPUT \[doctor\] ={10}\n(.*?)\n={37}",
-        text,
-        re.DOTALL,
-    )
-    for b in reversed(blocks):  # final diagnosis is the last doctor block
-        b = b.strip()
-        # Strip markdown code fences if present (e.g. ```json ... ```)
-        b = re.sub(r"^```(?:json)?\s*", "", b)
-        b = re.sub(r"\s*```$", "", b).strip()
-        try:
-            parsed = json.loads(b)
-            if isinstance(parsed, dict) and "diagnosis" in parsed:
-                return str(parsed["diagnosis"]).strip()
-        except (json.JSONDecodeError, ValueError):
-            m = re.search(r"\{[\s\S]*\}", b)
-            if m:
-                try:
-                    parsed = json.loads(m.group())
-                    if isinstance(parsed, dict) and "diagnosis" in parsed:
-                        return str(parsed["diagnosis"]).strip()
-                except (json.JSONDecodeError, ValueError):
-                    pass
-            continue
-    return None
+    """Return the doctor's final diagnosis string, or None if missing.
+
+    Reads doctor_memory.final_diagnosis.diagnosis from the .json log — this
+    field has always been persisted there (profile_batch_worker.py's
+    json_log_data["final_diagnosis"] = fd.get("diagnosis", "")), unlike
+    diagnostic_checklist which only exists in the .json for post-fix runs.
+    """
+    json_path = log_file.with_suffix(".json")
+    try:
+        data = json.loads(json_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    diagnosis = str(data.get("final_diagnosis") or "").strip()
+    return diagnosis or None
 
 
 def ground_truth_id(log_name: str) -> str | None:
@@ -89,9 +76,19 @@ def _log_sort_key(name: str) -> tuple[int, int]:
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--style", default=None,
+        help="Only process logs whose filename ends in _<style> (e.g. 'plain').",
+    )
+    args = parser.parse_args()
+
     id2name, code2id = load_disorder_map()
 
-    log_files = sorted(LOGS_DIR.glob("*.txt"), key=lambda p: _log_sort_key(p.stem))
+    log_files = sorted(LOGS_DIR.glob("*.json"), key=lambda p: _log_sort_key(p.stem))
+    if args.style:
+        log_files = [p for p in log_files if p.stem.endswith(f"_{args.style}")]
     if not log_files:
         print(f"No log files in {LOGS_DIR}", file=sys.stderr)
         sys.exit(1)

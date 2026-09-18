@@ -8,10 +8,19 @@ Metrics per episode (computed from the KG-deterministic CandidateSet sizes):
   cssr                         : (size[0] − size[T-1]) / T
   time_to_first_correct_narrowing : first turn where the reference candidate set
                                      (high|moderate|low) has collapsed to exactly {gt}
-                                     (true complement of overcommitment_turns)
+  time_to_first_confident_narrowing : first turn where the reference candidate set
+                                     has collapsed to exactly {final_diagnosis}, regardless
+                                     of correctness — measures convergence speed independent
+                                     of final_accuracy
   monotonicity_violations      : turns where ref candidate set grew
   redundant_turn_ratio         : fraction of consecutive turns with no candidate set change
-  overcommitment_turns         : turns after first size-1 collapse until episode end
+  overcommitment_turns         : turns after first size-1 collapse (to ANY single
+                                     candidate, not necessarily gt or final_diagnosis)
+                                     until episode end
+  overcommitment_conf          : turns after the set collapses specifically to
+                                     {final_diagnosis} until episode end — true complement
+                                     of time_to_first_confident_narrowing (turn_count ==
+                                     ttfin + overcommitment_conf whenever ttfin is reached)
 
 Requires result JSONs produced by symptom_diagnosis.py (with candidate_set per turn).
 
@@ -78,30 +87,14 @@ def _log_sort_key(name: str) -> tuple[int, int]:
 
 
 def _extract_final_diagnosis(log_file: Path) -> str:
-    text = log_file.read_text(encoding="utf-8")
-    blocks = re.findall(
-        r"={10} OUTPUT \[doctor\] ={10}\n(.*?)\n={37}", text, re.DOTALL
-    )
-    for b in reversed(blocks):
-        b = b.strip()
-        # Strip markdown code fences if present (e.g. ```json ... ```)
-        b = re.sub(r"^```(?:json)?\s*", "", b)
-        b = re.sub(r"\s*```$", "", b).strip()
-        try:
-            p = json.loads(b)
-            if isinstance(p, dict) and "diagnosis" in p:
-                return str(p["diagnosis"]).strip()
-        except (json.JSONDecodeError, ValueError):
-            m = re.search(r"\{[\s\S]*\}", b)
-            if m:
-                try:
-                    p = json.loads(m.group())
-                    if isinstance(p, dict) and "diagnosis" in p:
-                        return str(p["diagnosis"]).strip()
-                except (json.JSONDecodeError, ValueError):
-                    pass
-            continue
-    return ""
+    """Read doctor_memory.final_diagnosis.diagnosis from the .json log — always
+    present there (profile_batch_worker.py persists it unconditionally)."""
+    json_path = log_file.with_suffix(".json")
+    try:
+        data = json.loads(json_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return ""
+    return str(data.get("final_diagnosis") or "").strip()
 
 
 def score_efficiency_episode(
@@ -131,6 +124,18 @@ def score_efficiency_episode(
             ttfcn = i + 1  # 1-indexed
             break
 
+    # time_to_first_confident_narrowing: first turn where the reference candidate
+    # set has collapsed to exactly {final_diagnosis_id}, i.e. the disease the doctor
+    # actually settled on — regardless of whether that diagnosis is correct.
+    # Isolates convergence speed from final_accuracy (unlike ttfcn, this is never
+    # driven to the sentinel purely by an incorrect final diagnosis).
+    ttfin = T + 1  # sentinel: never reached
+    if final_diagnosis_id:
+        for i, ids in enumerate(all_candidates_per_turn):
+            if ids == {final_diagnosis_id}:
+                ttfin = i + 1  # 1-indexed
+                break
+
     # monotonicity_violations: turns where size grew
     mono_violations = sum(
         1 for i in range(1, T) if candidate_sizes[i] > candidate_sizes[i - 1]
@@ -152,14 +157,23 @@ def score_efficiency_episode(
     else:
         overcommitment_turns = (T - 1) - first_size_one
 
+    # overcommitment_conf: turns AFTER the candidate set collapses to exactly
+    # {final_diagnosis_id} (ttfin), before end — the true complement of
+    # time_to_first_confident_narrowing (turn_count == ttfin + overcommitment_conf
+    # whenever ttfin is reached). 0 if never reached (ttfin stayed at sentinel),
+    # same convention as overcommitment_turns.
+    overcommitment_conf = 0 if ttfin > T else T - ttfin
+
     return {
         "final_accuracy":                  final_accuracy,
         "turn_count":                       T,
         "cssr":                             round(cssr, 4),
         "time_to_first_correct_narrowing":  ttfcn,
+        "time_to_first_confident_narrowing": ttfin,
         "monotonicity_violations":          mono_violations,
         "redundant_turn_ratio":             round(redundant_turn_ratio, 4),
         "overcommitment_turns":             overcommitment_turns,
+        "overcommitment_conf":              overcommitment_conf,
     }
 
 
@@ -182,7 +196,7 @@ def evaluate() -> list[dict]:
     for res_path in result_paths:
         result   = json.loads(res_path.read_text(encoding="utf-8"))
         log_name = result["log_file"]
-        log_file = LOGS_DIR / f"{log_name}.txt"
+        log_file = LOGS_DIR / f"{log_name}.json"
 
         gt_m = re.match(r"(D\d+)", log_name)
         if not gt_m:
@@ -259,9 +273,11 @@ def _print_summary(aggregate: dict[str, list], episode_results: list[dict]) -> N
         ("turn_count",                     "Mean Turn Count"),
         ("cssr",                           "CSSR (Candidate Shrinkage Rate)"),
         ("time_to_first_correct_narrowing","Time to First Correct Narrowing"),
+        ("time_to_first_confident_narrowing","Time to First Confident Narrowing"),
         ("monotonicity_violations",        "Monotonicity Violations (mean)"),
         ("redundant_turn_ratio",           "Redundant Turn Ratio"),
         ("overcommitment_turns",           "Overcommitment Turns (mean)"),
+        ("overcommitment_conf",            "Overcommitment Turns, Confidence-based (mean)"),
     ]
 
     print("\n=== Efficiency Evaluation Summary ===")

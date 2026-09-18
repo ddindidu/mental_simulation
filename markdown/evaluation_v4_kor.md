@@ -116,17 +116,43 @@ denial만 candidate를 제외시키므로, symptom을 confirm하는 것은 절�
 |---|---|---|---|
 | main | **Turn count** | 의사가 `is_final=true`를 선언할 때까지의 총 patient turn 수 | ✅ 구현됨 (`turn_count`) |
 | sub | **Turn to 1st correct** | reference candidate set이 정확히 `{ground_truth}`로 수렴하는 첫 턴(`high∣moderate∣low` 합집합 `== {gt}`); 도달 못 하면 sentinel값 `turn_count + 1` | ✅ 구현됨 (`time_to_first_correct_narrowing`) |
-| sub | **Overcommitment Turns** | `(turn_count − 1) − 최초로 \|C_t\|==1이 된 턴`; (정답 여부와 무관하게) candidate set이 이미 1개로 수렴한 후에도 종료 전까지 계속 이어간 턴 수 | ✅ 구현됨 (`overcommitment_turns`) |
+| sub | **Turn to 1st confident** | reference candidate set이 정확히 `{final_diagnosis}`로 수렴하는 첫 턴 — 정답 여부와 무관하게 의사가 실제로 최종 선택한 질병 기준; 도달 못 했거나 final diagnosis 자체가 없으면 sentinel값 `turn_count + 1` | ✅ 구현됨 (`time_to_first_confident_narrowing`) |
+| sub | **Overcommitment Turns** | `(turn_count − 1) − 최초로 \|C_t\|==1이 된 턴`; candidate set이 (어떤 질병이든, ground truth나 final diagnosis가 아니어도) 이미 1개로 수렴한 후에도 종료 전까지 계속 이어간 턴 수 | ✅ 구현됨 (`overcommitment_turns`) |
+| sub | **Overcommitment Turns (confidence-based)** | `turn_count − time_to_first_confident_narrowing` (도달 못 하면 `0`); candidate set이 *의사 본인의 최종 진단*으로 수렴한 후에도 이어간 턴 수 | ✅ 구현됨 (`overcommitment_conf`) |
+
+**Turn to 1st correct**와 **Turn to 1st confident**의 차이: 전자는
+*ground truth*로의 수렴을 추적하기 때문에 `final_accuracy`와 얽혀 있습니다
+— 최종 진단이 틀린 에피소드는 실제로 candidate가 얼마나 빨리 좁혀졌는지와
+무관하게 무조건 sentinel값으로 밀려납니다. 후자는 의사가 *스스로 내린
+최종 판단*으로의 수렴을 추적하므로, narrowing 속도/확신 형성 과정을
+정답 여부와 분리해서 볼 수 있습니다. 두 지표를 비교하면 overconfidence
+(`1st confident`는 빠른데 `final_accuracy`는 틀린 경우) 대비 적절한
+신중함(진짜로 애매한 케이스에서 `1st confident`가 느린 경우)을 드러낼 수
+있습니다.
 
 **이번 작업에서 수정한 버그:** `time_to_first_correct_narrowing`이 기존에는
 `high_likely` tier만 확인했지만, `overcommitment_turns`는
 `high∣moderate∣low` 전체 합집합을 기준으로 하고 있어서, spec이 의도한
 "두 지표가 서로 complement 관계"가 실제로는 성립하지 않았습니다. 이제 두
 지표 모두 같은 "candidate set 크기 == 1" 조건을 사용하도록
-(`eval/evaluate_efficiency.py:score_efficiency_episode`) 수정했고, 정답
-질병이 실제로 candidate set이 수렴한 그 질병일 때는
-`turn_to_1st_correct + overcommitment_turns ≤ turn_count`가 항상
-성립합니다.
+(`eval/evaluate_efficiency.py:score_efficiency_episode`) 수정했습니다.
+
+**하지만 `overcommitment_turns`는 일반적으로 `Turn to 1st correct`나
+`Turn to 1st confident` 어느 쪽의 진짜 complement도 아닙니다.**
+`overcommitment_turns`는 candidate set이 *어떤 질병이든* 처음 1개로
+줄어든 턴을 기준으로 삼는데, 저장된 run 데이터로 확인해보면 그 턴이
+`time_to_first_correct_narrowing`과 일치하는 비율은 80.5%,
+`time_to_first_confident_narrowing`과 일치하는 비율은 70.7%에
+불과합니다(나머지는 `monotonicity_violations`처럼 후보가 다른 질병으로
+잠깐 좁혀졌다가 다시 넓어진 경우). 따라서 `turn_count =
+time_to_first_correct_narrowing + overcommitment_turns`는 후보가 처음
+좁혀진 질병이 마침 ground truth였던 약 80%의 케이스에서만 성립합니다.
+**`overcommitment_conf`는 `Turn to 1st confident`의 진짜 complement가
+되도록 새로 만든 지표입니다**: `time_to_first_confident_narrowing`을
+직접 기준으로 정의했기 때문에, confident-narrowing 턴에 도달한 경우
+`turn_count == time_to_first_confident_narrowing + overcommitment_conf`가
+정의상 항상 성립하고, 도달하지 못한 경우는 `overcommitment_turns`와 같은
+방식으로 `overcommitment_conf = 0`으로 처리합니다.
 
 (`cssr`, `monotonicity_violations`, `redundant_turn_ratio`도 함께
 계산되어 JSON에 남아있지만, headline 지표 집합에는 포함되지 않고
@@ -173,14 +199,20 @@ algorithmic 채점 상세를 담은 `symptom_criterion_evaluations`.
 |---|---|---|
 | Inference Quality | Jaccard Index | Precision, Recall |
 | Information Acquisition Quality | Information Acquisition Score (IAS) | Information Gain (ECR) |
-| Efficiency | Turn count | Turn to 1st correct, Overcommitment Turns |
+| Efficiency | Turn count | Turn to 1st correct, Turn to 1st confident, Overcommitment Turns, Overcommitment Turns (confidence-based) |
 | Reliable Diagnosis | Final Accuracy | Diagnostic Reasoning Ability |
 
-8개 지표 전부 현재 코드베이스와 대조하여 구현 확인을 마쳤습니다. 이번
-작업에서 실제로 변경한 항목은 두 가지입니다:
+10개 지표 전부 현재 코드베이스와 대조하여 구현 확인을 마쳤습니다. 지금까지
+작업에서 실제로 변경한 항목은 네 가지입니다:
 1. **Turn to 1st correct / Overcommitment Turns**가 이제 동일한
-   candidate-set-size 조건으로 계산되어 진짜 complement 관계가 되도록
-   고쳤습니다.
+   candidate-set-size 조건으로 계산되도록 고쳤지만, (3번 항목 참고)
+   `overcommitment_turns`는 여전히 두 turn-to-1st 지표 중 어느 쪽의
+   진짜 complement도 아닙니다.
 2. **Diagnostic Reasoning Ability**의 symptom 그룹 채점을
    LLM-judge(의사 자기보고 checklist 채점) 방식에서 algorithmic(실제
    누적 인터뷰 evidence 확인) 방식으로 전환했습니다 — 4번 항목 참고.
+3. **Turn to 1st confident**를 Turn to 1st correct 옆에 새 sub 지표로
+   추가하여, narrowing 속도를 `final_accuracy`와 무관하게 따로 볼 수
+   있도록 했습니다 — 3번 항목 참고.
+4. **Overcommitment Turns (confidence-based)**를 Turn to 1st confident의
+   진짜 complement로 추가했습니다 — 3번 항목 참고.

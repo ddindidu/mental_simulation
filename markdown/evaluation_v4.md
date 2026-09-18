@@ -113,15 +113,43 @@ Per-episode, from the per-turn candidate-set sizes. `eval/evaluate_efficiency.py
 |---|---|---|---|
 | main | **Turn count** | total patient turns until the doctor declares `is_final=true` | ✅ implemented (`turn_count`) |
 | sub | **Turn to 1st correct** | first turn where the reference candidate set collapses to exactly `{ground_truth}` (`high∣moderate∣low` union `== {gt}`); sentinel `turn_count + 1` if never reached | ✅ implemented (`time_to_first_correct_narrowing`) |
-| sub | **Overcommitment Turns** | `(turn_count − 1) − first_turn_where_|C_t|==1`; turns spent continuing after the candidate set (regardless of correctness) already collapsed to one, before ending | ✅ implemented (`overcommitment_turns`) |
+| sub | **Turn to 1st confident** | first turn where the reference candidate set collapses to exactly `{final_diagnosis}` — the disease the doctor actually settled on, regardless of whether it's correct; sentinel `turn_count + 1` if never reached or no final diagnosis | ✅ implemented (`time_to_first_confident_narrowing`) |
+| sub | **Overcommitment Turns** | `(turn_count − 1) − first_turn_where_|C_t|==1`; turns spent continuing after the candidate set collapsed to size 1 *(to whichever single disease that happened to be — not necessarily the ground truth or the final diagnosis)*, before ending | ✅ implemented (`overcommitment_turns`) |
+| sub | **Overcommitment Turns (confidence-based)** | `turn_count − time_to_first_confident_narrowing`, or `0` if never reached; turns spent continuing *after the candidate set collapsed specifically to the doctor's own final diagnosis* | ✅ implemented (`overcommitment_conf`) |
+
+**Turn to 1st correct** vs **Turn to 1st confident**: the former tracks
+convergence onto the *ground truth*, so it is entangled with
+`final_accuracy` — an episode with a wrong final diagnosis is driven to the
+sentinel regardless of how quickly candidates actually narrowed. The latter
+tracks convergence onto the doctor's *own final call*, isolating narrowing
+speed / confidence-formation from correctness. Comparing the two surfaces
+overconfidence (fast `1st confident`, wrong `final_accuracy`) vs.
+appropriate caution (slow `1st confident` when the case is genuinely
+ambiguous).
 
 **Fix applied in this pass:** `time_to_first_correct_narrowing` previously
 checked the `high_likely` tier only, while `overcommitment_turns` checked
 the full `high∣moderate∣low` union — they weren't true complements as the
 spec intends. Both now use the same "candidate-set size == 1" condition
-(`eval/evaluate_efficiency.py:score_efficiency_episode`), so
-`turn_to_1st_correct + overcommitment_turns ≤ turn_count` holds whenever the
-correct disease is the one the set collapses to.
+(`eval/evaluate_efficiency.py:score_efficiency_episode`).
+
+**`overcommitment_turns` is not the true complement of either `Turn to 1st
+correct` or `Turn to 1st confident`, in general.** `overcommitment_turns`
+anchors on the *first* turn the candidate set reaches size 1, regardless of
+which disease that is — measured against saved run data, that turn matches
+`time_to_first_correct_narrowing` only 80.5% of the time and
+`time_to_first_confident_narrowing` only 70.7% of the time (the rest are
+episodes where the set briefly collapsed to some other disease before
+widening again, per `monotonicity_violations`). `turn_count =
+time_to_first_correct_narrowing + overcommitment_turns` therefore only
+holds in the ~80% of cases where the disease the set first collapses to
+happens to be the ground truth. **`overcommitment_conf` is the metric
+purpose-built to be the true complement of `Turn to 1st confident`**: since
+it is defined directly off `time_to_first_confident_narrowing`,
+`turn_count == time_to_first_confident_narrowing + overcommitment_conf`
+holds by construction whenever the confident-narrowing turn is reached (and
+`overcommitment_conf = 0` when it is not, matching `overcommitment_turns`'s
+convention for the unreached case).
 
 (`cssr`, `monotonicity_violations`, `redundant_turn_ratio` are also computed
 and retained in the JSON as supporting ablation metrics, not part of this
@@ -168,13 +196,19 @@ algorithmic per-group detail) for debugging.
 |---|---|---|
 | Inference Quality | Jaccard Index | Precision, Recall |
 | Information Acquisition Quality | Information Acquisition Score (IAS) | Information Gain (ECR) |
-| Efficiency | Turn count | Turn to 1st correct, Overcommitment Turns |
+| Efficiency | Turn count | Turn to 1st correct, Turn to 1st confident, Overcommitment Turns, Overcommitment Turns (confidence-based) |
 | Reliable Diagnosis | Final Accuracy | Diagnostic Reasoning Ability |
 
-All eight metrics are implemented and verified against the current
-codebase as of this pass. Two changes made in this pass:
+All ten metrics are implemented and verified against the current
+codebase as of this pass. Changes made across passes:
 1. **Turn to 1st correct / Overcommitment Turns** are now computed off the
-   same candidate-set-size condition so they are true complements.
+   same candidate-set-size condition, though (per §3) `overcommitment_turns`
+   still isn't a true complement of either turn-to-1st metric in general.
 2. **Diagnostic Reasoning Ability** symptom-group scoring switched from
    LLM-judged (grading the doctor's self-reported checklist) to algorithmic
    (checking actual cumulative interview evidence) — see §4.
+3. **Turn to 1st confident** added as a new sub-metric alongside Turn to
+   1st correct, so narrowing speed can be read independent of
+   `final_accuracy` — see §3.
+4. **Overcommitment Turns (confidence-based)** added as the true complement
+   of Turn to 1st confident — see §3.

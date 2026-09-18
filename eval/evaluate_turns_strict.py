@@ -80,53 +80,34 @@ def _code_to_id() -> dict[str, str]:
 
 
 # ── Log parsing ──────────────────────────────────────────────────────────────
+#
+# Reads the structured .json simulation log's doctor_memory.turns instead of
+# regex-parsing the .txt transcript — see symptom_diagnosis.py's log-parsing
+# section for the turn-slot schema (each slot pairs, for the same turn
+# number, the doctor's question + inference candidates with the patient's
+# alignment/response).
 
 def parse_dialogue(log_file: Path) -> tuple[list[tuple[str, str]], list[list[str]]]:
     """Return ([(doctor_question, patient_response), ...], doctor_candidates_per_turn)."""
-    text = log_file.read_text(encoding="utf-8")
-
-    doc_blocks = re.findall(
-        r"={10} OUTPUT \[doctor\] ={10}\n(.*?)\n={37}",
-        text, re.DOTALL,
-    )
-    pat_blocks = re.findall(
-        r"={10} OUTPUT \[patient\] ={10}\n(.*?)\n={37}",
-        text, re.DOTALL,
+    json_path = log_file.with_suffix(".json")
+    data = json.loads(json_path.read_text(encoding="utf-8"))
+    turns = sorted(
+        data.get("doctor_memory", {}).get("turns", []),
+        key=lambda t: t.get("turn", 0),
     )
 
-    # Extract doctor questions (has 'question' key) and inference blocks
     questions: list[str] = []
-    candidates_per_turn: list[list[str]] = []
-    for b in doc_blocks:
-        b = b.strip()
-        try:
-            p = json.loads(b)
-            if isinstance(p, dict) and "question" in p:
-                questions.append(p["question"])
-            elif (
-                isinstance(p, dict)
-                and "candidates" in p
-                and "note" in p
-                and "diagnosis" not in p
-            ):
-                candidates_per_turn.append(p["candidates"])
-        except (json.JSONDecodeError, ValueError):
-            continue
-
-    # Extract patient natural-language responses (skip analyst JSON blobs)
     responses: list[str] = []
-    ANALYST = {"matched", "matched_section", "matched_sections", "answer_strategy"}
-    for b in pat_blocks:
-        b = b.strip()
-        if not b:
-            continue
-        try:
-            p = json.loads(b)
-            if isinstance(p, dict) and ANALYST & p.keys():
-                continue
-        except (json.JSONDecodeError, ValueError):
-            pass
-        responses.append(b)
+    candidates_per_turn: list[list[str]] = []
+    for slot in turns:
+        doctor  = slot.get("doctor")
+        patient = slot.get("patient")
+        inference = slot.get("inference")
+        if doctor is not None and patient is not None:
+            questions.append(doctor.get("question", ""))
+            responses.append(patient.get("answer", ""))
+        if inference is not None:
+            candidates_per_turn.append(inference.get("candidates", []))
 
     # Pair them: the doctor asks question i, patient responds i
     pairs = list(zip(questions, responses))
@@ -202,7 +183,7 @@ def extract_denials_for_log(
             {"role": "system", "content": "You are a clinical analyst. Output only valid JSON."},
             {"role": "user", "content": prompt},
         ],
-        max_new_tokens=4096,
+        max_new_tokens=8192,
         role="judge",
         phase="denial_check",
         source="evaluate_turns_strict.DENIAL_PROMPT",
@@ -349,7 +330,7 @@ def evaluate() -> tuple[list[dict], dict, int]:
     for r in results:
         log_name = r["log_file"]
         gt = ground_truth_disease(log_name)
-        log_file = LOGS_DIR / f"{log_name}.txt"
+        log_file = LOGS_DIR / f"{log_name}.json"
         if not log_file.exists():
             skipped += 1
             continue

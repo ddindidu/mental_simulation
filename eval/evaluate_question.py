@@ -87,32 +87,35 @@ def _extract_questions_and_candidates(
     log_file: Path,
 ) -> list[tuple[str, list[str]]]:
     """
-    Return [(follow_up_question, candidates_after_that_turn), ...].
+    Return [(follow_up_question, candidates_after_that_turn), ...] — read from
+    the structured .json simulation log's doctor_memory.turns.
 
-    Follow-up question i corresponds to inference candidates i (0-indexed after
-    the opening question which is skipped).
+    Pair i (0-indexed) is (the question asked after patient turn i+1, that
+    turn's inference candidates): turns[k].doctor.question is the question
+    that preceded turn k, and turns[k].inference.candidates is the candidate
+    state right after turn k concluded, so turns[k+1].doctor.question paired
+    with turns[k].inference.candidates captures "the next question, given
+    what the candidate set looked like at that point" — matching the old
+    .txt-order pairing (opening question dropped, last turn's inference has
+    no following question and is dropped too).
     """
-    text   = log_file.read_text(encoding="utf-8")
-    blocks = re.findall(
-        r"={10} OUTPUT \[doctor\] ={10}\n(.*?)\n={37}", text, re.DOTALL
-    )
+    json_path = log_file.with_suffix(".json")
+    data = json.loads(json_path.read_text(encoding="utf-8"))
+    turns = sorted(data.get("doctor_memory", {}).get("turns", []), key=lambda t: t.get("turn", 0))
+    by_turn = {t.get("turn"): t for t in turns}
+    max_turn = max(by_turn) if by_turn else 0
 
-    questions:      list[str]       = []
-    cands_per_turn: list[list[str]] = []
-
-    for b in blocks:
-        b = b.strip()
-        try:
-            p = json.loads(b)
-            if isinstance(p, dict) and "question" in p:
-                questions.append(p["question"])
-            elif isinstance(p, dict) and "candidates" in p and "note" in p and "diagnosis" not in p:
-                cands_per_turn.append(p.get("candidates", []))
-        except (json.JSONDecodeError, ValueError):
+    pairs: list[tuple[str, list[str]]] = []
+    for k in range(1, max_turn):
+        cur, nxt = by_turn.get(k), by_turn.get(k + 1)
+        if cur is None or nxt is None:
             continue
-
-    follow_ups = questions[1:] if len(questions) > 1 else []
-    return list(zip(follow_ups, cands_per_turn))
+        inference   = cur.get("inference")
+        doctor_next = nxt.get("doctor")
+        if inference is None or doctor_next is None:
+            continue
+        pairs.append((doctor_next.get("question", ""), inference.get("candidates", [])))
+    return pairs
 
 
 # ── Main evaluation ────────────────────────────────────────────────────────────
@@ -122,9 +125,24 @@ def evaluate() -> list[dict]:
     criteria     = load_criteria()
     code2id      = _build_code_to_id()
 
+    # question_text -> symptom_ids, shared across ALL episodes/runs in this
+    # results dir — the llm_judge mapper's judgment only depends on the
+    # question text + the static symptom catalogue, never on which episode it
+    # came from, so a question seen before (e.g. an opening question repeated
+    # across many episodes, or an episode being rescored after an unrelated
+    # fix upstream) never needs a fresh LLM call. Persisted independently of
+    # the episode-level cache below.
+    llm_judge_cache_path = RESULTS_DIR / "llm_judge_question_cache.json"
+    llm_judge_cache: dict[str, list[str]] = {}
+    if llm_judge_cache_path.exists():
+        try:
+            llm_judge_cache = json.loads(llm_judge_cache_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            llm_judge_cache = {}
+
     mappers: dict[str, CosineSemanticMapper | LLMJudgeMapper] = {
         "cosine":    CosineSemanticMapper(),
-        "llm_judge": LLMJudgeMapper(),
+        "llm_judge": LLMJudgeMapper(cache=llm_judge_cache),
     }
 
     all_episode_results: list[dict] = []
@@ -151,7 +169,7 @@ def evaluate() -> list[dict]:
     for res_path in result_paths:
         result   = json.loads(res_path.read_text(encoding="utf-8"))
         log_name = result["log_file"]
-        log_file = LOGS_DIR / f"{log_name}.txt"
+        log_file = LOGS_DIR / f"{log_name}.json"
 
         cached_ep = cached.get(log_name)
         if cached_ep is not None and len(cached_ep.get("turns", [])) == len(result.get("turns", [])):
@@ -259,6 +277,11 @@ def evaluate() -> list[dict]:
         encoding="utf-8",
     )
     print(f"Saved question evaluation → {out_path}")
+
+    llm_judge_cache_path.write_text(
+        json.dumps(llm_judge_cache, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    print(f"Saved llm_judge question cache ({len(llm_judge_cache)} questions) → {llm_judge_cache_path}")
 
     _print_summary(all_episode_results)
     return all_episode_results

@@ -145,6 +145,13 @@ def main() -> int:
     parser.add_argument("--judge-model", default=DEFAULT_JUDGE["model"], help="Judge LLM.")
     parser.add_argument("--judge-provider", default=DEFAULT_JUDGE["provider"])
     parser.add_argument(
+        "--judge-api-model-override", default=None,
+        help="Actually call this model for judge requests instead of --judge-model, while "
+             "logs/results/analysis still save under --judge-model's folder name (see "
+             "utils.llm._chat_gemini's api_model_override). Only wired up for the gemini "
+             "provider so far.",
+    )
+    parser.add_argument(
         "--config", type=Path, default=CONFIG_PATH,
         help=f"Config file to patch and restore (default: {CONFIG_PATH.name}).",
     )
@@ -187,6 +194,8 @@ def main() -> int:
 
     patient_llm = {"provider": args.patient_provider, "model": args.patient_model}
     judge_llm = {"provider": args.judge_provider, "model": args.judge_model}
+    if args.judge_api_model_override:
+        judge_llm["api_model_override"] = args.judge_api_model_override
     config_path = args.config.resolve()
 
     if not config_path.exists():

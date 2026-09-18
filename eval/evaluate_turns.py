@@ -59,33 +59,23 @@ def extract_doctor_candidates_per_turn(
     log_file: Path,
 ) -> tuple[list[list[str]], list[str] | None]:
     """
-    Parse a simulation log and return:
-      - per_turn : inference candidates (ICD-10 codes) per patient turn
-      - final_cands: candidates from the final diagnosis block, if present
-
-    Inference block: {"candidates", "note"} without "diagnosis".
-    Final diagnosis block: {"diagnosis", "candidates", "reason"}.
+    Read the structured .json simulation log's doctor_memory and return:
+      - per_turn : inference candidates (ICD-10 codes) per patient turn, in turn order
+      - final_cands: candidates from the final diagnosis, if present
     """
-    text = log_file.read_text(encoding="utf-8")
-    blocks = re.findall(
-        r"={10} OUTPUT \[doctor\] ={10}\n(.*?)\n={37}",
-        text,
-        re.DOTALL,
-    )
+    json_path = log_file.with_suffix(".json")
+    data = json.loads(json_path.read_text(encoding="utf-8"))
+    mem = data.get("doctor_memory", {})
+    turns = sorted(mem.get("turns", []), key=lambda t: t.get("turn", 0))
+
     per_turn: list[list[str]] = []
-    final_cands: list[str] | None = None
-    for b in blocks:
-        b = b.strip()
-        try:
-            parsed = json.loads(b)
-            if not isinstance(parsed, dict) or "candidates" not in parsed:
-                continue
-            if "diagnosis" in parsed:
-                final_cands = parsed["candidates"]
-            elif "note" in parsed:
-                per_turn.append(parsed["candidates"])
-        except (json.JSONDecodeError, ValueError):
-            continue
+    for slot in turns:
+        inference = slot.get("inference")
+        if inference is not None:
+            per_turn.append(inference.get("candidates", []))
+
+    final_diag = mem.get("final_diagnosis") or {}
+    final_cands = final_diag.get("candidates")
     return per_turn, final_cands
 
 
@@ -160,7 +150,7 @@ def evaluate():
     for r in results:
         log_name = r["log_file"]
         gt = ground_truth_disease(log_name)
-        log_file = LOGS_DIR / f"{log_name}.txt"
+        log_file = LOGS_DIR / f"{log_name}.json"
 
         if not log_file.exists():
             print(f"  [warn] Log file not found: {log_file}, skipping.", file=sys.stderr)
