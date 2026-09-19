@@ -86,8 +86,10 @@ def main() -> None:
 
     points, skipped = [], []
     for r in rows:
-        x = _to_float(r["recall"])
-        y = _to_float(r["precision"])
+        # "rigid" (tier-priority) reference candidate set, not the loose union —
+        # see eval/evaluate_turns.py's rigid_truth_set.
+        x = _to_float(r["recall_rigid"])
+        y = _to_float(r["precision_rigid"])
         if x is None or y is None:
             skipped.append(f"{r['judge']}/{r['doctor']}")
             continue
@@ -128,8 +130,8 @@ def main() -> None:
     ax.set_xlim(x_lo, x_hi)
     ax.set_ylim(y_lo, y_hi)
 
-    ax.set_xlabel("Recall — §1, TP / |truth_set|, higher = better", fontsize=10, color="#52514e")
-    ax.set_ylabel("Precision — §1, TP / |predicted|, higher = better", fontsize=10, color="#52514e")
+    ax.set_xlabel("Recall (rigid) — §1, TP / |rigid_truth_set|, higher = better", fontsize=10, color="#52514e")
+    ax.set_ylabel("Precision (rigid) — §1, TP / |predicted|, higher = better", fontsize=10, color="#52514e")
     # ax.set_title(
     #     "evaluation_v4.md §1 — Precision vs. Recall",
     #     fontsize=12, fontweight="bold",

@@ -59,6 +59,7 @@ FIELDS = [
     "patient", "judge", "doctor",
     "final_accuracy_pct", "final_accuracy_frac",
     "n_turns", "jaccard", "precision", "recall",
+    "jaccard_rigid", "precision_rigid", "recall_rigid",
     "n_episodes_efficiency", "turn_count", "turn_to_1st_correct",
     "turn_to_1st_confident", "overcommitment_turns", "overcommitment_conf",
     "n_episodes_question_eval", "ias", "ecr", "safety_all_covered_rate",
@@ -71,6 +72,7 @@ SELECTED_FIELDS = [
         "final_accuracy_pct",  # "final_accuracy_frac",
         # "n_turns",
         "jaccard", "precision", "recall",
+        "jaccard_rigid", "precision_rigid", "recall_rigid",
 
         # "n_episodes_question_eval",
         "ias",  # "ecr", "safety_all_covered_rate",
@@ -78,7 +80,7 @@ SELECTED_FIELDS = [
         # "n_episodes_efficiency",
         "turn_count", "turn_to_1st_correct",
         "turn_to_1st_confident", "overcommitment_turns", "overcommitment_conf",
-        
+
         # "n_episodes_diagnostic_reasoning",
         "diagnostic_reasoning_overall_score",
     ]
@@ -165,16 +167,22 @@ def compute_final_accuracy(logs_dir: Path, style: str | None) -> tuple[float | N
     return 100 * correct / total, f"{correct}/{total}"
 
 
-def load_turn_eval(path: Path, style: str | None) -> tuple[float | None, float | None, float | None, int]:
+def load_turn_eval(path: Path, style: str | None) -> dict | None:
     data = _filter_style(_load_list(path), style)
     if not data:
-        return None, None, None, 0
-    return (
-        _mean([d.get("jaccard") for d in data]),
-        _mean([d.get("precision") for d in data]),
-        _mean([d.get("recall") for d in data]),
-        len(data),
-    )
+        return None
+    return {
+        "n": len(data),
+        "jaccard":   _mean([d.get("jaccard") for d in data]),
+        "precision": _mean([d.get("precision") for d in data]),
+        "recall":    _mean([d.get("recall") for d in data]),
+        # "rigid" reference set: tier-priority (high alone if non-empty, else
+        # moderate alone, else low alone) instead of the union of all three —
+        # see eval/evaluate_turns.py's rigid_truth_set.
+        "jaccard_rigid":   _mean([d.get("jaccard_rigid") for d in data]),
+        "precision_rigid": _mean([d.get("precision_rigid") for d in data]),
+        "recall_rigid":    _mean([d.get("recall_rigid") for d in data]),
+    }
 
 
 def load_efficiency(path: Path, style: str | None) -> dict | None:
@@ -242,7 +250,7 @@ def build_rows(style: str | None) -> list[dict]:
         logs_dir = LOGS_ROOT / patient / judge / doctor
 
         acc_pct, acc_frac = compute_final_accuracy(logs_dir, style)
-        jaccard, precision, recall, n_turns = load_turn_eval(analysis_dir / "turn_eval.json", style)
+        te = load_turn_eval(analysis_dir / "turn_eval.json", style)
         eff = load_efficiency(results_dir / "efficiency_eval.json", style)
         qe = load_question_eval(results_dir / "question_eval.json", style)
         dr = load_diagnostic_reasoning(results_dir / "diagnostic_reasoning_eval.json", style)
@@ -250,7 +258,13 @@ def build_rows(style: str | None) -> list[dict]:
         rows.append({
             "patient": patient, "judge": judge, "doctor": doctor,
             "final_accuracy_pct": acc_pct, # "final_accuracy_frac": acc_frac,
-            "n_turns": n_turns, "jaccard": jaccard, "precision": precision, "recall": recall,
+            "n_turns": te["n"] if te else None,
+            "jaccard": te["jaccard"] if te else None,
+            "precision": te["precision"] if te else None,
+            "recall": te["recall"] if te else None,
+            "jaccard_rigid":   te["jaccard_rigid"] if te else None,
+            "precision_rigid": te["precision_rigid"] if te else None,
+            "recall_rigid":    te["recall_rigid"] if te else None,
             "n_episodes_efficiency": eff["n"] if eff else None,
             "turn_count": eff["turn_count"] if eff else None,
             "turn_to_1st_correct": eff["t1_correct"] if eff else None,

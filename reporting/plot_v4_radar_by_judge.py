@@ -52,8 +52,11 @@ os.environ.setdefault("MS_RUN", "run_batch_20260912")
 from utils.paths import ANALYSIS_ROOT
 
 # (axis label, CSV field)
+# Jaccard uses the "rigid" (tier-priority) reference candidate set instead of
+# the loose union of high|moderate|low_likely — see eval/evaluate_turns.py's
+# rigid_truth_set and reporting/plot_v4_rigid_vs_loose.py.
 METRICS = [
-    ("Diff. Diag\n(Jaccard)", "jaccard"),
+    ("Diff. Diag\n(Jaccard, rigid)", "jaccard_rigid"),
     ("Info. Acquisition\n(IAS)", "ias"),
     ("Efficiency\n(Turn Count, reversed)", "turn_count"),
     ("Diag. Decision\n(Final Acc.)", "final_accuracy_pct"),
