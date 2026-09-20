@@ -56,7 +56,7 @@ from utils.paths import ANALYSIS_ROOT
 # the loose union of high|moderate|low_likely — see eval/evaluate_turns.py's
 # rigid_truth_set and reporting/plot_v4_rigid_vs_loose.py.
 METRICS = [
-    ("Diff. Diag\n(Jaccard, rigid)", "jaccard_rigid"),
+    ("Diff. Diag\n(Jaccard)", "jaccard_rigid"),
     ("Info. Acquisition\n(IAS)", "ias"),
     ("Efficiency\n(Turn Count, reversed)", "turn_count"),
     ("Diag. Decision\n(Final Acc.)", "final_accuracy_pct"),
@@ -79,7 +79,7 @@ DOCTOR_NAME_CANONICAL = {
     "gpt-5.4": "GPT 5.4",
     "gemini-3.8-flash": "Gemini 3.8 Flash",
     "claude-sonnet-5": "Claude Sonnet 5",
-    "llama-3.3-70b-instruct": "Llama 3.3 70B Inst.",
+    "llama-3.3-70b-instruct": "Llama 3.3 70B",
     "qwen3-235b": "Qwen3 235B",
 }
 
@@ -186,22 +186,23 @@ def main() -> None:
         ax.set_theta_direction(-1)
 
         ax.set_xticks(angles[:-1])
-        ax.set_xticklabels([label for label, _field in METRICS], fontsize=12)
+        ax.set_xticklabels([label for label, _field in METRICS], fontsize=14)
         ax.set_ylim(-zlim, zlim)
         yticks = np.linspace(-zlim, zlim, 5)
         ax.set_yticks(yticks)
-        ax.set_yticklabels([f"{t:+.1f}σ" for t in yticks], fontsize=8, color="gray")
+        ax.set_yticklabels([f"{t:+.1f}σ" for t in yticks], fontsize=10, color="gray")
         ax.grid(color="lightgray", linewidth=0.7)
         ax.spines["polar"].set_color("lightgray")
 
-        ax.plot(angles, [0] * len(angles), color="dimgray", linewidth=1.2,
-                linestyle="--", zorder=2)
+        # Dashed baseline ring at z=0 (the panel's per-metric mean).
+        # ax.plot(angles, [0] * len(angles), color="dimgray", linewidth=1.2,
+        #         linestyle="--", zorder=2)
 
         for j, model in enumerate(models):
             vals = z[:, j].tolist()
             vals += vals[:1]
             color = color_of[model.lower()]
-            ax.plot(angles, vals, color=color, linewidth=2, label=DOCTOR_NAME_CANONICAL.get(model, model))
+            ax.plot(angles, vals, color=color, linewidth=2)
             ax.fill(angles, vals, color=color, alpha=0.08)
             ax.scatter(angles[:-1], vals[:-1], color=color, s=22, zorder=3)
 
@@ -218,7 +219,16 @@ def main() -> None:
         #     f"Diagnostic Profile (judge: {judge})\n({subtitle})",
         #     fontsize=11.5, pad=30,
         # )
-        ax.legend(loc="upper right", fontsize=12, frameon=False, bbox_to_anchor=(1.2, 1.1), )
+        # Circle-marker legend handles (not the line itself) — same
+        # plt.Line2D-proxy convention as the other v4 scripts' "Doctor model" legends.
+        legend_handles = [
+            plt.Line2D([0], [0], marker="o", color="w", markerfacecolor=color_of[m.lower()],
+                       markeredgecolor=color_of[m.lower()], markersize=11,
+                       label=DOCTOR_NAME_CANONICAL.get(m, m))
+            for m in models
+        ]
+        ax.legend(handles=legend_handles, loc="upper right", fontsize=14,
+                  frameon=False, bbox_to_anchor=(1.2, 1.1))
 
         fig.tight_layout()
         out_path = Path(f"{out_prefix}{judge}.png")
