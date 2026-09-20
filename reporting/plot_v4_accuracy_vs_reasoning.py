@@ -46,6 +46,12 @@ if str(_REPO_ROOT) not in _sys.path:
 os.environ.setdefault("MS_RUN", "run_batch_20260912")
 
 from utils.paths import ANALYSIS_ROOT
+from reporting.plot_v4_radar_by_judge import DOCTOR_NAME_CANONICAL
+
+JUDGE_NAME_CANONICAL = {
+    "gemini-3.1-pro-preview": "Gemini 3.1 Pro",
+    "gpt-5.6-terra": "GPT 5.6 Terra",
+}
 
 SELECTED_DOCTORS = {
     "gpt-5.4",
@@ -108,14 +114,21 @@ def main() -> None:
 
     fig, ax = plt.subplots(figsize=(8.5, 7))
     seen_models: set[str] = set()
+    annotations = []
     for judge, doctor, x, y in points:
         color = color_of[doctor.lower()]
         label = doctor if doctor.lower() not in seen_models else None
         seen_models.add(doctor.lower())
         ax.scatter(x, y, color=color, marker=marker_of[judge], s=170,
                    edgecolors="white", linewidths=0.8, zorder=3, label=label)
-        ax.annotate(doctor, (x, y), textcoords="offset points", xytext=(7, 6),
-                    fontsize=8.5, color="#3a3a38")
+        # Same doctor's two judge points often sit close together (same
+        # color): stagger the label vertically by judge index so they don't
+        # collide, instead of every label defaulting to the same offset.
+        y_off = 6 - 18 * judges.index(judge)
+        ann = ax.annotate(DOCTOR_NAME_CANONICAL.get(doctor.lower(), doctor), (x, y),
+                           textcoords="offset points", xytext=(7, y_off),
+                           fontsize=12, color="#3a3a38")
+        annotations.append((ann, x, y, y_off))
 
     xs = [p[2] for p in points]
     ys = [p[3] for p in points]
@@ -124,8 +137,9 @@ def main() -> None:
     ax.set_xlim(min(xs) - x_pad, max(xs) + x_pad)
     ax.set_ylim(min(ys) - y_pad, max(ys) + y_pad)
 
-    ax.set_xlabel("Final Accuracy (%) — §4, higher = better", fontsize=10, color="#52514e")
-    ax.set_ylabel("Diagnostic Reasoning Ability (overall_score) — §4, higher = better", fontsize=10, color="#52514e")
+    ax.set_xlabel("Final Accuracy (%)", fontsize=14, color="#52514e")
+    ax.set_ylabel("Evidence Sufficiency", fontsize=14, color="#52514e")
+    ax.tick_params(axis="both", labelsize=12)
     # ax.set_title(
     #     "evaluation_v4.md §4 — Final Accuracy vs. Diagnostic Reasoning Ability\n"
     #     "(color = doctor model; marker shape = judge)",
@@ -136,23 +150,63 @@ def main() -> None:
     for spine in ["top", "right"]:
         ax.spines[spine].set_visible(False)
 
-    model_handles = [
-        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor=color_of[d],
-                   markeredgecolor="white", markersize=9, label=d)
-        for d in canonical_doctors
-    ]
     judge_handles = [
         plt.Line2D([0], [0], marker=marker_of[j], color="w", markerfacecolor="#999999",
-                   markeredgecolor="white", markersize=9, label=j)
+                   markeredgecolor="white", markersize=10, label=JUDGE_NAME_CANONICAL.get(j, j))
         for j in judges
     ]
-    leg1 = ax.legend(handles=model_handles, title="Doctor model", loc="upper left",
-                      bbox_to_anchor=(1.02, 1.0), fontsize=8.5, frameon=False)
-    ax.add_artist(leg1)
-    ax.legend(handles=judge_handles, title="Judge", loc="lower left",
-              bbox_to_anchor=(1.02, 0.0), fontsize=8.5, frameon=False)
+    # legend: models (dropped — doctor identity is already given by the
+    # canonical-name point annotations, same convention as
+    # plot_v4_precision_vs_recall.py)
+    ax.legend(handles=judge_handles, title="Judge", loc="lower right",
+              fontsize=12, frameon=False)
 
     fig.tight_layout()
+
+    # Resolve remaining label collisions: a label can run into either
+    # another label's text OR a nearby point's marker (a label two doctors
+    # apart in x can still slide its text right over a closer neighbor's
+    # dot). Match the save dpi here — checking at the figure's default
+    # (lower) dpi under-detects overlaps that only appear once text is
+    # rendered at the larger, actually-saved size.
+    fig.set_dpi(180)
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+
+    marker_radius_px = 0.5 * (170 ** 0.5) * (180 / 72)  # scatter s=170, pt->px at dpi=180
+    marker_bboxes = []
+    for _judge, _doctor, x, y in points:
+        px, py = ax.transData.transform((x, y))
+        marker_bboxes.append(plt.matplotlib.transforms.Bbox(
+            [[px - marker_radius_px, py - marker_radius_px],
+             [px + marker_radius_px, py + marker_radius_px]]))
+
+    def _flip_left(mover, y_off_m):
+        mover.set_ha("right")
+        mover.xyann = (-7, y_off_m)
+
+    for _pass in range(2):  # a flip can create a new collision; two passes settles it
+        moved_any = False
+        for i in range(len(annotations)):
+            ann_i, xi, yi, y_off_i = annotations[i]
+            bbox_i = ann_i.get_window_extent(renderer)
+            for k, mbbox in enumerate(marker_bboxes):
+                if k == i:
+                    continue
+                if bbox_i.overlaps(mbbox):
+                    _flip_left(ann_i, y_off_i)
+                    bbox_i = ann_i.get_window_extent(renderer)
+                    moved_any = True
+            for j in range(i + 1, len(annotations)):
+                ann_j, xj, yj, y_off_j = annotations[j]
+                bbox_j = ann_j.get_window_extent(renderer)
+                if bbox_i.overlaps(bbox_j):
+                    mover, y_off_m = (ann_i, y_off_i) if xi <= xj else (ann_j, y_off_j)
+                    _flip_left(mover, y_off_m)
+                    bbox_i = ann_i.get_window_extent(renderer)
+                    moved_any = True
+        if not moved_any:
+            break
     out_path = Path(args.out) if args.out else ANALYSIS_ROOT / "v4_accuracy_vs_reasoning.png"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=180, bbox_inches="tight")

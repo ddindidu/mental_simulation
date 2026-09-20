@@ -153,7 +153,7 @@ def main() -> None:
         doctors = [d for d, _s, _n in rows]
         x = np.arange(len(doctors))
 
-        fig, ax = plt.subplots(figsize=(2.3 * len(doctors) + 2.5, 6.5))
+        fig, ax = plt.subplots(figsize=(1.55 * len(doctors) + 2.5, 6.5))
 
         bottom = np.zeros(len(doctors))
         for key, label, color, hatch in CATEGORIES:
@@ -177,7 +177,7 @@ def main() -> None:
         ax.spines[["top", "right"]].set_visible(False)
         # ax.set_title(f"Judge: {judge}", fontsize=13, fontweight="bold", pad=14)
 
-        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.14), ncol=2,
+        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.1), ncol=2,
                   fontsize=14, frameon=False)
 
         # style_note = f"style={style}" if style else "all styles"
