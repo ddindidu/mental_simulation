@@ -55,6 +55,7 @@ if str(_REPO_ROOT) not in _sys.path:
     _sys.path.insert(0, str(_REPO_ROOT))
 
 from utils.paths import ANALYSIS_ROOT, RESULTS_ROOT, RUN_ROOT
+from reporting.plot_v4_radar_by_judge import DOCTOR_NAME_CANONICAL
 
 DEFAULT_DOCTORS = [
     "gpt-5.4",
@@ -163,13 +164,14 @@ def main() -> None:
                               "_<style> (default: plain). Pass '' for all styles.")
     parser.add_argument("--doctors", nargs="+", default=DEFAULT_DOCTORS,
                          help=f"Doctor models to include (default: {DEFAULT_DOCTORS})")
-    parser.add_argument("-o", "--out", default=None,
-                         help="Output PNG path (default: analysis/<run>/narrowing_progress_predicted_by_judge.png)")
+    parser.add_argument("-o", "--out-prefix", default=None,
+                         help="Output PNG path prefix, one file per judge: "
+                              "<prefix><judge>.png (default: analysis/<run>/narrowing_progress_predicted_)")
     args = parser.parse_args()
     style = args.style or None
     wanted = {d.lower() for d in args.doctors}
 
-    out_path = Path(args.out) if args.out else ANALYSIS_ROOT / "narrowing_progress_predicted_by_judge.png"
+    out_prefix = Path(args.out_prefix) if args.out_prefix else ANALYSIS_ROOT / "narrowing_progress_predicted_"
 
     combos = [c for c in discover_combos() if c[2].lower() in wanted]
     if not combos:
@@ -197,18 +199,17 @@ def main() -> None:
         return
 
     x_pct = GRID * 100
-    fig, axes = plt.subplots(1, len(judges), figsize=(7.5 * len(judges), 6.5), sharey=True)
-    if len(judges) == 1:
-        axes = [axes]
 
-    for ax, judge in zip(axes, judges):
+    for judge in judges:
+        fig, ax = plt.subplots(figsize=(7.5, 6.5))
+
         curves = sorted(panels[judge], key=lambda c: DEFAULT_DOCTORS.index(c[0]) if c[0] in DEFAULT_DOCTORS else 99)
 
         for doctor, mat, n, ias in curves:
             color = color_of[doctor.lower()]
             mean = mat.mean(axis=0)
             ax.plot(x_pct, mean, color=color, linewidth=2.2, marker="o", markersize=4,
-                     label=f"{doctor} (n={n})", zorder=3)
+                     label=DOCTOR_NAME_CANONICAL.get(doctor.lower(), doctor), zorder=3)
 
         # Stagger end-of-line annotations vertically (by rank of final value)
         # so labels don't overlap when several models finish near the same
@@ -218,40 +219,44 @@ def main() -> None:
         for rank, (doctor, mat, n, ias) in enumerate(by_final):
             color = color_of[doctor.lower()]
             mean = mat.mean(axis=0)
-            ias_str = f"{ias:.3f}" if ias is not None else "n/a"
+            ias_str = f"{ias:.2f}" if ias is not None else "n/a"
             y_off = (rank - mid) * 15
-            ax.annotate(f"{mean[-1]:.0f}%  (IAS={ias_str})", (x_pct[-1], mean[-1]),
-                        textcoords="offset points", xytext=(8, y_off), fontsize=8.5,
+            ax.annotate(f"{mean[-1]:.0f}% (IAS={ias_str})", (x_pct[-1], mean[-1]),
+                        textcoords="offset points", xytext=(8, y_off), fontsize=12,
                         color=color, va="center", fontweight="bold",
                         arrowprops=dict(arrowstyle="-", color=color, lw=0.8, alpha=0.6))
 
         ax.axhline(0, color="#BBBBBB", linewidth=0.8, zorder=0)
-        ax.set_title(f"Judge: {judge}", fontsize=12.5, fontweight="bold", pad=10)
-        ax.set_xlabel("Relative turn progress (%)", fontsize=10.5)
+        # ax.set_title(f"Judge: {judge}", fontsize=12.5, fontweight="bold", pad=10)
+        ax.set_xlabel("Relative Turn Progress (%)", fontsize=14)
         ax.set_xlim(0, 125)
         ax.set_ylim(-15, 108)
+        yticks = [0, 20, 40, 60, 80, 100]
+        ytick_labels = [str(t) for t in yticks]
+        ytick_labels[0] = r"0" + "\n" + r"($\hat{C}_t$=1)"
+        ytick_labels[-1] = r"100" + "\n" + r"($\hat{C}_t$=$\hat{C}_1$)"
+        ax.set_yticks(yticks)
+        ax.set_yticklabels(ytick_labels)
         ax.grid(color="#E4EBF5", linewidth=0.8, zorder=0)
         ax.spines[["top", "right"]].set_visible(False)
-        # Per-panel legend: n differs by judge, so a legend shared across
-        # panels would show only one (wrong for the other). IAS is written
-        # next to each line's endpoint instead of in the legend.
-        ax.legend(loc="lower left", fontsize=8, frameon=False)
+        ax.legend(loc="lower left", fontsize=12, frameon=False)
 
-    axes[0].set_ylabel("Narrowing progress remaining (%)\n(doctor's own predicted list; 100%=start, 0%=|P_t|=1)", fontsize=10.5)
+        ax.set_ylabel("Remaining Candidate Set Size (%)", fontsize=14)
 
-    style_note = f"style={style}" if style else "all styles"
-    fig.suptitle(
-        "Narrowing Progress vs. Relative Turn Progress — by judge model (doctor-reported)\n"
-        f"(100*(|P_t|-1)/(|P_1|-1), P_t = doctor's own stated differential size; "
-        f"each episode resampled onto its own 0-100% timeline; {style_note}; {RUN_ROOT.name})",
-        fontsize=12.5, fontweight="bold", y=1.06,
-    )
+        # style_note = f"style={style}" if style else "all styles"
+        # fig.suptitle(
+        #     f"Narrowing Progress vs. Relative Turn Progress — judge: {judge} (doctor-reported)\n"
+        #     f"(100*(|P_t|-1)/(|P_1|-1), P_t = doctor's own stated differential size; "
+        #     f"each episode resampled onto its own 0-100% timeline; {style_note}; {RUN_ROOT.name})",
+        #     fontsize=12.5, fontweight="bold", y=1.06,
+        # )
 
-    fig.tight_layout(rect=[0, 0, 1, 0.94])
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_path, dpi=150, bbox_inches="tight", pad_inches=0.35)
-    plt.close(fig)
-    print(f"[saved] {out_path}")
+        fig.tight_layout(rect=[0, 0, 1, 0.94])
+        out_path = Path(f"{out_prefix}{judge}.png")
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(out_path, dpi=150, bbox_inches="tight", pad_inches=0.35)
+        plt.close(fig)
+        print(f"[saved] {out_path}")
 
 
 if __name__ == "__main__":
