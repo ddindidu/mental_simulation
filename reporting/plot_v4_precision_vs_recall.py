@@ -39,6 +39,12 @@ if str(_REPO_ROOT) not in _sys.path:
 os.environ.setdefault("MS_RUN", "run_batch_20260912")
 
 from utils.paths import ANALYSIS_ROOT
+from reporting.plot_v4_radar_by_judge import DOCTOR_NAME_CANONICAL
+
+JUDGE_NAME_CANONICAL = {
+    "gemini-3.1-pro-preview": "Gemini 3.1 Pro",
+    "gpt-5.6-terra": "GPT 5.6 Terra",
+}
 
 SELECTED_DOCTORS = {
     "gpt-5.4",
@@ -115,7 +121,7 @@ def main() -> None:
     ax.plot([diag_lo, diag_hi], [diag_lo, diag_hi], color="#c3c2b7", linewidth=1.2,
             linestyle=":", zorder=1, clip_on=True)
     ax.annotate("precision = recall", (x_hi, min(x_hi, y_hi)), textcoords="offset points",
-                xytext=(-6, 4), ha="right", fontsize=8, color="#898781", style="italic")
+                xytext=(-6, 4), ha="right", fontsize=10, color="#898781", style="italic")
 
     seen_models: set[str] = set()
     for judge, doctor, x, y in points:
@@ -124,14 +130,16 @@ def main() -> None:
         seen_models.add(doctor.lower())
         ax.scatter(x, y, color=color, marker=marker_of[judge], s=170,
                    edgecolors="white", linewidths=0.8, zorder=3, label=label)
-        ax.annotate(doctor, (x, y), textcoords="offset points", xytext=(7, 6),
-                    fontsize=8.5, color="#3a3a38")
+        ax.annotate(DOCTOR_NAME_CANONICAL.get(doctor.lower(), doctor), (x, y),
+                    textcoords="offset points", xytext=(7, 6),
+                    fontsize=12, color="#3a3a38")
 
     ax.set_xlim(x_lo, x_hi)
     ax.set_ylim(y_lo, y_hi)
 
-    ax.set_xlabel("Recall (rigid) — §1, TP / |rigid_truth_set|, higher = better", fontsize=10, color="#52514e")
-    ax.set_ylabel("Precision (rigid) — §1, TP / |predicted|, higher = better", fontsize=10, color="#52514e")
+    ax.set_xlabel("Recall", fontsize=14, color="#52514e")
+    ax.set_ylabel("Precision", fontsize=14, color="#52514e")
+    ax.tick_params(axis="both", labelsize=12)
     # ax.set_title(
     #     "evaluation_v4.md §1 — Precision vs. Recall",
     #     fontsize=12, fontweight="bold",
@@ -143,19 +151,22 @@ def main() -> None:
 
     model_handles = [
         plt.Line2D([0], [0], marker="o", color="w", markerfacecolor=color_of[d],
-                   markeredgecolor="white", markersize=9, label=d)
+                   markeredgecolor="white", markersize=10, label=DOCTOR_NAME_CANONICAL.get(d, d))
         for d in canonical_doctors
     ]
     judge_handles = [
         plt.Line2D([0], [0], marker=marker_of[j], color="w", markerfacecolor="#999999",
-                   markeredgecolor="white", markersize=9, label=j)
+                   markeredgecolor="white", markersize=10, label=JUDGE_NAME_CANONICAL.get(j, j))
         for j in judges
     ]
-    leg1 = ax.legend(handles=model_handles, title="Doctor model", loc="upper left",
-                      bbox_to_anchor=(1.02, 1.0), fontsize=8.5, frameon=False)
-    ax.add_artist(leg1)
-    ax.legend(handles=judge_handles, title="Judge", loc="lower left",
-              bbox_to_anchor=(1.02, 0.0), fontsize=8.5, frameon=False)
+    # legend: models
+    # leg1 = ax.legend(handles=model_handles, title="Doctor model", loc="upper left",
+    #                   bbox_to_anchor=(1.02, 1.0), fontsize=12, frameon=False)
+    # ax.add_artist(leg1)
+    # legend: judges
+    ax.legend(handles=judge_handles, title="Judge", loc="lower right",
+              # bbox_to_anchor=(1.02, 0.0), 
+              fontsize=12, frameon=False)
 
     fig.tight_layout()
     out_path = Path(args.out) if args.out else ANALYSIS_ROOT / "v4_precision_vs_recall.png"
