@@ -93,7 +93,7 @@ def main() -> None:
     )
     ymax = max(ymax, max(
         (s["real_t1c_mean"] or 0) + (s["real_oc_mean"] or 0) for _j, rows in panels for _d, s in rows
-    )) * 1.18
+    )) * 1.06
 
     for judge, rows in panels:
         fig, ax = plt.subplots(figsize=(8.5, 1.1 * len(rows) + 1.8))
@@ -153,11 +153,20 @@ def main() -> None:
                 ax.text(ymax * 0.012, slot_bottom + pinned_h + narrow_h / 2, f"{narrow_frac*100:.0f}%",
                         ha="left", va="center", fontsize=12, color="white", fontweight="bold")
 
+        # Break each canonical name onto two lines (before the last word) so
+        # long names don't force extra left margin on the y-axis.
+        def _break_name(name: str) -> str:
+            parts = name.split(" ")
+            return "\n".join(parts)
+
         ax.set_yticks([(n_rows - 1 - i) * SLOT_GAP + SLOT_WIDTH / 2 for i in range(n_rows)])
-        ax.set_yticklabels([DOCTOR_NAME_CANONICAL.get(d, d) for d, _s in rows], fontsize=14)
+        ax.set_yticklabels(
+            [_break_name(DOCTOR_NAME_CANONICAL.get(d, d)) for d, _s in rows], fontsize=14
+        )
         legend_band = 0.15
         ax.set_ylim(-0.08, (n_rows - 1) * SLOT_GAP + SLOT_WIDTH + legend_band)
         ax.set_xlim(0, ymax)
+        ax.set_xticks(np.arange(0, ymax, 5))
         # ax.set_title(f"Judge: {judge}", fontsize=12.5, fontweight="bold", pad=10)
         ax.grid(axis="x", color="#E4EBF5", linewidth=0.8, zorder=0)
         ax.spines[["top", "right"]].set_visible(False)
