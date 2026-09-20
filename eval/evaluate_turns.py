@@ -143,6 +143,8 @@ def evaluate():
         "strict_acc_sum": 0.0,
         "jaccard_sum": 0.0,
         "wr_penalty": 0, "wr_max_penalty": 0,
+        "tp_rigid": 0, "fp_rigid": 0, "fn_rigid": 0, "total_pred_rigid": 0,
+        "jaccard_rigid_sum": 0.0,
     })
     sample_turns = []
     skipped = 0
@@ -198,6 +200,22 @@ def evaluate():
                 moderate_likely = {d["disease_id"] for d in dm.get("top_partial", [])}
                 low_likely      = set()
 
+            # Tier-priority ("rigid") reference set, captured before gt gets
+            # forced into high_likely below: if high_likely has any member,
+            # the rigid truth set is high_likely alone (moderate/low excluded
+            # entirely); else moderate_likely alone if non-empty; else
+            # low_likely alone; ground truth is still always added on top so
+            # a doctor naming only the correct answer is never unfairly
+            # penalized by an algorithmic tier miss.
+            if high_likely:
+                rigid_truth_set = set(high_likely) | {gt}
+            elif moderate_likely:
+                rigid_truth_set = set(moderate_likely) | {gt}
+            elif low_likely:
+                rigid_truth_set = set(low_likely) | {gt}
+            else:
+                rigid_truth_set = {gt}
+
             high_likely.add(gt)
             moderate_likely -= high_likely
             low_likely      -= high_likely | moderate_likely
@@ -211,6 +229,16 @@ def evaluate():
             fp = len(preds - truth_set)
             fn = len(truth_set - preds)
             n_truth = len(truth_set)
+
+            # Rigid-version precision/recall/jaccard (spec discussion: tier
+            # priority instead of tier union as the reference candidate set).
+            tp_rigid = len(preds & rigid_truth_set)
+            fp_rigid = len(preds - rigid_truth_set)
+            fn_rigid = len(rigid_truth_set - preds)
+            precision_rigid = tp_rigid / len(preds) if preds else 0.0
+            recall_rigid    = tp_rigid / len(rigid_truth_set) if rigid_truth_set else 0.0
+            union_rigid     = preds | rigid_truth_set
+            jaccard_rigid   = tp_rigid / len(union_rigid) if union_rigid else 1.0
 
             # spec §4.3 metrics
             precision = tp / len(preds) if preds else 0.0
@@ -236,6 +264,11 @@ def evaluate():
             stats["jaccard_sum"] += jaccard
             stats["wr_penalty"] += wr_penalty
             stats["wr_max_penalty"] += wr_max
+            stats["tp_rigid"] += tp_rigid
+            stats["fp_rigid"] += fp_rigid
+            stats["fn_rigid"] += fn_rigid
+            stats["total_pred_rigid"] += len(preds)
+            stats["jaccard_rigid_sum"] += jaccard_rigid
 
             sample_turns.append({
                 "log_file":          log_name,
@@ -257,6 +290,11 @@ def evaluate():
                 "accuracy":         round(accuracy, 4),
                 "jaccard":          round(jaccard, 4),
                 "weighted_recall":  round(weighted_recall, 4),
+                "reference_candidate_set_rigid": sorted(rigid_truth_set),
+                "tp_rigid": tp_rigid, "fp_rigid": fp_rigid, "fn_rigid": fn_rigid,
+                "precision_rigid":  round(precision_rigid, 4),
+                "recall_rigid":     round(recall_rigid, 4),
+                "jaccard_rigid":    round(jaccard_rigid, 4),
             })
 
     # Print table
@@ -308,6 +346,22 @@ def evaluate():
     print(sep)
     if skipped:
         print(f"\n({skipped} log files not found, skipped)")
+
+    # Rigid-version summary (tier-priority reference set: high alone if
+    # non-empty, else moderate alone, else low alone, always + ground truth).
+    all_tp_r = sum(s["tp_rigid"] for s in turn_stats.values())
+    all_fp_r = sum(s["fp_rigid"] for s in turn_stats.values())
+    all_fn_r = sum(s["fn_rigid"] for s in turn_stats.values())
+    all_pred_r = sum(s["total_pred_rigid"] for s in turn_stats.values())
+    all_jac_r = sum(s["jaccard_rigid_sum"] for s in turn_stats.values())
+    overall_prec_r = all_tp_r / all_pred_r if all_pred_r else 0
+    overall_rec_r = all_tp_r / (all_tp_r + all_fn_r) if (all_tp_r + all_fn_r) else 0
+    overall_jac_r = all_jac_r / all_n if all_n else 0
+    print("\n[rigid] Prec/Recall/Jaccard (tier-priority reference set, not union):")
+    print(
+        f"  ALL  N={all_n:>5}  Prec={overall_prec_r:>8.4f}  Recall={overall_rec_r:>8.4f}  "
+        f"Jaccard={overall_jac_r:>8.4f}  TP={all_tp_r:>5}  FP={all_fp_r:>5}  FN={all_fn_r:>5}"
+    )
 
     ANALYSIS_DIR.mkdir(parents=True, exist_ok=True)
     out_path = ANALYSIS_DIR / "turn_eval.json"
