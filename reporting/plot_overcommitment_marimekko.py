@@ -120,7 +120,7 @@ def main() -> None:
                 if pinned_h > 0.06:
                     ax.text(pinned_mean + ymax * 0.012, slot_bottom + pinned_h / 2,
                             f"{pinned_mean:.1f}", ha="left", va="center", 
-                            fontsize=12,
+                            fontsize=14,
                               color=COLOR_PINNED)
 
             if narrow_h > 0:
@@ -132,26 +132,26 @@ def main() -> None:
                 # (matches plot_overcommitment_by_judge.py's labeling)
                 if narrow_h > 0.10 and t1c > ymax * 0.04:
                     ax.text(t1c - 1, slot_bottom + pinned_h + narrow_h / 2,
-                            f"{t1c:.1f}", ha="center", va="center", fontsize=12, color="white", fontweight="bold")
+                            f"{t1c:.1f}", ha="center", va="center", fontsize=14, color="white", fontweight="bold")
                 # overcommitment (turns after 1st confident) value, centered
                 # in its own segment — same convention as the t1c label above.
                 if narrow_h > 0.10 and oc > ymax * 0.04:
                     ax.text(t1c + oc / 2, slot_bottom + pinned_h + narrow_h / 2,
-                            f"+{oc:.1f}", ha="center", va="center", fontsize=12,
+                            f"+{oc:.1f}", ha="center", va="center", fontsize=14,
                             color="white", fontweight="bold")
                 if narrow_h > 0.06:
                     ax.text(t1c + oc + ymax * 0.012, slot_bottom + pinned_h + narrow_h / 2,
-                            f"{t1c + oc:.1f}", ha="left", va="center", fontsize=12, color="#1C2333")
+                            f"{t1c + oc:.1f}", ha="left", va="center", fontsize=14, color="#1C2333")
 
             # share labels inside the base of each bar (white, small) rather
             # than past the bar's end, which would collide with the value
             # label placed there.
             if pinned_h > 0.10 and pinned_mean > ymax * 0.04:
                 ax.text(ymax * 0.012, slot_bottom + pinned_h / 2, f"{pinned_frac*100:.0f}%",
-                        ha="left", va="center", fontsize=12, color="white", fontweight="bold")
+                        ha="left", va="center", fontsize=14, color="white", fontweight="bold")
             if narrow_h > 0.10 and (t1c + oc) > ymax * 0.04:
                 ax.text(ymax * 0.012, slot_bottom + pinned_h + narrow_h / 2, f"{narrow_frac*100:.0f}%",
-                        ha="left", va="center", fontsize=12, color="white", fontweight="bold")
+                        ha="left", va="center", fontsize=14, color="white", fontweight="bold")
 
         # Break each canonical name onto two lines (before the last word) so
         # long names don't force extra left margin on the y-axis.
@@ -161,7 +161,7 @@ def main() -> None:
 
         ax.set_yticks([(n_rows - 1 - i) * SLOT_GAP + SLOT_WIDTH / 2 for i in range(n_rows)])
         ax.set_yticklabels(
-            [_break_name(DOCTOR_NAME_CANONICAL.get(d, d)) for d, _s in rows], fontsize=14
+            [_break_name(DOCTOR_NAME_CANONICAL.get(d, d)) for d, _s in rows], fontsize=16
         )
         legend_band = 0.15
         ax.set_ylim(-0.08, (n_rows - 1) * SLOT_GAP + SLOT_WIDTH + legend_band)
@@ -170,20 +170,20 @@ def main() -> None:
         # ax.set_title(f"Judge: {judge}", fontsize=12.5, fontweight="bold", pad=10)
         ax.grid(axis="x", color="#E4EBF5", linewidth=0.8, zorder=0)
         ax.spines[["top", "right"]].set_visible(False)
-        ax.set_xlabel("Mean turn count", fontsize=14)
+        ax.set_xlabel("Mean turn count", fontsize=16)
         ax.tick_params(axis="x", labelsize=12)
 
         handles = [
             plt.Rectangle((0, 0), 1, 1, color=COLOR_PINNED,
-                          label="Single fixed candidate\n" + r"(non-narrowing case; $\hat{C}_{1,\dots}=1$)"),
+                          label="Single fixed candidate\n" + r"(non-narrowing case; $\hat{C}_{\{1,\dots\}}=1$)"),
             plt.Rectangle((0, 0), 1, 1, color=COLOR_CONFIDENT,
                           label="Turns to convergence\n" + r"(narrowing case; $\hat{C}_t > 1$)"),
             plt.Rectangle((0, 0), 1, 1, color=COLOR_OVERCOMMIT,
                           label="Extended inquiry\n" + r"(narrowing case; $\hat{C}_t = 1$)"),
         ]
-        ax.legend(handles=handles, fontsize=11, loc="center right",
-                  bbox_to_anchor=(0.9, 0.6), borderaxespad=0.0,
-                  frameon=False)
+        ax.legend(handles=handles, fontsize=14, loc="center right",
+                  bbox_to_anchor=(1, 0.6), borderaxespad=0.0,
+                )#frameon=False)
 
         style_note = f"style={style}" if style else "all styles"
         # fig.suptitle(
