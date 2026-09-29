@@ -8,7 +8,7 @@ model, over 5 headline metrics:
 
   Jaccard (Inference Quality), IAS (Information Acquisition Quality),
   Turn Count (Efficiency), Final Accuracy (Reliable Diagnosis),
-  Diagnostic Reasoning Ability (Reliable Diagnosis)
+  Diagnostic Evidence Sufficiency (Reliable Diagnosis)
 
 Each axis is z-scored across the doctor models shown *within that judge's
 panel*: z = (x - mean) / std. 0 = that panel's mean on the metric, +1/-1 = one
@@ -19,7 +19,7 @@ farther from center is always "better", not just "more standard deviations
 from the mean in whichever direction the raw metric happens to point".
 
 Every doctor model with at least one metric present is plotted. IAS and
-Diagnostic Reasoning depend on the LLM-judge stage (evaluate_question.py /
+Diagnostic Evidence Sufficiency depend on the LLM-judge stage (evaluate_question.py /
 score_diagnostic_reasoning.py), which may still be running for some
 doctor/judge combos — a model missing one of those gets 0 filled in for that
 axis's *raw* value before z-scoring (i.e. treated as "no signal yet", not
@@ -56,11 +56,11 @@ from utils.paths import ANALYSIS_ROOT
 # the loose union of high|moderate|low_likely — see eval/evaluate_turns.py's
 # rigid_truth_set and reporting/plot_v4_rigid_vs_loose.py.
 METRICS = [
-    ("Diff. Diag\n(Jaccard)", "jaccard_rigid"),
-    ("Info. Acquisition\n(IAS)", "ias"),
+    ("Hypothesis Q.\n(Jaccard)", "jaccard_rigid"),
+    ("Question Q.\n(IAS)", "ias"),
     ("Efficiency\n(Turn Count, reversed)", "turn_count"),
-    ("Diag. Decision\n(Final Acc.)", "final_accuracy_pct"),
-    ("Diag. Decision\n(Evidence Sufficiency)", "diagnostic_reasoning_overall_score"),
+    ("Decision Q.\n(Final Acc.)", "final_accuracy_pct"),
+    ("Decision Q.\n(Evidence\nSufficiency)", "diagnostic_evidence_sufficiency_pred"),
 ]
 
 # Fields where a lower raw value is better — their z-score is sign-flipped
@@ -186,9 +186,9 @@ def main() -> None:
         ax.set_theta_direction(-1)
 
         ax.set_xticks(angles[:-1])
-        ax.set_xticklabels([label for label, _field in METRICS], fontsize=14)
-        ax.set_ylim(-zlim, zlim)
-        yticks = np.linspace(-zlim, zlim, 5)
+        ax.set_xticklabels([label for label, _field in METRICS], fontsize=16)
+        ax.set_ylim(-zlim, zlim-0.5)
+        yticks = np.linspace(-zlim, zlim-0.5, 6)
         ax.set_yticks(yticks)
         ax.set_yticklabels([f"{t:+.1f}σ" for t in yticks], fontsize=10, color="gray")
         ax.grid(color="lightgray", linewidth=0.7)
@@ -207,14 +207,14 @@ def main() -> None:
             ax.scatter(angles[:-1], vals[:-1], color=color, s=22, zorder=3)
 
         any_filled = any(missing_labels for _m, _v, missing_labels in complete)
-        base_note = "z-score per metric across models shown; 0 = group mean, dashed ring; Turn Count sign-flipped so outward = better"
-        if len(complete) == 1:
-            subtitle = "only 1 model has data — z-scores are trivially 0, shape not comparative"
-        elif any_filled:
-            subtitle = (base_note + " — models missing IAS/Diagnostic Reasoning "
-                        "(LLM-judge pending) plotted with 0")
-        else:
-            subtitle = base_note
+        # base_note = "z-score per metric across models shown; 0 = group mean, dashed ring; Turn Count sign-flipped so outward = better"
+        # if len(complete) == 1:
+        #     subtitle = "only 1 model has data — z-scores are trivially 0, shape not comparative"
+        # elif any_filled:
+        #     subtitle = (base_note + " — models missing IAS/Diagnostic Evidence Sufficiency "
+        #                 "(LLM-judge pending) plotted with 0")
+        # else:
+        #     subtitle = base_note
         # ax.set_title(
         #     f"Diagnostic Profile (judge: {judge})\n({subtitle})",
         #     fontsize=11.5, pad=30,
