@@ -16,6 +16,19 @@ code (see [Deactivated](#deactivated-metrics)).
 
 ## 0. Shared inputs
 
+**Turn numbering** (`utils/turn_policy.py`, shared by `eval/` and `human_validation/`):
+
+- **t = 0** is the doctor's opening question. It is not a turn and is never scored.
+- **Turn t ≥ 1** groups three things: patient response *t*, the doctor's
+  disorder prediction after it, and the doctor's next question.
+- The last turn *T* has no question, so an episode with *T* turns has *T*
+  responses and predictions but only *T* − 1 scored questions.
+
+The raw logs group turns the other way: `turns[k].doctor.question` (and
+`doctor_question` in `*_result.json`) is the question asked *before* response
+*k*, which is turn *k* − 1 under this policy. Always convert with
+`policy_turns()` rather than re-deriving the offset in each script.
+
 **Ground truth.** The disease ID comes from the log filename (`D009_S003_P001_plain` → `D009`).
 
 **ICD-10 → disease ID.** The doctor names diseases as ICD-10 codes. These map

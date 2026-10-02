@@ -4,6 +4,8 @@ Diagnostic Efficiency (+ Final Accuracy for Diagnostic Decision Quality)
 
 Metrics per episode. C_t = high_likely ∪ moderate_likely ∪ low_likely from
 the per-turn candidate_set written by symptom_diagnosis.py.
+Turns follow utils/turn_policy.py: the opening question is t = 0 and is
+not counted; T = number of patient responses.
 
   turn_count                        (main) total patient turns T
   time_to_first_confident_narrowing (sub)  "1st-confidence turn": first turn t

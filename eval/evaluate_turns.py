@@ -4,6 +4,8 @@ Diagnostic Hypothesis Quality — turn-level Jaccard / Precision / Recall /
 Weighted Recall of the doctor's stated candidate list vs. the KG reference.
 
 Ground truth : disease ID extracted from log filename (e.g. D001_3 → D001)
+Turn t       : patient response t + the doctor's prediction after it
+               (utils/turn_policy.py; the opening question is t = 0, not a turn)
 Predicted P  : doctor's inference candidates (ICD-10 codes → disease IDs via
                disorder_icd10.json icd10_accepted_codes) after each patient turn
 Tiers        : candidate_set.{high,moderate,low}_likely from symptom_diagnosis.py

@@ -6,6 +6,7 @@ as a judge-facing .xlsx in human_validation/judge/.
 """
 import json
 import random
+import sys
 from pathlib import Path
 
 from openpyxl import Workbook
@@ -13,6 +14,10 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 BASE = Path(__file__).resolve().parent.parent.parent
+if str(BASE) not in sys.path:
+    sys.path.insert(0, str(BASE))
+from utils.turn_policy import policy_turns  # noqa: E402
+
 RUN = BASE / "saved" / "run_batch_20260912"
 PROFILES_DIR = BASE / "data" / "v2_final_profiles"
 KG_DISORDER = BASE / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "disorder.json"
@@ -87,7 +92,7 @@ class CaseData:
             ("Turn Count", self.efficiency.get("turn_count")),
             ("Turns to First Confident Narrowing", self.efficiency.get("time_to_first_confident_narrowing")),
             ("Final Accuracy", self.efficiency.get("final_accuracy")),
-            ("Diagnostic Reasoning Ability (overall_score)", self.diagnostic_reasoning.get("overall_score")),
+            ("Diagnostic Evidence Sufficiency (overall_score)", self.diagnostic_reasoning.get("overall_score_gt")),
         ]
 
     def patient_profile_text(self):
@@ -124,13 +129,19 @@ class CaseData:
             parts.append(f"{label}: {names}")
         return " | ".join(parts) if parts else "(no differential recorded for this turn)"
 
+    def opening_question(self) -> str | None:
+        """t = 0 (utils/turn_policy.py): the doctor's opening question, not a turn."""
+        return policy_turns(self.transcript["turns"])[0]
+
     def turns(self):
-        for t in self.transcript["turns"]:
+        """Policy turns t >= 1: (t, patient response, differential after it,
+        doctor's next question — None on the last turn)."""
+        for t in policy_turns(self.transcript["turns"])[1]:
             yield (
                 t["turn"],
-                t["doctor_question"],
                 t["patient_response"],
                 self._candidate_str(t.get("candidate_set", {})),
+                t["question"],
             )
 
     def final_diagnosis_text(self):
@@ -258,12 +269,14 @@ def build_workbook(case: CaseData) -> Workbook:
 
     row = write_section_header(ws, row, "Transcript")
     transcript_start_row = row
-    for turn, question, response, candidates in case.turns():
-        c = ws.cell(row=row, column=2, value=f"[Turn {turn} · Doctor Question] {question}")
-        c.font = BODY_FONT
-        c.alignment = WRAP_TOP
-        row += 1
-
+    # Turn numbering per utils/turn_policy.py: Turn 0 = opening question (not
+    # a turn); Turn t = patient response t, the differential after it, and the
+    # doctor's next question (none on the last turn).
+    c = ws.cell(row=row, column=2, value=f"[Turn 0 · Doctor Opening Question] {case.opening_question()}")
+    c.font = BODY_FONT
+    c.alignment = WRAP_TOP
+    row += 1
+    for turn, response, candidates, question in case.turns():
         c = ws.cell(row=row, column=1, value=f"[Turn {turn} · Patient Response] {response}")
         c.font = BODY_FONT
         c.alignment = WRAP_TOP
@@ -273,6 +286,12 @@ def build_workbook(case: CaseData) -> Workbook:
         c.font = BODY_FONT
         c.alignment = WRAP_TOP
         row += 1
+
+        if question is not None:
+            c = ws.cell(row=row, column=2, value=f"[Turn {turn} · Doctor Question] {question}")
+            c.font = BODY_FONT
+            c.alignment = WRAP_TOP
+            row += 1
     row += 1
 
     row = write_section_header(ws, row, "Final Diagnosis & Diagnostic Checklist")

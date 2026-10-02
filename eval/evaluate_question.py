@@ -6,6 +6,9 @@ For each logged episode:
   1. Load cumulative symptom state and candidate_set per turn from result JSON
   2. Parse doctor questions and inference candidates from the log file
   3. Map each question to targeted symptom IDs with the llm_judge mapper
+     (turn numbering per utils/turn_policy.py: turn t = patient response t,
+     the doctor's prediction after it, and the question asked next; the
+     opening question is t = 0 and is never scored)
   4. Compute per-turn QTS (+ its diagnostic_relevance / redundancy_penalty
      components) and every intermediate symptom set used to derive it
      (discriminative/required/candidate/resolved/unresolved symptoms) for
@@ -49,6 +52,7 @@ from eval.question_targeting_score import (
 )
 from utils.llm import get_run_dir as _get_run_dir
 from eval.common import load_code2id
+from utils.turn_policy import policy_turns
 # from utils.config import CONFIG  # only used by the deactivated safety horizon
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -77,39 +81,29 @@ LOGS_DIR    = _args.logs    if _args.logs    else LOGS_ROOT    / _RUN_DIR
 
 # ── Log parsing ────────────────────────────────────────────────────────────────
 
-def _extract_questions_and_candidates(
-    log_file: Path,
-) -> list[tuple[str, list[str]]]:
+def _extract_questions_and_candidates(log_file: Path) -> dict[int, tuple[str, list[str]]]:
     """
-    Return [(follow_up_question, candidates_after_that_turn), ...] — read from
-    the structured .json simulation log's doctor_memory.turns.
+    {t: (question, candidates)} per utils/turn_policy.py: turn t's question
+    is the one the doctor asked AFTER patient response t, paired with the
+    doctor's prediction (inference candidates) at t. The opening question
+    (t = 0) and the last turn (no follow-up question) are not included.
 
-    Pair i (0-indexed) is (the question asked after patient turn i+1, that
-    turn's inference candidates): turns[k].doctor.question is the question
-    that preceded turn k, and turns[k].inference.candidates is the candidate
-    state right after turn k concluded, so turns[k+1].doctor.question paired
-    with turns[k].inference.candidates captures "the next question, given
-    what the candidate set looked like at that point" — matching the old
-    .txt-order pairing (opening question dropped, last turn's inference has
-    no following question and is dropped too).
+    Raw doctor_memory.turns[k].doctor.question is the question BEFORE
+    response k, so policy_turns() shifts it onto turn k − 1.
     """
-    json_path = log_file.with_suffix(".json")
-    data = json.loads(json_path.read_text(encoding="utf-8"))
-    turns = sorted(data.get("doctor_memory", {}).get("turns", []), key=lambda t: t.get("turn", 0))
-    by_turn = {t.get("turn"): t for t in turns}
-    max_turn = max(by_turn) if by_turn else 0
-
-    pairs: list[tuple[str, list[str]]] = []
-    for k in range(1, max_turn):
-        cur, nxt = by_turn.get(k), by_turn.get(k + 1)
-        if cur is None or nxt is None:
-            continue
-        inference   = cur.get("inference")
-        doctor_next = nxt.get("doctor")
-        if inference is None or doctor_next is None:
-            continue
-        pairs.append((doctor_next.get("question", ""), inference.get("candidates", [])))
-    return pairs
+    data = json.loads(log_file.with_suffix(".json").read_text(encoding="utf-8"))
+    raw = [
+        {"turn": int(slot.get("turn", 0)),
+         "doctor_question": (slot.get("doctor") or {}).get("question"),
+         "inference": slot.get("inference")}
+        for slot in data.get("doctor_memory", {}).get("turns", [])
+    ]
+    _opening, turns = policy_turns(raw)
+    return {
+        t["turn"]: (t["question"], t["inference"].get("candidates", []))
+        for t in turns
+        if t["question"] is not None and t["inference"] is not None
+    }
 
 
 # ── Main evaluation ────────────────────────────────────────────────────────────
@@ -204,7 +198,7 @@ def evaluate() -> list[dict]:
                 + len(cs.get("low_likely",     []))
             )
 
-            if i >= len(q_and_cands):
+            if t not in q_and_cands:
                 turns_out.append({
                     "turn": t,
                     "candidate_size": candidate_size,
@@ -212,7 +206,7 @@ def evaluate() -> list[dict]:
                 })
                 continue
 
-            question, raw_cands = q_and_cands[i]
+            question, raw_cands = q_and_cands[t]
             candidate_ids = [
                 code2id[c.strip().upper()]
                 for c in raw_cands

@@ -67,6 +67,12 @@ def load_diagnostic_criteria() -> dict:
 # numbering in simulation_core.py (opening question logged at turn=1 alongside
 # that same turn's patient answer; each follow-up logged at turn=t+1 alongside
 # the next turn's answer). No pairing/regex heuristics needed.
+#
+# Turn numbering (utils/turn_policy.py): result turn t = patient response t.
+# Its "doctor_question" field is the question the patient is answering —
+# i.e. the question of policy turn t − 1 (t − 1 = 0 is the opening question),
+# kept here as context for symptom extraction. The question that BELONGS to
+# turn t under the policy is result turn t + 1's doctor_question.
 
 
 def _json_log_path(log_file: Path) -> Path:

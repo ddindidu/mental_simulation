@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from generate_judge_xlsx import (  # noqa: E402
     CaseData, sample_cases, results_dir, analysis_dir, PROFILES_DIR,
 )
+from utils.turn_policy import policy_turns  # noqa: E402  (repo root put on sys.path by generate_judge_xlsx)
 
 TRANSLATED_DIR = Path(
     "/tmp/claude-1003/-home-jsshin-mental-simulation/59041d6a-8621-4fad-ac5c-671374a46b87/scratchpad/kor_translated"
@@ -120,15 +121,32 @@ class KoCaseData(CaseData):
             parts.append(f"{label}: {names}")
         return " | ".join(parts) if parts else "(이 시점에 기록된 감별진단 없음)"
 
-    def turns_ko(self):
+    def _raw_turns_ko(self) -> list[dict]:
+        """Raw result turns with Korean text merged in. Like *_result.json,
+        doctor_question is the question BEFORE that response."""
+        out = []
         for t in self.transcript["turns"]:
-            turn = t["turn"]
-            ko_t = self._ko_turns.get(turn, {})
+            ko_t = self._ko_turns.get(t["turn"], {})
+            out.append({
+                **t,
+                "doctor_question": ko_t.get("doctor_question", t["doctor_question"]),
+                "patient_response": ko_t.get("patient_response", t["patient_response"]),
+            })
+        return out
+
+    def opening_question_ko(self) -> str | None:
+        """t = 0 (utils/turn_policy.py): the doctor's opening question, not a turn."""
+        return policy_turns(self._raw_turns_ko())[0]
+
+    def turns_ko(self):
+        """Policy turns t >= 1: (t, patient response, differential after it,
+        doctor's next question — None on the last turn)."""
+        for t in policy_turns(self._raw_turns_ko())[1]:
             yield (
-                turn,
-                ko_t.get("doctor_question", t["doctor_question"]),
-                ko_t.get("patient_response", t["patient_response"]),
+                t["turn"],
+                t["patient_response"],
                 self._candidate_str_ko(t.get("candidate_set", {})),
+                t["question"],
             )
 
     def final_diagnosis_text_ko(self):
@@ -175,7 +193,7 @@ METRIC_LABELS_KO = [
     "총 턴 수",
     "첫 확신적 후보 축소까지의 턴 수",
     "최종 진단 정확도",
-    "진단적 추론 능력 (overall_score)",
+    "진단 근거 충분성(자동) (overall_score)",
 ]
 
 TITLE_FONT = Font(name=FONT_NAME, size=16, bold=True)
@@ -229,12 +247,13 @@ def build_workbook(case: KoCaseData) -> Workbook:
 
     row = write_section_header(ws, row, "대화문")
     transcript_start_row = row
-    for turn, question, response, candidates in case.turns_ko():
-        c = ws.cell(row=row, column=2, value=f"[{turn}번째 턴 · 의사 질문] {question}")
-        c.font = BODY_FONT
-        c.alignment = WRAP_TOP
-        row += 1
-
+    # 턴 번호 규칙 (utils/turn_policy.py): 0번째 턴 = 의사의 첫 질문 (턴에 포함되지 않음);
+    # t번째 턴 = 환자 응답 t, 그 직후 의사의 감별진단, 의사의 다음 질문 (마지막 턴은 질문 없음).
+    c = ws.cell(row=row, column=2, value=f"[0번째 턴 · 의사 첫 질문] {case.opening_question_ko()}")
+    c.font = BODY_FONT
+    c.alignment = WRAP_TOP
+    row += 1
+    for turn, response, candidates, question in case.turns_ko():
         c = ws.cell(row=row, column=1, value=f"[{turn}번째 턴 · 환자 응답] {response}")
         c.font = BODY_FONT
         c.alignment = WRAP_TOP
@@ -244,6 +263,12 @@ def build_workbook(case: KoCaseData) -> Workbook:
         c.font = BODY_FONT
         c.alignment = WRAP_TOP
         row += 1
+
+        if question is not None:
+            c = ws.cell(row=row, column=2, value=f"[{turn}번째 턴 · 의사 질문] {question}")
+            c.font = BODY_FONT
+            c.alignment = WRAP_TOP
+            row += 1
     row += 1
 
     row = write_two_col_header(ws, row, "환자 증상 프로필", "최종 진단 및 진단 체크리스트")

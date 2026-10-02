@@ -8,7 +8,9 @@ side is replaced by llm_judge_scores.json (this dir's own LLM-as-judge
 output) instead of human expert xlsx ratings:
 
   jaccard_rigid (ours, turn_eval.json)              <-> h  (LLM-judge, Diagnostic Hypothesis Quality)
-  ias (ours, question_eval.json)                    <-> q  (LLM-judge, Diagnostic Question Quality, turn>=2)
+  qts (ours, question_eval.json)                    <-> q  (LLM-judge, Diagnostic Question Quality, turn>=1)
+
+Turns follow utils/turn_policy.py (turn 0 = opening question, not scored).
   diagnostic_evidence_sufficiency_pred (ours, dr json) <-> evidence_sufficiency (LLM-judge, episode-level)
 
 Usage:
@@ -19,8 +21,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import sys
 import numpy as np
 import scipy.stats as scipy_stats
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+from utils.turn_policy import OPENING_TURN, preceding_question_turn_to_policy  # noqa: E402
 
 
 def _qts(d: dict, new_key: str, old_key: str):
@@ -132,8 +138,16 @@ def main() -> None:
         m = our_metrics(doctor, profile_id)
 
         turns = parsed.get("turns") or []
+        # Turns follow utils/turn_policy.py. Outputs written before
+        # llm_judge.py recorded "turn_numbering" numbered q by the patient
+        # response that FOLLOWS the question, so shift them onto the policy
+        # (q at t -> turn t - 1; t - 1 = 0 is the unscored opening question).
+        legacy = c.get("turn_numbering") != "policy"
+        def q_turn(t: dict) -> int | None:
+            tn = t.get("t")
+            return None if tn is None else (preceding_question_turn_to_policy(tn) if legacy else tn)
         h_vals = [t.get("h") for t in turns if t.get("h") is not None]
-        q_vals = [t.get("q") for t in turns if t.get("q") is not None]
+        q_vals = [t.get("q") for t in turns if t.get("q") is not None and q_turn(t) != OPENING_TURN]
         mean_h = _mean(h_vals)
         mean_q = _mean(q_vals)
         llm_evidence = parsed.get("evidence_sufficiency")
@@ -142,8 +156,9 @@ def main() -> None:
             tn = t.get("t")
             if t.get("h") is not None and m["jaccard_rigid_by_turn"].get(tn) is not None:
                 turn_h_pairs.append((m["jaccard_rigid_by_turn"][tn], t["h"]))
-            if t.get("q") is not None and m["ias_by_turn"].get(tn) is not None:
-                turn_q_pairs.append((m["ias_by_turn"][tn], t["q"]))
+            qt = q_turn(t)
+            if t.get("q") is not None and qt != OPENING_TURN and m["ias_by_turn"].get(qt) is not None:
+                turn_q_pairs.append((m["ias_by_turn"][qt], t["q"]))
 
         rows.append({
             "sheet": c["sheet"], "profile_id": profile_id, "doctor": doctor,
@@ -176,7 +191,7 @@ def main() -> None:
 
     print(f"\n=== Turn-level (pooled, each rated turn = one point) ===")
     for label, pairs in (("jaccard_rigid(turn) <-> h(turn)", turn_h_pairs),
-                          ("ias(turn) <-> q(turn, t>=2)", turn_q_pairs)):
+                          ("qts(t) <-> q(t), t>=1 (turn_policy)", turn_q_pairs)):
         xs = [p[0] for p in pairs]; ys = [p[1] for p in pairs]
         r, n = pearson(xs, ys)
         rho, _ = spearman(xs, ys)

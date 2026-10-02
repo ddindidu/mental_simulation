@@ -72,6 +72,7 @@ if str(_REPO_ROOT) not in _sys.path:
     _sys.path.insert(0, str(_REPO_ROOT))
 
 from utils.metric_compat import episode_mean_qts, turn_qts
+from utils.turn_policy import OPENING_TURN, preceding_question_turn_to_policy
 from reporting.ias_variants import IAS_VARIANT_KEYS, IAS_VARIANT_LABELS, episode_ias_variants
 from reporting.plot_v4_radar_by_judge import DOCTOR_NAME_CANONICAL, PALETTE
 
@@ -133,8 +134,37 @@ KOR_LABEL_TO_KEY = {
 }
 
 
+_TURN_RE = re.compile(r"(\d+)번째\s*턴")
+
+
+def _sheet_uses_policy_numbering(ws) -> bool:
+    """Sheets generated under utils/turn_policy.py start the transcript with a
+    '[0번째 턴 · 의사 첫 질문]' row. The expert_response/ sheets predate that
+    and number each question with the patient response that FOLLOWS it."""
+    for row in ws.iter_rows(values_only=True):
+        text = row[2] if len(row) > 2 else None
+        if isinstance(text, str) and (m := _TURN_RE.search(text)) and int(m.group(1)) == OPENING_TURN:
+            return True
+    return False
+
+
+def _row_turn(text, policy_numbering: bool) -> int | None:
+    """Policy turn of a transcript row (utils/turn_policy.py), or None if the
+    row isn't a transcript row. Question rows in old-layout sheets are
+    shifted onto the policy (sheet 'N번째 턴 · 의사 질문' -> turn N − 1)."""
+    if not isinstance(text, str) or not (m := _TURN_RE.search(text)):
+        return None
+    turn = int(m.group(1))
+    if "의사 질문" in text and not policy_numbering:
+        turn = preceding_question_turn_to_policy(turn)
+    return turn
+
+
 def parse_expert_file(path: Path) -> dict[str, dict[str, float]]:
-    """sheet -> {profile_id, diff_diag, info_acq, evidence_suff}."""
+    """sheet -> {profile_id, diff_diag, info_acq, evidence_suff}.
+
+    info_acq excludes any rating on the opening question (turn 0 is not a
+    turn under utils/turn_policy.py — QTS never scores it either)."""
     wb = openpyxl.load_workbook(path, data_only=True)
     out = {}
     for sheet in wb.sheetnames:
@@ -144,11 +174,13 @@ def parse_expert_file(path: Path) -> dict[str, dict[str, float]]:
             continue
         profile_id = str(header).split("/")[0].strip()
 
+        policy_numbering = _sheet_uses_policy_numbering(ws)
         diff_vals, info_vals, evid_vals = [], [], []
         for row in ws.iter_rows(min_row=1, values_only=True):
             if len(row) > 3 and isinstance(row[3], (int, float)):
                 diff_vals.append(float(row[3]))
-            if len(row) > 4 and isinstance(row[4], (int, float)):
+            if (len(row) > 4 and isinstance(row[4], (int, float))
+                    and _row_turn(row[2] if len(row) > 2 else None, policy_numbering) != OPENING_TURN):
                 info_vals.append(float(row[4]))
             if len(row) > 5 and isinstance(row[5], (int, float)):
                 evid_vals.append(float(row[5]))
@@ -163,16 +195,16 @@ def parse_expert_file(path: Path) -> dict[str, dict[str, float]]:
     return out
 
 
-_TURN_RE = re.compile(r"(\d+)번째\s*턴")
-
-
 def parse_expert_turns(path: Path) -> dict[str, dict[str, dict[int, float]]]:
     """sheet -> {profile_id, diff_diag: {turn: value}, info_acq: {turn: value}}.
 
-    Turn number is parsed from the Doctor-column text ("[N번째 턴 · ...]"):
-    감별진단 ratings (col D) live on '...의사의 감별진단' rows, 정보습득 ratings
-    (col E) on '...의사 질문' rows. 진단근거충분성 (col F) has no turn — it's a
-    single per-episode rating, so it has no turn-level counterpart."""
+    Turns follow utils/turn_policy.py (turn t = patient response t, the
+    differential after it, and the doctor's next question; the opening
+    question is turn 0 and is dropped). Parsed from the Doctor-column text
+    ("[N번째 턴 · ...]"): 감별진단 ratings (col D) live on '...의사의 감별진단'
+    rows, 정보습득 ratings (col E) on '...의사 질문' rows — in old-layout sheets
+    a question row labelled N is the question of turn N − 1 (see _row_turn), so
+    it lines up with QTS at turn N − 1. 진단근거충분성 (col F) has no turn."""
     wb = openpyxl.load_workbook(path, data_only=True)
     out: dict[str, dict[str, dict[int, float]]] = {}
     for sheet in wb.sheetnames:
@@ -182,19 +214,16 @@ def parse_expert_turns(path: Path) -> dict[str, dict[str, dict[int, float]]]:
             continue
         profile_id = str(header).split("/")[0].strip()
 
+        policy_numbering = _sheet_uses_policy_numbering(ws)
         diff_by_turn: dict[int, float] = {}
         info_by_turn: dict[int, float] = {}
         for row in ws.iter_rows(min_row=1, values_only=True):
-            doctor_text = row[2] if len(row) > 2 else None
-            if not isinstance(doctor_text, str):
+            turn = _row_turn(row[2] if len(row) > 2 else None, policy_numbering)
+            if turn is None:
                 continue
-            m = _TURN_RE.search(doctor_text)
-            if not m:
-                continue
-            turn = int(m.group(1))
             if len(row) > 3 and isinstance(row[3], (int, float)):
                 diff_by_turn[turn] = float(row[3])
-            if len(row) > 4 and isinstance(row[4], (int, float)):
+            if len(row) > 4 and isinstance(row[4], (int, float)) and turn != OPENING_TURN:
                 info_by_turn[turn] = float(row[4])
 
         if diff_by_turn or info_by_turn:
