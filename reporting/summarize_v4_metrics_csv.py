@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
 """
-evaluation_v4.md — Cross-Combo CSV Summary
+evaluation_v5.md — Cross-Combo CSV Summary of the headline metrics
 
 Scans a run's results/ tree for every (patient, judge, doctor) combo that has
-already been evaluated, and writes one CSV row per combo covering all four
-evaluation_v4.md dimensions:
+already been evaluated, and writes one CSV row per combo covering the four
+evaluation dimensions:
 
-  Inference Quality             <- analysis/<patient>/<judge>/<doctor>/turn_eval.json
-  Information Acquisition (IAS/ECR) <- results/<patient>/<judge>/<doctor>/question_eval.json
-  Efficiency                    <- results/<patient>/<judge>/<doctor>/efficiency_eval.json
-  Reliable Diagnosis            <- results/<patient>/<judge>/<doctor>/final_diagnosis_eval.txt
-                                    + diagnostic_reasoning_eval.json
+  Diagnostic Hypothesis Quality <- analysis/<patient>/<judge>/<doctor>/turn_eval.json
+                                    (jaccard / precision / recall / weighted_recall)
+  Diagnostic Question Quality   <- results/<patient>/<judge>/<doctor>/question_eval.json (QTS)
+  Diagnostic Efficiency         <- results/<patient>/<judge>/<doctor>/efficiency_eval.json
+  Diagnostic Decision Quality   <- dialogue logs (final accuracy)
+                                    + diagnostic_reasoning_eval.json (_pred)
 
 Does not compute anything itself — it only aggregates whatever the eval/*.py
 scripts have already written to disk, so a combo whose LLM-judge stage
 (evaluate_question.py / score_diagnostic_reasoning.py) hasn't run yet simply
-gets blank IAS/ECR/Diagnostic Reasoning cells rather than failing.
+gets blank QTS / Diagnostic Evidence Sufficiency cells rather than failing.
 
 Combo discovery: every results/<patient>/<judge>/<doctor>/final_diagnosis_eval.txt
 found under RESULTS_ROOT marks one row (that script runs independent of the
@@ -51,38 +52,31 @@ if str(_REPO_ROOT) not in _sys.path:
 
 os.environ.setdefault("MS_RUN", "run_batch_20260912")
 
+from eval.common import load_code2id, read_final_diagnosis, resolve_disease_id
+from utils.metric_compat import episode_mean_qts
 from utils.paths import ANALYSIS_ROOT, LOGS_ROOT, RESULTS_ROOT
 
-DISORDER_ICD10_FILE = _REPO_ROOT / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "disorder_icd10.json"
 
 FIELDS = [
     "patient", "judge", "doctor",
     "final_accuracy_pct", "final_accuracy_frac",
-    "n_turns", "jaccard", "precision", "recall",
-    "jaccard_rigid", "precision_rigid", "recall_rigid",
-    "n_episodes_efficiency", "turn_count", "turn_to_1st_correct",
-    "turn_to_1st_confident", "overcommitment_turns", "overcommitment_conf",
-    "n_episodes_question_eval", "ias", "ecr", "safety_all_covered_rate",
-    "n_episodes_diagnostic_reasoning", "diagnostic_reasoning_overall_score",
+    "n_turns", "jaccard", "precision", "recall", "weighted_recall",
+    "n_episodes_question_eval", "qts",
+    "n_episodes_efficiency", "turn_count", "turn_to_1st_confident", "overcommitment_conf",
+    "n_episodes_diagnostic_reasoning", "diagnostic_evidence_sufficiency_pred",
 ]
 
 SELECTED_FIELDS = [
         "patient", "judge", "doctor",
 
-        "final_accuracy_pct",  # "final_accuracy_frac",
-        # "n_turns",
-        "jaccard", "precision", "recall",
-        "jaccard_rigid", "precision_rigid", "recall_rigid",
-
-        # "n_episodes_question_eval",
-        "ias",  # "ecr", "safety_all_covered_rate",
-
-        # "n_episodes_efficiency",
-        "turn_count", "turn_to_1st_correct",
-        "turn_to_1st_confident", "overcommitment_turns", "overcommitment_conf",
-
-        # "n_episodes_diagnostic_reasoning",
-        "diagnostic_reasoning_overall_score",
+        # Diagnostic Hypothesis Quality
+        "jaccard", "precision", "recall", "weighted_recall",
+        # Diagnostic Question Quality
+        "qts",
+        # Diagnostic Efficiency
+        "turn_count", "turn_to_1st_confident", "overcommitment_conf",
+        # Diagnostic Decision Quality
+        "final_accuracy_pct", "diagnostic_evidence_sufficiency_pred",
     ]
 
 DOCTOR_ORDER = [
@@ -115,33 +109,9 @@ def _filter_style(episodes: list[dict], style: str | None) -> list[dict]:
     return [ep for ep in episodes if str(ep.get("log_file", "")).endswith(f"_{style}")]
 
 
-_DISORDER_MAP_CACHE: dict[str, str] | None = None
-
-
-def _code2id() -> dict[str, str]:
-    global _DISORDER_MAP_CACHE
-    if _DISORDER_MAP_CACHE is None:
-        icd10_data = json.loads(DISORDER_ICD10_FILE.read_text(encoding="utf-8"))
-        code2id: dict[str, str] = {}
-        for k, v in icd10_data.items():
-            for code in v.get("icd10_accepted_codes") or [v["icd10_code"]]:
-                code2id[code.strip().upper()] = k
-        _DISORDER_MAP_CACHE = code2id
-    return _DISORDER_MAP_CACHE
-
-
 def _ground_truth_id(log_stem: str) -> str | None:
     m = re.match(r"(D\d+)", log_stem)
     return m.group(1) if m else None
-
-
-def _extract_final_diagnosis(json_log: Path) -> str | None:
-    try:
-        data = json.loads(json_log.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return None
-    diagnosis = str(data.get("final_diagnosis") or "").strip()
-    return diagnosis or None
 
 
 def compute_final_accuracy(logs_dir: Path, style: str | None) -> tuple[float | None, str | None]:
@@ -152,15 +122,14 @@ def compute_final_accuracy(logs_dir: Path, style: str | None) -> tuple[float | N
     log_files = sorted(logs_dir.glob("*.json"))
     if style:
         log_files = [p for p in log_files if p.stem.endswith(f"_{style}")]
-    code2id = _code2id()
+    code2id = load_code2id()
     total = correct = 0
     for log_file in log_files:
         gt = _ground_truth_id(log_file.stem)
         if gt is None:
             continue
         total += 1
-        diagnosis = _extract_final_diagnosis(log_file)
-        if diagnosis and code2id.get(diagnosis.strip().upper()) == gt:
+        if resolve_disease_id(read_final_diagnosis(log_file), code2id) == gt:
             correct += 1
     if total == 0:
         return None, None
@@ -171,17 +140,14 @@ def load_turn_eval(path: Path, style: str | None) -> dict | None:
     data = _filter_style(_load_list(path), style)
     if not data:
         return None
+    # Mean over all (episode, turn) rows. *_rigid holds the tier-priority
+    # reference-set value in both pre- and post-refactor turn_eval.json.
     return {
         "n": len(data),
-        "jaccard":   _mean([d.get("jaccard") for d in data]),
-        "precision": _mean([d.get("precision") for d in data]),
-        "recall":    _mean([d.get("recall") for d in data]),
-        # "rigid" reference set: tier-priority (high alone if non-empty, else
-        # moderate alone, else low alone) instead of the union of all three —
-        # see eval/evaluate_turns.py's rigid_truth_set.
-        "jaccard_rigid":   _mean([d.get("jaccard_rigid") for d in data]),
-        "precision_rigid": _mean([d.get("precision_rigid") for d in data]),
-        "recall_rigid":    _mean([d.get("recall_rigid") for d in data]),
+        "jaccard":         _mean([d.get("jaccard_rigid") for d in data]),
+        "precision":       _mean([d.get("precision_rigid") for d in data]),
+        "recall":          _mean([d.get("recall_rigid") for d in data]),
+        "weighted_recall": _mean([d.get("weighted_recall") for d in data]),
     }
 
 
@@ -192,9 +158,7 @@ def load_efficiency(path: Path, style: str | None) -> dict | None:
     return {
         "n": len(data),
         "turn_count": _mean([d.get("turn_count") for d in data]),
-        "t1_correct": _mean([d.get("time_to_first_correct_narrowing") for d in data]),
         "t1_confident": _mean([d.get("time_to_first_confident_narrowing") for d in data]),
-        "overcommit": _mean([d.get("overcommitment_turns") for d in data]),
         "overcommit_conf": _mean([d.get("overcommitment_conf") for d in data]),
     }
 
@@ -203,32 +167,24 @@ def load_question_eval(path: Path, style: str | None) -> dict | None:
     data = _filter_style(_load_list(path), style)
     if not data:
         return None
-    ias_vals, ecr_vals = [], []
-    safety_ok = safety_n = 0
-    for ep in data:
-        judge_metrics = (ep.get("episode_metrics") or {}).get("llm_judge") or {}
-        if judge_metrics.get("mean_ias") is not None:
-            ias_vals.append(judge_metrics["mean_ias"])
-        if judge_metrics.get("mean_ecr") is not None:
-            ecr_vals.append(judge_metrics["mean_ecr"])
-        safety = ep.get("safety_screening_compliance")
-        if safety is not None:
-            safety_n += 1
-            if safety.get("all_covered"):
-                safety_ok += 1
     return {
         "n": len(data),
-        "ias": _mean(ias_vals),
-        "ecr": _mean(ecr_vals),
-        "safety_rate": (safety_ok / safety_n) if safety_n else None,
+        "qts": _mean([episode_mean_qts(ep) for ep in data]),
     }
 
 
 def load_diagnostic_reasoning(path: Path, style: str | None) -> dict | None:
+    """overall_score_pred = evidence sufficiency for the doctor's own final
+    diagnosis (None when that diagnosis couldn't be resolved to a disease
+    id). Mean over episodes with a non-null value."""
     data = _filter_style(_load_list(path), style)
     if not data:
         return None
-    return {"n": len(data), "overall": _mean([ep.get("overall_score") for ep in data])}
+    pred_vals = [ep.get("overall_score_pred") for ep in data if ep.get("overall_score_pred") is not None]
+    return {
+        "n": len(pred_vals),
+        "pred": _mean(pred_vals) if pred_vals else None,
+    }
 
 
 def discover_combos() -> list[tuple[str, str, str, Path]]:
@@ -257,26 +213,21 @@ def build_rows(style: str | None) -> list[dict]:
 
         rows.append({
             "patient": patient, "judge": judge, "doctor": doctor,
-            "final_accuracy_pct": acc_pct, # "final_accuracy_frac": acc_frac,
+            "final_accuracy_pct": acc_pct,
+            "final_accuracy_frac": acc_frac,
             "n_turns": te["n"] if te else None,
             "jaccard": te["jaccard"] if te else None,
             "precision": te["precision"] if te else None,
             "recall": te["recall"] if te else None,
-            "jaccard_rigid":   te["jaccard_rigid"] if te else None,
-            "precision_rigid": te["precision_rigid"] if te else None,
-            "recall_rigid":    te["recall_rigid"] if te else None,
+            "weighted_recall": te["weighted_recall"] if te else None,
+            "n_episodes_question_eval": qe["n"] if qe else None,
+            "qts": qe["qts"] if qe else None,
             "n_episodes_efficiency": eff["n"] if eff else None,
             "turn_count": eff["turn_count"] if eff else None,
-            "turn_to_1st_correct": eff["t1_correct"] if eff else None,
-            "overcommitment_turns": eff["overcommit"] if eff else None,
             "turn_to_1st_confident": eff["t1_confident"] if eff else None,
             "overcommitment_conf": eff["overcommit_conf"] if eff else None,
-            "n_episodes_question_eval": qe["n"] if qe else None,
-            "ias": qe["ias"] if qe else None,
-            "ecr": qe["ecr"] if qe else None,
-            "safety_all_covered_rate": qe["safety_rate"] if qe else None,
             "n_episodes_diagnostic_reasoning": dr["n"] if dr else None,
-            "diagnostic_reasoning_overall_score": dr["overall"] if dr else None,
+            "diagnostic_evidence_sufficiency_pred": dr["pred"] if dr else None,
         })
     return rows
 

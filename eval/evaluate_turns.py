@@ -1,16 +1,29 @@
 #!/usr/bin/env python3
 """
-Turn-level evaluation: accuracy, precision, recall based on doctor's
-per-turn candidate diagnoses parsed from simulation logs.
+Diagnostic Hypothesis Quality — turn-level Jaccard / Precision / Recall /
+Weighted Recall of the doctor's stated candidate list vs. the KG reference.
 
-Ground truth : disease ID extracted from log filename (e.g. D001_3.txt → D001)
-Predicted set: doctor's inference candidates (ICD-10 codes) after each patient turn
-Truth set    : {ground_truth} ∪ {all diseases in disease_matches (fully_met + top_partial)}
+Ground truth : disease ID extracted from log filename (e.g. D001_3 → D001)
+Predicted P  : doctor's inference candidates (ICD-10 codes → disease IDs via
+               disorder_icd10.json icd10_accepted_codes) after each patient turn
+Tiers        : candidate_set.{high,moderate,low}_likely from symptom_diagnosis.py
+               (compute_candidate_set over cumulative confirmed/denied symptoms)
 
-Definitions (per sample per turn):
-  TP = |predicted ∩ truth_set|
-  FP = |predicted − truth_set|
-  FN = |truth_set − predicted|
+Reference candidate set R (tier-priority, a.k.a. "rigid"):
+  R = high_likely ∪ {gt}       if high_likely ≠ ∅
+    = moderate_likely ∪ {gt}   elif moderate_likely ≠ ∅
+    = low_likely ∪ {gt}        elif low_likely ≠ ∅
+    = {gt}                     otherwise
+
+  precision = |P ∩ R| / |P|      (0 if P = ∅)
+  recall    = |P ∩ R| / |R|
+  jaccard   = |P ∩ R| / |P ∪ R|
+
+Weighted recall uses ALL three tiers (gt forced into high):
+  weighted_recall = 1 − (2·|H∖P| + 1·|M∖P| + 0.5·|L∖P|) / (2·|H| + 1·|M| + 0.5·|L|)
+
+[DEACTIVATED] union-reference (high ∪ moderate ∪ low) precision/recall/jaccard
+and strict accuracy (P == R) — not part of the headline metric set.
 """
 
 import json
@@ -31,6 +44,7 @@ BASE_DIR    = Path(__file__).resolve().parent.parent
 from utils.paths import ANALYSIS_ROOT, LOGS_ROOT, RESULTS_ROOT
 
 from utils.llm import get_run_dir as _get_run_dir
+from eval.common import load_code2id
 _RUN_DIR    = _get_run_dir()
 RESULTS_DIR  = RESULTS_ROOT  / _RUN_DIR
 LOGS_DIR     = LOGS_ROOT     / _RUN_DIR
@@ -41,17 +55,6 @@ DISORDER_ICD10_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph"
 
 
 # ── ICD-10 code ↔ ID mapping ─────────────────────────────────────────────────
-
-def _build_code_to_id() -> dict[str, str]:
-    """Return {icd10_code: disease_id} from disorder_icd10.json."""
-    with open(DISORDER_ICD10_FILE, encoding="utf-8") as f:
-        mapping = json.load(f)
-    code2id: dict[str, str] = {}
-    for k, v in mapping.items():
-        for code in v.get("icd10_accepted_codes") or [v["icd10_code"]]:
-            code2id[code.strip().upper()] = k
-    return code2id
-
 
 # ── Log parsing: extract doctor candidates per turn ──────────────────────────
 
@@ -129,7 +132,7 @@ def all_matched_disease_ids(turn: dict) -> set[str]:
 # ── Main evaluation ──────────────────────────────────────────────────────────
 
 def evaluate():
-    code2id = _build_code_to_id()
+    code2id = load_code2id()
     results = load_results()
     if not results:
         print("No result files found.", file=sys.stderr)
@@ -137,14 +140,10 @@ def evaluate():
 
     max_turn = max(r["total_turns"] for r in results)
 
-    # turn_stats now tracks weighted_recall numerators/denominators separately
     turn_stats = defaultdict(lambda: {
         "tp": 0, "fp": 0, "fn": 0, "n": 0, "total_pred": 0,
-        "strict_acc_sum": 0.0,
         "jaccard_sum": 0.0,
         "wr_penalty": 0, "wr_max_penalty": 0,
-        "tp_rigid": 0, "fp_rigid": 0, "fn_rigid": 0, "total_pred_rigid": 0,
-        "jaccard_rigid_sum": 0.0,
     })
     sample_turns = []
     skipped = 0
@@ -200,53 +199,31 @@ def evaluate():
                 moderate_likely = {d["disease_id"] for d in dm.get("top_partial", [])}
                 low_likely      = set()
 
-            # Tier-priority ("rigid") reference set, captured before gt gets
-            # forced into high_likely below: if high_likely has any member,
-            # the rigid truth set is high_likely alone (moderate/low excluded
-            # entirely); else moderate_likely alone if non-empty; else
-            # low_likely alone; ground truth is still always added on top so
-            # a doctor naming only the correct answer is never unfairly
-            # penalized by an algorithmic tier miss.
+            # Reference candidate set (tier-priority), captured before gt is
+            # forced into high_likely below. gt is always added so a doctor
+            # naming only the correct answer is never penalized by an
+            # algorithmic tier miss.
             if high_likely:
-                rigid_truth_set = set(high_likely) | {gt}
+                reference_set = set(high_likely) | {gt}
             elif moderate_likely:
-                rigid_truth_set = set(moderate_likely) | {gt}
+                reference_set = set(moderate_likely) | {gt}
             elif low_likely:
-                rigid_truth_set = set(low_likely) | {gt}
+                reference_set = set(low_likely) | {gt}
             else:
-                rigid_truth_set = {gt}
+                reference_set = {gt}
 
+            # Tiers for weighted recall: gt forced into high, tiers disjoint.
             high_likely.add(gt)
             moderate_likely -= high_likely
             low_likely      -= high_likely | moderate_likely
 
-            strong_candidates = high_likely | moderate_likely
-            all_candidates    = strong_candidates | low_likely
-            truth_set         = all_candidates
-
-            intersection = preds & truth_set
-            tp = len(intersection)
-            fp = len(preds - truth_set)
-            fn = len(truth_set - preds)
-            n_truth = len(truth_set)
-
-            # Rigid-version precision/recall/jaccard (spec discussion: tier
-            # priority instead of tier union as the reference candidate set).
-            tp_rigid = len(preds & rigid_truth_set)
-            fp_rigid = len(preds - rigid_truth_set)
-            fn_rigid = len(rigid_truth_set - preds)
-            precision_rigid = tp_rigid / len(preds) if preds else 0.0
-            recall_rigid    = tp_rigid / len(rigid_truth_set) if rigid_truth_set else 0.0
-            union_rigid     = preds | rigid_truth_set
-            jaccard_rigid   = tp_rigid / len(union_rigid) if union_rigid else 1.0
-
-            # spec §4.3 metrics
+            tp = len(preds & reference_set)
+            fp = len(preds - reference_set)
+            fn = len(reference_set - preds)
             precision = tp / len(preds) if preds else 0.0
-            recall = tp / n_truth if n_truth else 0.0
-            accuracy = 1.0 if preds == truth_set else 0.0
-            union = preds | truth_set
-            jaccard = tp / len(union) if union else 1.0
-            # weighted recall: high=2×, moderate=1×, low=0.5× — spec §4.3
+            recall    = tp / len(reference_set)
+            jaccard   = tp / len(preds | reference_set)
+
             missed_high = high_likely - preds
             missed_mod  = moderate_likely - preds
             missed_low  = low_likely - preds
@@ -254,21 +231,23 @@ def evaluate():
             wr_max      = 2 * len(high_likely) + 1 * len(moderate_likely) + 0.5 * len(low_likely)
             weighted_recall = 1.0 - wr_penalty / wr_max if wr_max else 1.0
 
+            # [DEACTIVATED] union-reference metrics + strict accuracy.
+            # union_set = high_likely | moderate_likely | low_likely
+            # tp_u = len(preds & union_set)
+            # precision_union = tp_u / len(preds) if preds else 0.0
+            # recall_union    = tp_u / len(union_set)
+            # jaccard_union   = tp_u / len(preds | union_set)
+            # accuracy        = 1.0 if preds == union_set else 0.0
+
             stats = turn_stats[t]
             stats["tp"] += tp
             stats["fp"] += fp
             stats["fn"] += fn
             stats["n"] += 1
             stats["total_pred"] += len(preds)
-            stats["strict_acc_sum"] += accuracy
             stats["jaccard_sum"] += jaccard
             stats["wr_penalty"] += wr_penalty
             stats["wr_max_penalty"] += wr_max
-            stats["tp_rigid"] += tp_rigid
-            stats["fp_rigid"] += fp_rigid
-            stats["fn_rigid"] += fn_rigid
-            stats["total_pred_rigid"] += len(preds)
-            stats["jaccard_rigid_sum"] += jaccard_rigid
 
             sample_turns.append({
                 "log_file":          log_name,
@@ -281,87 +260,53 @@ def evaluate():
                 "high_likely":       sorted(high_likely),
                 "moderate_likely":   sorted(moderate_likely),
                 "low_likely":        sorted(low_likely),
-                "strong_candidates": sorted(strong_candidates),
-                "all_candidates":    sorted(all_candidates),
-                "truth_set":         sorted(truth_set),
+                "reference_candidate_set": sorted(reference_set),
+                "truth_set":         sorted(reference_set),  # alias, read by reporting/plot_confusion.py
                 "tp": tp, "fp": fp, "fn": fn,
+                "jaccard":          round(jaccard, 4),
                 "precision":        round(precision, 4),
                 "recall":           round(recall, 4),
-                "accuracy":         round(accuracy, 4),
-                "jaccard":          round(jaccard, 4),
                 "weighted_recall":  round(weighted_recall, 4),
-                "reference_candidate_set_rigid": sorted(rigid_truth_set),
-                "tp_rigid": tp_rigid, "fp_rigid": fp_rigid, "fn_rigid": fn_rigid,
-                "precision_rigid":  round(precision_rigid, 4),
-                "recall_rigid":     round(recall_rigid, 4),
-                "jaccard_rigid":    round(jaccard_rigid, 4),
+                # Back-compat aliases: reporting/* reads *_rigid. In turn_eval.json
+                # written before this refactor, the unsuffixed keys held the
+                # (now deactivated) union-reference values; *_rigid is correct
+                # for both old and new files.
+                "jaccard_rigid":    round(jaccard, 4),
+                "precision_rigid":  round(precision, 4),
+                "recall_rigid":     round(recall, 4),
             })
 
-    # Print table
+    # Print table (pooled TP/FP/FN for precision/recall; per-sample mean for jaccard)
     header = (
-        f"{'Turn':>5}  {'N':>5}  {'Acc':>6}  {'Prec':>8}  {'Recall':>8}  "
-        f"{'Jaccard':>8}  {'WtdRec':>8}  {'TP':>5}  {'FP':>5}  {'FN':>5}"
+        f"{'Turn':>5}  {'N':>5}  {'Jaccard':>8}  {'Prec':>8}  {'Recall':>8}  "
+        f"{'WtdRec':>8}  {'TP':>5}  {'FP':>5}  {'FN':>5}"
     )
     sep = "-" * len(header)
-    print(sep)
-    print(header)
-    print(sep)
 
-    for t in range(1, max_turn + 1):
-        s = turn_stats[t]
+    def _row(label, s):
         n = s["n"]
-        if n == 0:
-            continue
-        prec = s["tp"] / s["total_pred"] if s["total_pred"] > 0 else 0.0
-        rec = s["tp"] / (s["tp"] + s["fn"]) if (s["tp"] + s["fn"]) > 0 else 0.0
-        acc = s["strict_acc_sum"] / n
-        jac = s["jaccard_sum"] / n
+        prec = s["tp"] / s["total_pred"] if s["total_pred"] else 0.0
+        rec = s["tp"] / (s["tp"] + s["fn"]) if (s["tp"] + s["fn"]) else 0.0
+        jac = s["jaccard_sum"] / n if n else 0.0
         wr = 1.0 - s["wr_penalty"] / s["wr_max_penalty"] if s["wr_max_penalty"] else 1.0
-        print(
-            f"{t:>5}  {n:>5}  {acc:>6.3f}  {prec:>8.4f}  {rec:>8.4f}  "
-            f"{jac:>8.4f}  {wr:>8.4f}  {s['tp']:>5}  {s['fp']:>5}  {s['fn']:>5}"
+        return (
+            f"{label:>5}  {n:>5}  {jac:>8.4f}  {prec:>8.4f}  {rec:>8.4f}  "
+            f"{wr:>8.4f}  {s['tp']:>5}  {s['fp']:>5}  {s['fn']:>5}"
         )
 
     print(sep)
-
-    all_tp = sum(s["tp"] for s in turn_stats.values())
-    all_fp = sum(s["fp"] for s in turn_stats.values())
-    all_fn = sum(s["fn"] for s in turn_stats.values())
-    all_n = sum(s["n"] for s in turn_stats.values())
-    all_pred = sum(s["total_pred"] for s in turn_stats.values())
-    all_acc = sum(s["strict_acc_sum"] for s in turn_stats.values())
-    all_jac = sum(s["jaccard_sum"] for s in turn_stats.values())
-    all_wr_pen = sum(s["wr_penalty"] for s in turn_stats.values())
-    all_wr_max = sum(s["wr_max_penalty"] for s in turn_stats.values())
-
-    overall_prec = all_tp / all_pred if all_pred else 0
-    overall_rec = all_tp / (all_tp + all_fn) if (all_tp + all_fn) else 0
-    overall_acc = all_acc / all_n if all_n else 0
-    overall_jac = all_jac / all_n if all_n else 0
-    overall_wr = 1.0 - all_wr_pen / all_wr_max if all_wr_max else 1.0
-    print(
-        f"{'ALL':>5}  {all_n:>5}  {overall_acc:>6.3f}  {overall_prec:>8.4f}  {overall_rec:>8.4f}  "
-        f"{overall_jac:>8.4f}  {overall_wr:>8.4f}  {all_tp:>5}  {all_fp:>5}  {all_fn:>5}"
-    )
+    print(header)
+    print(sep)
+    for t in range(1, max_turn + 1):
+        if turn_stats[t]["n"]:
+            print(_row(t, turn_stats[t]))
+    print(sep)
+    total = {k: sum(s[k] for s in turn_stats.values()) for k in
+             ("tp", "fp", "fn", "n", "total_pred", "jaccard_sum", "wr_penalty", "wr_max_penalty")}
+    print(_row("ALL", total))
     print(sep)
     if skipped:
         print(f"\n({skipped} log files not found, skipped)")
-
-    # Rigid-version summary (tier-priority reference set: high alone if
-    # non-empty, else moderate alone, else low alone, always + ground truth).
-    all_tp_r = sum(s["tp_rigid"] for s in turn_stats.values())
-    all_fp_r = sum(s["fp_rigid"] for s in turn_stats.values())
-    all_fn_r = sum(s["fn_rigid"] for s in turn_stats.values())
-    all_pred_r = sum(s["total_pred_rigid"] for s in turn_stats.values())
-    all_jac_r = sum(s["jaccard_rigid_sum"] for s in turn_stats.values())
-    overall_prec_r = all_tp_r / all_pred_r if all_pred_r else 0
-    overall_rec_r = all_tp_r / (all_tp_r + all_fn_r) if (all_tp_r + all_fn_r) else 0
-    overall_jac_r = all_jac_r / all_n if all_n else 0
-    print("\n[rigid] Prec/Recall/Jaccard (tier-priority reference set, not union):")
-    print(
-        f"  ALL  N={all_n:>5}  Prec={overall_prec_r:>8.4f}  Recall={overall_rec_r:>8.4f}  "
-        f"Jaccard={overall_jac_r:>8.4f}  TP={all_tp_r:>5}  FP={all_fp_r:>5}  FN={all_fn_r:>5}"
-    )
 
     ANALYSIS_DIR.mkdir(parents=True, exist_ok=True)
     out_path = ANALYSIS_DIR / "turn_eval.json"
@@ -379,7 +324,7 @@ def plot(sample_turns: list[dict]) -> None:
         id2name = {}
 
     stats: dict = defaultdict(lambda: defaultdict(lambda: {
-        "acc": [], "prec": [], "recall": [], "jaccard": [], "weighted_recall": [],
+        "prec": [], "recall": [], "jaccard": [], "weighted_recall": [],
     }))
     case_series: dict = defaultdict(lambda: defaultdict(list))
     for e in sample_turns:
@@ -388,35 +333,33 @@ def plot(sample_turns: list[dict]) -> None:
             continue
         did = m.group(1)
         t = e["turn"]
-        stats[did][t]["acc"].append(e["accuracy"])
         stats[did][t]["prec"].append(e["precision"])
         stats[did][t]["recall"].append(e["recall"])
         stats[did][t]["jaccard"].append(e["jaccard"])
         stats[did][t]["weighted_recall"].append(e["weighted_recall"])
         case_series[did][e["log_file"]].append(
-            (t, e["accuracy"], e["precision"], e["recall"], e["jaccard"], e["weighted_recall"])
+            (t, e["precision"], e["recall"], e["jaccard"], e["weighted_recall"])
         )
 
     disease_ids = sorted(stats.keys(), key=lambda x: int(x[1:]))
 
     overall: dict = defaultdict(lambda: {
-        "acc": [], "prec": [], "recall": [], "jaccard": [], "weighted_recall": [],
+        "prec": [], "recall": [], "jaccard": [], "weighted_recall": [],
     })
     overall_series: dict = defaultdict(list)
     for e in sample_turns:
         t = e["turn"]
-        overall[t]["acc"].append(e["accuracy"])
         overall[t]["prec"].append(e["precision"])
         overall[t]["recall"].append(e["recall"])
         overall[t]["jaccard"].append(e["jaccard"])
         overall[t]["weighted_recall"].append(e["weighted_recall"])
         overall_series[e["log_file"]].append(
-            (t, e["accuracy"], e["precision"], e["recall"], e["jaccard"], e["weighted_recall"])
+            (t, e["precision"], e["recall"], e["jaccard"], e["weighted_recall"])
         )
 
-    colors   = {"acc": "#1f77b4", "prec": "#ff7f0e", "recall": "#2ca02c",
+    colors   = {"prec": "#ff7f0e", "recall": "#2ca02c",
                 "jaccard": "#9467bd", "weighted_recall": "#8c564b"}
-    markers  = {"acc": "o",       "prec": "s",        "recall": "^",
+    markers  = {"prec": "s",        "recall": "^",
                 "jaccard": "D",    "weighted_recall": "v"}
     n_dis    = len(disease_ids)
     n_cols   = 6
@@ -424,7 +367,7 @@ def plot(sample_turns: list[dict]) -> None:
 
     def _case_lines(ax, series, metric, color):
         """각 case(log_file)의 turn별 점수를 연한 실선으로 연결."""
-        key_idx = {"acc": 1, "prec": 2, "recall": 3}[metric]
+        key_idx = {"prec": 1, "recall": 2, "jaccard": 3, "weighted_recall": 4}[metric]
         for pts in series.values():
             pts_s = sorted(pts, key=lambda x: x[0])
             if len(pts_s) < 2:
@@ -444,12 +387,11 @@ def plot(sample_turns: list[dict]) -> None:
         if not turns:
             ax.set_title(title, fontsize=9)
             return
-        mean_acc  = [np.mean(turn_data[t]["acc"])             for t in turns]
         mean_prec = [np.mean(turn_data[t]["prec"])            for t in turns]
         mean_rec  = [np.mean(turn_data[t]["recall"])          for t in turns]
         mean_jac  = [np.mean(turn_data[t]["jaccard"])         for t in turns]
         mean_wr   = [np.mean(turn_data[t]["weighted_recall"]) for t in turns]
-        counts    = [len(turn_data[t]["acc"])                  for t in turns]
+        counts    = [len(turn_data[t]["jaccard"])              for t in turns]
 
         ax2 = ax.twinx()
         ax2.bar(turns, counts, color="gray", alpha=0.25, width=0.7, zorder=1)
@@ -459,8 +401,6 @@ def plot(sample_turns: list[dict]) -> None:
         for t, c in zip(turns, counts):
             ax2.text(t, c, str(c), ha="center", va="bottom", fontsize=7, color="gray", alpha=0.9)
 
-        ax.plot(turns, mean_acc,  color=colors["acc"],             marker=markers["acc"],
-                label="Accuracy (strict)", linewidth=1.5, markersize=5, zorder=3)
         ax.plot(turns, mean_prec, color=colors["prec"],            marker=markers["prec"],
                 label="Precision",         linewidth=1.5, markersize=5, zorder=3)
         ax.plot(turns, mean_rec,  color=colors["recall"],          marker=markers["recall"],
@@ -518,7 +458,7 @@ def plot(sample_turns: list[dict]) -> None:
 
     PLOTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # ── Combined plot (all three metrics + individual dots) ──
+    # ── Combined plot (all metrics) ──
     fig = _iter_subplots(_plot_combined)
     out_png = PLOTS_DIR / "turn_eval_plot.png"
     fig.savefig(out_png, dpi=300, bbox_inches="tight")
@@ -527,7 +467,7 @@ def plot(sample_turns: list[dict]) -> None:
 
     # ── Per-metric plots ──
     metric_cfgs = [
-        ("acc",             "#1f77b4", "o", "Accuracy (strict)", "turn_eval_plot_accuracy.png"),
+        # ("acc",           "#1f77b4", "o", "Accuracy (strict)", "turn_eval_plot_accuracy.png"),  # [DEACTIVATED]
         ("prec",            "#ff7f0e", "s", "Precision",         "turn_eval_plot_precision.png"),
         ("recall",          "#2ca02c", "^", "Recall",            "turn_eval_plot_recall.png"),
         ("jaccard",         "#9467bd", "D", "Jaccard",           "turn_eval_plot_jaccard.png"),

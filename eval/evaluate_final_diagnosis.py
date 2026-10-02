@@ -25,9 +25,9 @@ if str(_REPO_ROOT) not in _sys.path:
 BASE_DIR      = Path(__file__).resolve().parent.parent
 from utils.paths import ANALYSIS_ROOT, LOGS_ROOT, RESULTS_ROOT
 DISORDER_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "disorder.json"
-DISORDER_ICD10_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "disorder_icd10.json"
 
 from utils.llm import get_run_dir as _get_run_dir
+from eval.common import load_code2id, unwrap_json_diagnosis
 _RUN_DIR = _get_run_dir()
 LOGS_DIR = LOGS_ROOT / _RUN_DIR
 
@@ -39,13 +39,7 @@ def load_disorder_map() -> tuple[dict[str, str], dict[str, str]]:
     with open(DISORDER_FILE, encoding="utf-8") as f:
         data = json.load(f)
     id2name = {k: v["name"] for k, v in data.items()}
-    with open(DISORDER_ICD10_FILE, encoding="utf-8") as f:
-        icd10_data = json.load(f)
-    code2id: dict[str, str] = {}
-    for k, v in icd10_data.items():
-        for code in v.get("icd10_accepted_codes") or [v["icd10_code"]]:
-            code2id[code.strip().upper()] = k
-    return id2name, code2id
+    return id2name, load_code2id()
 
 
 def extract_final_diagnosis(log_file: Path) -> str | None:
@@ -62,6 +56,7 @@ def extract_final_diagnosis(log_file: Path) -> str | None:
     except (json.JSONDecodeError, OSError):
         return None
     diagnosis = str(data.get("final_diagnosis") or "").strip()
+    diagnosis = unwrap_json_diagnosis(diagnosis)
     return diagnosis or None
 
 

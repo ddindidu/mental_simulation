@@ -301,7 +301,10 @@ def _run_eval_pipeline() -> None:
       1. symptom_diagnosis     → D{code}_{n}_result.json, summary.json
       2. evaluate_final_diagnosis → final_diagnosis_eval.txt
       3. evaluate_turns        → turn_eval.json + PNG (non-strict)
-      4. evaluate_turns_strict → turn_eval_strict.json + PNG (LLM 호출)
+      4. [DEACTIVATED] evaluate_turns_strict
+      5. evaluate_efficiency → efficiency_eval.json
+      6. evaluate_question   → question_eval.json (QTS, LLM judge)
+      7. evaluate_diagnostic_reasoning → diagnostic_reasoning_eval.json (_pred, LLM judge)
     """
     import traceback as _tb
     from utils.paths import LOGS_ROOT, RESULTS_ROOT
@@ -356,17 +359,18 @@ def _run_eval_pipeline() -> None:
         print(f"[pipeline] evaluate_turns failed: {_e}", flush=True)
         _tb.print_exc()
 
-    with _batch_lock:
-        _batch_state["current"] = "[pipeline] turn-level eval (strict)"
-    try:
-        ets = _load("eval.evaluate_turns_strict")
-        _turns_s, _crit, _ = ets.evaluate()
-        ets.plot(_turns_s, _crit)
-    except SystemExit:
-        print("[pipeline] evaluate_turns_strict: no result files, skipping.", flush=True)
-    except Exception as _e:
-        print(f"[pipeline] evaluate_turns_strict failed: {_e}", flush=True)
-        _tb.print_exc()
+    # [DEACTIVATED] evaluate_turns_strict — non-headline; 1 LLM call per log.
+    # with _batch_lock:
+    #     _batch_state["current"] = "[pipeline] turn-level eval (strict)"
+    # try:
+    #     ets = _load("eval.evaluate_turns_strict")
+    #     _turns_s, _crit, _ = ets.evaluate()
+    #     ets.plot(_turns_s, _crit)
+    # except SystemExit:
+    #     print("[pipeline] evaluate_turns_strict: no result files, skipping.", flush=True)
+    # except Exception as _e:
+    #     print(f"[pipeline] evaluate_turns_strict failed: {_e}", flush=True)
+    #     _tb.print_exc()
 
     with _batch_lock:
         _batch_state["current"] = "[pipeline] efficiency eval"
@@ -380,7 +384,7 @@ def _run_eval_pipeline() -> None:
         _tb.print_exc()
 
     with _batch_lock:
-        _batch_state["current"] = "[pipeline] question reasonability eval"
+        _batch_state["current"] = "[pipeline] question quality eval (QTS)"
     try:
         eq = _load("eval.evaluate_question")
         eq.evaluate()

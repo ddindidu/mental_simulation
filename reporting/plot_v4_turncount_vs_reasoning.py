@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-evaluation_v4.md — Turn Count vs. Diagnostic Reasoning Ability
+evaluation_v5.md — Turn Count vs. Diagnostic Evidence Sufficiency
 
 Scatters one point per (judge, doctor) combo from the CSV produced by
 reporting/summarize_v4_metrics_csv.py:
 
   x = turn_count                             (§3, mean patient turns per episode,
                                               lower = more efficient)
-  y = diagnostic_reasoning_overall_score     (§4, whether enough evidence was
+  y = diagnostic_evidence_sufficiency_pred     (§4, whether enough evidence was
                                               actually collected during the
                                               interview to satisfy the GT
                                               disease's required criteria)
@@ -60,8 +60,8 @@ PALETTE = ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00",
 MARKERS = ["o", "^", "s", "D", "P", "X"]
 
 X_FIELD = "turn_count"
-X_LABEL = "Turn Count — §3, mean patient turns per episode, lower = more efficient"
-TITLE = "evaluation_v4.md — Turn Count vs. Diagnostic Reasoning Ability"
+X_LABEL = "Total Turns — §3, mean patient turns per episode, lower = more efficient"
+TITLE = "evaluation_v5.md — Turn Count vs. Diagnostic Evidence Sufficiency"
 
 
 def _to_float(s: str) -> float | None:
@@ -96,16 +96,16 @@ def main() -> None:
     points, skipped = [], []
     for r in rows:
         x = _to_float(r[X_FIELD])
-        y = _to_float(r["diagnostic_reasoning_overall_score"])
+        y = _to_float(r["diagnostic_evidence_sufficiency_pred"])
         if x is None or y is None:
             skipped.append(f"{r['judge']}/{r['doctor']}")
             continue
         points.append((r["judge"], r["doctor"], x, y))
 
     if skipped:
-        print(f"Skipped (missing {X_FIELD} or diagnostic reasoning score): {', '.join(skipped)}", file=sys.stderr)
+        print(f"Skipped (missing {X_FIELD} or diagnostic evidence sufficiency score): {', '.join(skipped)}", file=sys.stderr)
     if not points:
-        print(f"No combo has both {X_FIELD} and diagnostic_reasoning_overall_score.")
+        print(f"No combo has both {X_FIELD} and diagnostic_evidence_sufficiency_pred.")
         return
 
     fig, ax = plt.subplots(figsize=(8.5, 7))
@@ -127,7 +127,7 @@ def main() -> None:
     ax.set_ylim(min(ys) - y_pad, max(ys) + y_pad)
 
     ax.set_xlabel(X_LABEL, fontsize=10, color="#52514e")
-    ax.set_ylabel("Diagnostic Reasoning Ability (overall_score) — §4, higher = better", fontsize=10, color="#52514e")
+    ax.set_ylabel("Diagnostic Evidence Sufficiency (for the final dx) — §4, higher = better", fontsize=10, color="#52514e")
     # ax.set_title(
     #     f"{TITLE}\n(color = doctor model; marker shape = judge)",
     #     fontsize=12, fontweight="bold",

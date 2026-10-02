@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """
-evaluation_v4.md — IAS vs. Efficiency (Turn Count, Overcommitment Turns)
+evaluation_v5.md — QTS vs. Diagnostic Efficiency
 
-Two side-by-side scatters, one point per (judge, doctor) combo from the CSV
-produced by reporting/summarize_v4_metrics_csv.py:
+Three side-by-side scatters, one point per (judge, doctor) combo from the CSV
+produced by reporting/summarize_v4_metrics_csv.py; y = qts (§2, Question
+Targeting Score) in every panel:
 
-  Left:  x = turn_count            (§3, mean patient turns per episode)
-         y = ias                    (§2, Information Acquisition Score)
-  Right: x = overcommitment_turns  (§3, mean turns spent after the candidate
-                                    set first collapsed to size 1)
-         y = ias                    (§2)
+  x = turn_count             (§3 main, Total Turns)
+  x = turn_to_1st_confident  (§3 sub, 1st-Confidence Turn)
+  x = overcommitment_conf    (§3 sub, Overcommitment Turns = Total − 1st-Confidence)
 
 Each panel gets its own least-squares trend line + Pearson r. Point color =
 doctor model (same canonical palette as the other v4 scripts, so a model
@@ -40,6 +39,7 @@ if str(_REPO_ROOT) not in _sys.path:
 
 os.environ.setdefault("MS_RUN", "run_batch_20260912")
 
+from utils.metric_compat import episode_mean_qts, turn_qts, csv_qts, csv_hypothesis
 from utils.paths import ANALYSIS_ROOT
 
 SELECTED_DOCTORS = {
@@ -57,8 +57,9 @@ PALETTE = ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00",
 MARKERS = ["o", "^", "s", "D", "P", "X"]
 
 PANELS = [
-    ("turn_count", "Turn Count — §3, mean patient turns per episode"),
-    ("overcommitment_turns", "Overcommitment Turns — §3, turns after candidates first hit size 1"),
+    ("turn_count", "Total Turns — §3 main"),
+    ("turn_to_1st_confident", "1st-Confidence Turn — §3 sub"),
+    ("overcommitment_conf", "Overcommitment Turns — §3 sub (Total − 1st-Confidence)"),
 ]
 
 
@@ -91,22 +92,22 @@ def main() -> None:
     judges = sorted({r["judge"] for r in rows})
     marker_of = {j: MARKERS[i % len(MARKERS)] for i, j in enumerate(judges)}
 
-    fig, axes = plt.subplots(1, 2, figsize=(16, 7))
+    fig, axes = plt.subplots(1, len(PANELS), figsize=(7.5 * len(PANELS), 7))
 
     for ax, (x_field, x_label) in zip(axes, PANELS):
         points, skipped = [], []
         for r in rows:
             x = _to_float(r[x_field])
-            y = _to_float(r["ias"])
+            y = _to_float(csv_qts(r))
             if x is None or y is None:
                 skipped.append(f"{r['judge']}/{r['doctor']}")
                 continue
             points.append((r["judge"], r["doctor"], x, y))
 
         if skipped:
-            print(f"[{x_field}] Skipped (missing {x_field} or ias): {', '.join(skipped)}", file=sys.stderr)
+            print(f"[{x_field}] Skipped (missing {x_field} or qts): {', '.join(skipped)}", file=sys.stderr)
         if not points:
-            print(f"[{x_field}] No combo has both {x_field} and ias.")
+            print(f"[{x_field}] No combo has both {x_field} and qts.")
             continue
 
         seen_models: set[str] = set()
@@ -137,7 +138,7 @@ def main() -> None:
             r_note = f"n={len(points)} — not enough points for a trend line"
 
         ax.set_xlabel(x_label, fontsize=10, color="#52514e")
-        ax.set_ylabel("IAS — §2, Information Acquisition Score, higher = better", fontsize=10, color="#52514e")
+        ax.set_ylabel("QTS — §2, Question Targeting Score, higher = better", fontsize=10, color="#52514e")
         ax.text(0.02, 0.98, r_note, transform=ax.transAxes, fontsize=10,
                 color="#52514e", va="top", ha="left")
         ax.grid(color="#e1e0d9", linewidth=1, zorder=0)

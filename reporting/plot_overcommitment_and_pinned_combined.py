@@ -49,6 +49,13 @@ from reporting.plot_pinned_at_1_turn_counts import (
 )
 
 
+def _real_mean(stats: dict) -> float | None:
+    """Mean turn_count of real-differential episodes = turn to 1st confident
+    + overcommitment (turn_counts_by_group stores the two parts separately)."""
+    t1c, oc = stats.get("real_t1c_mean"), stats.get("real_oc_mean")
+    return t1c + oc if t1c is not None and oc is not None else None
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -97,7 +104,7 @@ def main() -> None:
     top_xmax = max(t1c + oc for _j, rows in top_panels for _d, t1c, oc in rows) * 1.15
     bottom_all_means = [
         v for j in judges for _d, s in turn_count_by_judge.get(j, [])
-        for v in (s["pinned_mean"], s["real_mean"]) if v is not None
+        for v in (s["pinned_mean"], _real_mean(s)) if v is not None
     ]
     bottom_ymax = max(bottom_all_means) * 1.3 if bottom_all_means else 20
 
@@ -148,7 +155,7 @@ def main() -> None:
         xs = np.arange(len(doctors))
         width = 0.36
         pinned_vals = [rows_bottom.get(d, {}).get("pinned_mean") or 0 for d in doctors]
-        real_vals = [rows_bottom.get(d, {}).get("real_mean") or 0 for d in doctors]
+        real_vals = [_real_mean(rows_bottom.get(d, {})) or 0 for d in doctors]
         pinned_ns = [rows_bottom.get(d, {}).get("pinned_n", 0) for d in doctors]
         real_ns = [rows_bottom.get(d, {}).get("real_n", 0) for d in doctors]
 

@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-evaluation_v4.md — Main Metrics by Disease x Doctor Model
+evaluation_v5.md — Main Metrics by Disease x Doctor Model
 
-Heatmaps (one per main metric, §1/§2/§3/§4 of evaluation_v4.md) with disease
+Heatmaps (one per main metric, §1/§2/§3/§4 of evaluation_v5.md) with disease
 (ground-truth D-code) on the y-axis and doctor model on the x-axis, pooled
 across judges and patients (this run has 2 judges; a cell averages whatever
 episodes exist for that disease/doctor across both):
 
   Jaccard        <- analysis/<patient>/<judge>/<doctor>/turn_eval.json (turn-pooled mean)
-  IAS            <- results/<patient>/<judge>/<doctor>/question_eval.json
-                    (episode_metrics.llm_judge.mean_ias, episode-pooled mean)
+  QTS            <- results/<patient>/<judge>/<doctor>/question_eval.json
+                    (episode_metrics.llm_judge.mean_qts, episode-pooled mean)
   Turn Count     <- results/<patient>/<judge>/<doctor>/efficiency_eval.json
   Final Accuracy <- results/<patient>/<judge>/<doctor>/efficiency_eval.json
 
@@ -52,6 +52,7 @@ if str(_REPO_ROOT) not in _sys.path:
 
 os.environ.setdefault("MS_RUN", "run_batch_20260912")
 
+from utils.metric_compat import episode_mean_qts, turn_qts, csv_qts, csv_hypothesis
 from utils.paths import ANALYSIS_ROOT, RESULTS_ROOT
 
 SELECTED_DOCTORS = {
@@ -73,10 +74,10 @@ MODEL_ORDER = [
 ]
 
 METRICS = [
-    ("jaccard", "Jaccard (Inference Quality)", "Blues", False),
-    ("ias", "IAS (Information Acquisition)", "Blues", False),
-    ("turn_count", "Turn Count (Efficiency)", "Blues_r", False),
-    ("final_accuracy_pct", "Final Accuracy % (Reliable Dx)", "Blues", True),
+    ("jaccard_rigid", "Jaccard (Hypothesis Quality)", "Blues", False),
+    ("ias", "QTS (Question Targeting)", "Blues", False),
+    ("turn_count", "Total Turns (Efficiency)", "Blues_r", False),
+    ("final_accuracy_pct", "Final Accuracy % (Decision Quality)", "Blues", True),
 ]
 
 
@@ -97,10 +98,10 @@ def load_data(style: str | None) -> tuple[dict[str, dict[tuple[str, str], list]]
             if not _style_ok(row.get("log_file", ""), style):
                 continue
             gt = row.get("ground_truth")
-            jac = row.get("jaccard")
+            jac = row.get("jaccard_rigid")
             if gt is None or jac is None:
                 continue
-            values["jaccard"][(gt, doctor)].append(jac)
+            values["jaccard_rigid"][(gt, doctor)].append(jac)
 
     for qe_path in sorted(RESULTS_ROOT.glob("*/*/*/question_eval.json")):
         doctor = qe_path.parts[-2]
@@ -110,8 +111,7 @@ def load_data(style: str | None) -> tuple[dict[str, dict[tuple[str, str], list]]
             if not _style_ok(ep.get("log_file", ""), style):
                 continue
             gt = ep.get("ground_truth")
-            jm = (ep.get("episode_metrics") or {}).get("llm_judge") or {}
-            ias = jm.get("mean_ias")
+            ias = episode_mean_qts(ep)
             if gt is None or ias is None:
                 continue
             values["ias"][(gt, doctor)].append(ias)
@@ -195,7 +195,7 @@ def main() -> None:
             cbar.set_label("%", fontsize=8, color="#52514e")
 
     # fig.suptitle(
-    #     "evaluation_v4.md — Main Metrics by Disease x Doctor Model\n"
+    #     "evaluation_v5.md — Main Metrics by Disease x Doctor Model\n"
     #     "(darker = better in every panel; hatched = no data; pooled across judges/patients)",
     #     fontsize=13, fontweight="bold", y=1.01,
     # )

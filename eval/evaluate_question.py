@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
 """
-Information Acquisition Evaluation — "정보 수집 능력" dimension (IAS / ECR)
+Diagnostic Question Quality — Question Targeting Score (QTS)
 
 For each logged episode:
   1. Load cumulative symptom state and candidate_set per turn from result JSON
   2. Parse doctor questions and inference candidates from the log file
-  3. Run cosine and llm_judge mappers on each question
-  4. Compute per-turn scores: IAS (+ its diagnostic_relevance / redundancy_penalty
-     components), ECR, and every intermediate symptom set used to derive them
+  3. Map each question to targeted symptom IDs with the llm_judge mapper
+  4. Compute per-turn QTS (+ its diagnostic_relevance / redundancy_penalty
+     components) and every intermediate symptom set used to derive it
      (discriminative/required/candidate/resolved/unresolved symptoms) for
      debugging and case-study inspection.
-  5. Compute per-episode aggregate metrics (all-turn + active-turn conditional)
-  6. Track safety-critical symptom coverage across the episode
+  5. Compute the per-episode aggregate: mean_qts (mean over all scored turns)
+
+[DEACTIVATED] cosine mapper, ECR, active-turn conditional means, and
+safety-critical symptom coverage — not part of the headline metric set.
 
 Outputs:
   results/<run_dir>/question_eval.json
+  results/<run_dir>/llm_judge_question_cache.json   (question text -> symptom IDs)
 """
 from __future__ import annotations
 
@@ -33,37 +36,28 @@ if str(_REPO_ROOT) not in _sys.path:
 import numpy as np
 
 from eval.question_score import (
-    CosineSemanticMapper,
+    # CosineSemanticMapper,          # [DEACTIVATED] cosine mapper
     LLMJudgeMapper,
     load_all_symptoms,
     load_criteria,
-    safety_screening_compliance,
-    SAFETY_CRITICAL_IDS,
+    # safety_screening_compliance,   # [DEACTIVATED] safety coverage
+    # SAFETY_CRITICAL_IDS,
 )
-from eval.informative_question_score import (
+from eval.question_targeting_score import (
     score_question,
-    compute_episode_information_metrics,
-    DEFAULT_PROBABILITY_MODE,
+    compute_episode_question_metrics,
 )
 from utils.llm import get_run_dir as _get_run_dir
-from utils.config import CONFIG
+from eval.common import load_code2id
+# from utils.config import CONFIG  # only used by the deactivated safety horizon
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 from utils.paths import ANALYSIS_ROOT, LOGS_ROOT, RESULTS_ROOT
 DISORDER_ICD10_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "disorder_icd10.json"
 
-_SAFETY_HORIZON = (CONFIG.get("evaluation") or {}).get("safety_screening_horizon")
+# _SAFETY_HORIZON = (CONFIG.get("evaluation") or {}).get("safety_screening_horizon")  # [DEACTIVATED]
 
-
-def _build_code_to_id() -> dict[str, str]:
-    """Return {icd10_code: disease_id} from disorder_icd10.json."""
-    with open(DISORDER_ICD10_FILE, encoding="utf-8") as f:
-        mapping = json.load(f)
-    code2id: dict[str, str] = {}
-    for k, v in mapping.items():
-        for code in v.get("icd10_accepted_codes") or [v["icd10_code"]]:
-            code2id[code.strip().upper()] = k
-    return code2id
+MAPPERS = ("llm_judge",)  # headline mapper; "cosine" deactivated
 
 
 def _parse_args() -> argparse.Namespace:
@@ -123,7 +117,7 @@ def _extract_questions_and_candidates(
 def evaluate() -> list[dict]:
     all_symptoms = load_all_symptoms()
     criteria     = load_criteria()
-    code2id      = _build_code_to_id()
+    code2id      = load_code2id()
 
     # question_text -> symptom_ids, shared across ALL episodes/runs in this
     # results dir — the llm_judge mapper's judgment only depends on the
@@ -140,8 +134,8 @@ def evaluate() -> list[dict]:
         except (json.JSONDecodeError, OSError):
             llm_judge_cache = {}
 
-    mappers: dict[str, CosineSemanticMapper | LLMJudgeMapper] = {
-        "cosine":    CosineSemanticMapper(),
+    mappers: dict[str, LLMJudgeMapper] = {
+        # "cosine":    CosineSemanticMapper(),  # [DEACTIVATED]
         "llm_judge": LLMJudgeMapper(cache=llm_judge_cache),
     }
 
@@ -155,9 +149,10 @@ def evaluate() -> list[dict]:
         sys.exit(1)
 
     # Cache: reuse a previously-scored episode as-is if its turn count hasn't
-    # grown since last time — avoids re-running the llm_judge mapper (a real
-    # judge LLM call per turn) on episodes already fully scored in an earlier
-    # invocation of this script.
+    # grown since last time AND it was written with the QTS schema. Episodes
+    # from the pre-rename (IAS) schema are rescored — cheap, since the
+    # llm_judge mapper's question cache above already holds their questions,
+    # so no new judge LLM call is made for them.
     out_path = RESULTS_DIR / "question_eval.json"
     cached: dict[str, dict] = {}
     if out_path.exists():
@@ -172,7 +167,11 @@ def evaluate() -> list[dict]:
         log_file = LOGS_DIR / f"{log_name}.json"
 
         cached_ep = cached.get(log_name)
-        if cached_ep is not None and len(cached_ep.get("turns", [])) == len(result.get("turns", [])):
+        if (
+            cached_ep is not None
+            and len(cached_ep.get("turns", [])) == len(result.get("turns", []))
+            and "mean_qts" in (cached_ep.get("episode_metrics") or {}).get("llm_judge", {})
+        ):
             all_episode_results.append(cached_ep)
             n_cached += 1
             continue
@@ -190,8 +189,7 @@ def evaluate() -> list[dict]:
         q_and_cands = _extract_questions_and_candidates(log_file)
         turns_data  = result.get("turns", [])
 
-        turns_out:      list[dict]       = []
-        asked_per_turn: list[set[str]]   = []
+        turns_out: list[dict] = []
 
         for i, turn_data in enumerate(turns_data):
             t = turn_data["turn"]
@@ -212,7 +210,6 @@ def evaluate() -> list[dict]:
                     "candidate_size": candidate_size,
                     "skipped": "no question logged",
                 })
-                asked_per_turn.append(set())
                 continue
 
             question, raw_cands = q_and_cands[i]
@@ -232,13 +229,7 @@ def evaluate() -> list[dict]:
                     all_symptoms,
                     criteria,
                     mapper,
-                    probability_mode=DEFAULT_PROBABILITY_MODE,
                 )
-
-            # Safety tracking: union of cosine question_targets as reference
-            asked_per_turn.append(
-                set(scores_by_mapper.get("cosine", {}).get("question_targets", []))
-            )
 
             turns_out.append({
                 "turn":                  t,
@@ -250,20 +241,19 @@ def evaluate() -> list[dict]:
                 "scores_by_mapper":      scores_by_mapper,
             })
 
-        # Per-episode aggregate metrics (all-turn + active-turn conditional)
         episode_metrics: dict[str, dict] = {
-            mapper_name: compute_episode_information_metrics(turns_out, mapper_name)
+            mapper_name: compute_episode_question_metrics(turns_out, mapper_name)
             for mapper_name in mappers
         }
 
-        safety = safety_screening_compliance(asked_per_turn, horizon=_SAFETY_HORIZON)
+        # [DEACTIVATED] safety-critical symptom coverage
+        # safety = safety_screening_compliance(asked_per_turn, horizon=_SAFETY_HORIZON)
 
         all_episode_results.append({
-            "log_file":                    log_name,
-            "ground_truth":                gt,
-            "safety_screening_compliance": safety,
-            "episode_metrics":             episode_metrics,
-            "turns":                       turns_out,
+            "log_file":        log_name,
+            "ground_truth":    gt,
+            "episode_metrics": episode_metrics,
+            "turns":           turns_out,
         })
 
     if skipped:
@@ -290,15 +280,9 @@ def evaluate() -> list[dict]:
 # ── Summary printing ───────────────────────────────────────────────────────────
 
 def _print_summary(episode_results: list[dict]) -> None:
-    mappers     = ("cosine", "llm_judge")
-    all_metrics: dict[str, dict[str, list]] = {m: defaultdict(list) for m in mappers}
-    safety_covered: list[bool] = []
-
+    all_metrics: dict[str, dict[str, list]] = {m: defaultdict(list) for m in MAPPERS}
     for ep in episode_results:
-        safety_covered.append(
-            ep["safety_screening_compliance"].get("all_covered", False)
-        )
-        for m in mappers:
+        for m in MAPPERS:
             em = ep.get("episode_metrics", {}).get(m, {})
             for k, v in em.items():
                 if v is not None:
@@ -307,62 +291,20 @@ def _print_summary(episode_results: list[dict]) -> None:
     def _avg(lst: list) -> str:
         return f"{float(np.mean(lst)):.4f}" if lst else "   N/A"
 
-    print("\n=== Information Acquisition Summary (IAS / ECR) ===")
-
-    # ── Main metrics ───────────────────────────────────────────────────────────
-    MAIN = [
-        ("conditional_mean_ias", "Cond. Mean IAS       (active turns)"),
-        ("conditional_mean_ecr", "Cond. Mean ECR       (active turns)"),
-        ("ecr_positive_rate",    "ECR-Positive Rate    (active turns)"),
+    print("\n=== Diagnostic Question Quality Summary (QTS) ===")
+    ROWS = [
+        ("mean_qts",        "Mean QTS            (all turns)"),
+        ("mean_redundancy", "Mean Redundancy Penalty (QTS component)"),
     ]
-    print(f"\n{'── Main Metrics':-<60}")
-    hdr = f"  {'Metric':<42} {'cosine':>9} {'llm_judge':>10}"
+    hdr = f"  {'Metric':<42}" + "".join(f" {m:>10}" for m in MAPPERS)
     print(hdr)
     print("  " + "-" * (len(hdr) - 2))
-    for key, label in MAIN:
+    for key, label in ROWS:
         row = f"  {label:<42}"
-        for m in mappers:
-            row += f" {_avg(all_metrics[m].get(key, [])):>9}"
+        for m in MAPPERS:
+            row += f" {_avg(all_metrics[m].get(key, [])):>10}"
         print(row)
-
-    # ── Supporting metrics ─────────────────────────────────────────────────────
-    SUB = [
-        ("mean_ias",         "Mean IAS            (all turns)"),
-        ("mean_ecr",         "Mean ECR            (all turns)"),
-        ("redundancy_rate",  "Redundancy Rate     (all turns)"),
-        ("early_ecr_mean",   "Early ECR Mean      (first half active)"),
-        ("active_turn_count","Active Turn Count"),
-    ]
-    print(f"\n{'── Supporting Metrics':-<60}")
-    hdr2 = f"  {'Metric':<42} {'cosine':>9} {'llm_judge':>10}"
-    print(hdr2)
-    print("  " + "-" * (len(hdr2) - 2))
-    for key, label in SUB:
-        row = f"  {label:<42}"
-        for m in mappers:
-            row += f" {_avg(all_metrics[m].get(key, [])):>9}"
-        print(row)
-
-    safety_rate = sum(safety_covered) / len(safety_covered) if safety_covered else 0.0
-    print(f"\n{'── Safety':-<60}")
-    print(f"  All-safety-symptom coverage: {safety_rate:.1%} of episodes")
-
-    # Per-safety-symptom breakdown
-    try:
-        from eval.question_score import load_all_symptoms as _load_syms
-        syms = _load_syms()
-        sid_totals: dict[str, int] = {sid: 0 for sid in SAFETY_CRITICAL_IDS}
-        for ep in episode_results:
-            ssc = ep["safety_screening_compliance"]
-            for sid in SAFETY_CRITICAL_IDS:
-                if ssc.get(sid, False):
-                    sid_totals[sid] += 1
-        n = len(episode_results) or 1
-        for sid in sorted(SAFETY_CRITICAL_IDS):
-            name = syms.get(sid, {}).get("name", sid)
-            print(f"    {sid} {name:<40}: {sid_totals[sid]}/{n} ({sid_totals[sid]/n:.0%})")
-    except Exception:
-        pass
+    print(f"\n  Episodes evaluated: {len(episode_results)}")
 
 
 if __name__ == "__main__":

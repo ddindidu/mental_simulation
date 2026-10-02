@@ -20,7 +20,7 @@ OUT.mkdir(parents=True, exist_ok=True)
 
 DOCTOR_MODELS = [
     "gpt-5.4",
-    "gpt-5.4-mini-2026-03-17",
+    "gpt-5.6-luna",
     "gemini-3.5-flash",
     "gemini-3.1-flash-lite",
     "qwen3-235b-a22b-2507",
@@ -139,8 +139,9 @@ for m, md in MODELS.items():
     vals = []
     for log, qe in md.question_eval.items():
         em = qe.get("episode_metrics", {}).get("llm_judge", {})
-        if em.get("mean_ias") is not None:
-            vals.append(em["mean_ias"])
+        v = em.get("mean_qts", em.get("mean_ias"))  # QTS, pre-rename files: mean_ias
+        if v is not None:
+            vals.append(v)
     axis2_model_stats[m] = stats.mean(vals) if vals else 0.0
     print(f"  {m:28s} mean_ias={axis2_model_stats[m]:.4f}  n={len(vals)}")
 
@@ -158,7 +159,7 @@ def pick_axis2_turn(md: ModelData, want_good: bool):
         turns = qe.get("turns", [])
         for i, t in enumerate(turns):
             lj = t.get("scores_by_mapper", {}).get("llm_judge", {})
-            comp = lj.get("ias")
+            comp = lj.get("qts", lj.get("ias"))
             if comp is None:
                 continue
             prev_size = turns[i - 1]["candidate_size"] if i > 0 else N_DISORDERS
@@ -182,8 +183,8 @@ def pick_axis2_turn(md: ModelData, want_good: bool):
 
 a2_high = pick_axis2_turn(MODELS[a2_best_model], True)
 a2_low = pick_axis2_turn(MODELS[a2_worst_model], False)
-print(f"  HIGH case: {a2_best_model} / {a2_high[1]} turn {a2_high[3]['turn']}  ias={a2_high[3]['scores_by_mapper']['llm_judge']['ias']:.3f}  cand {a2_high[4]}->{a2_high[5]}")
-print(f"  LOW  case: {a2_worst_model} / {a2_low[1]} turn {a2_low[3]['turn']}  ias={a2_low[3]['scores_by_mapper']['llm_judge']['ias']:.3f}  cand {a2_low[4]}->{a2_low[5]}")
+print(f"  HIGH case: {a2_best_model} / {a2_high[1]} turn {a2_high[3]['turn']}  ias={a2_high[3]['scores_by_mapper']['llm_judge'].get('qts', a2_high[3]['scores_by_mapper']['llm_judge'].get('ias')):.3f}  cand {a2_high[4]}->{a2_high[5]}")
+print(f"  LOW  case: {a2_worst_model} / {a2_low[1]} turn {a2_low[3]['turn']}  ias={a2_low[3]['scores_by_mapper']['llm_judge'].get('qts', a2_low[3]['scores_by_mapper']['llm_judge'].get('ias')):.3f}  cand {a2_low[4]}->{a2_low[5]}")
 print()
 
 # ── Axis 3: Diagnostic reasoning coverage ──────────────────────────────────
@@ -193,8 +194,8 @@ print("AXIS 3: Diagnostic reasoning coverage (final-diagnosis checklist vs DSM-5
 print("=" * 70)
 axis3_model_stats = {}
 for m, md in MODELS.items():
-    vals = [e["overall_score"] for e in md.diagnostic_reasoning.values()
-            if e.get("overall_score") is not None and not e.get("_parse_error") and e.get("has_structured_checklist")]
+    vals = [e["overall_score_gt"] for e in md.diagnostic_reasoning.values()
+            if e.get("overall_score_gt") is not None and not e.get("_parse_error") and e.get("has_structured_checklist")]
     axis3_model_stats[m] = stats.mean(vals) if vals else 0.0
     print(f"  {m:28s} mean_overall_score={axis3_model_stats[m]:.4f}  n={len(vals)}")
 
@@ -208,19 +209,19 @@ print()
 def pick_axis3_episode(md: ModelData, want_high: bool):
     scored = []
     for log, e in md.diagnostic_reasoning.items():
-        if e.get("overall_score") is None or e.get("_parse_error") or not e.get("has_structured_checklist"):
+        if e.get("overall_score_gt") is None or e.get("_parse_error") or not e.get("has_structured_checklist"):
             continue
         eff = md.efficiency.get(log, {})
         if (eff.get("turn_count") or 0) < 4:
             continue
-        scored.append((e["overall_score"], log, e))
+        scored.append((e["overall_score_gt"], log, e))
     scored.sort(key=lambda x: x[0], reverse=want_high)
     return scored[0] if scored else None
 
 a3_high = pick_axis3_episode(MODELS[a3_best_model], True)
 a3_low = pick_axis3_episode(MODELS[a3_worst_model], False)
-print(f"  HIGH case: {a3_best_model} / {a3_high[1]}  overall_score={a3_high[2]['overall_score']:.3f}")
-print(f"  LOW  case: {a3_worst_model} / {a3_low[1]}  overall_score={a3_low[2]['overall_score']:.3f}")
+print(f"  HIGH case: {a3_best_model} / {a3_high[1]}  overall_score={a3_high[2]['overall_score_gt']:.3f}")
+print(f"  LOW  case: {a3_worst_model} / {a3_low[1]}  overall_score={a3_low[2]['overall_score_gt']:.3f}")
 print()
 
 # ── Axis 4: Efficiency / redundancy ────────────────────────────────────────
@@ -443,7 +444,7 @@ def build_bundle(axis: str, level: str, model: str, log: str, rationale: str,
                 "resolved_targets": annotate_symptom_ids(lj.get("resolved_targets", [])),
                 "diagnostic_relevance": lj.get("diagnostic_relevance"),
                 "redundancy_penalty": lj.get("redundancy_penalty"),
-                "ias": lj.get("ias"),
+                "ias": lj.get("qts", lj.get("ias")),
                 "ecr": lj.get("ecr"),
                 "candidate_size_after": prior_qe.get("candidate_size"),
             }
@@ -527,6 +528,8 @@ def turn_eval_mean(md: ModelData, log: str, field: str):
 def qe_episode_metric(md: ModelData, log: str, field: str):
     qe = md.question_eval.get(log, {})
     em = qe.get("episode_metrics", {}).get("llm_judge", {})
+    if field == "mean_ias":  # renamed to mean_qts
+        return em.get("mean_qts", em.get("mean_ias"))
     return em.get(field)
 
 
@@ -623,26 +626,26 @@ selections = [
     ("question_quality", "high", a2_best_model, a2_high[1],
      f"{a2_best_model} has the highest mean LLM-judged Information Acquisition Score (IAS) "
      f"({axis2_model_stats[a2_best_model]:.2f}) of the 6 doctor models. Turn "
-     f"{a2_high[3]['turn']} of this episode scored {a2_high[3]['scores_by_mapper']['llm_judge']['ias']:.2f} "
+     f"{a2_high[3]['turn']} of this episode scored {a2_high[3]['scores_by_mapper']['llm_judge'].get('qts', a2_high[3]['scores_by_mapper']['llm_judge'].get('ias')):.2f} "
      f"and the reference candidate set shrank {a2_high[4]} → {a2_high[5]} immediately after.",
      axis2_model_stats, a2_high[3]["turn"]),
     ("question_quality", "low", a2_worst_model, a2_low[1],
      f"{a2_worst_model} has the lowest mean LLM-judged Information Acquisition Score (IAS) "
      f"({axis2_model_stats[a2_worst_model]:.2f}) of the 6 doctor models. Turn "
-     f"{a2_low[3]['turn']} of this episode scored {a2_low[3]['scores_by_mapper']['llm_judge']['ias']:.2f} "
+     f"{a2_low[3]['turn']} of this episode scored {a2_low[3]['scores_by_mapper']['llm_judge'].get('qts', a2_low[3]['scores_by_mapper']['llm_judge'].get('ias')):.2f} "
      f"and the reference candidate set did not shrink ({a2_low[4]} → {a2_low[5]}) — the question "
      f"was redundant or off-target.",
      axis2_model_stats, a2_low[3]["turn"]),
     ("diagnostic_reasoning", "high", a3_best_model, a3_high[1],
      f"{a3_best_model} has the highest mean diagnostic-reasoning coverage score "
      f"({axis3_model_stats[a3_best_model]:.2f}) of the 6 doctor models. In this episode its "
-     f"final diagnostic checklist scored {a3_high[2]['overall_score']:.2f} against the "
+     f"final diagnostic checklist scored {a3_high[2]['overall_score_gt']:.2f} against the "
      f"DSM-5-derived ground-truth criteria.",
      axis3_model_stats, None),
     ("diagnostic_reasoning", "low", a3_worst_model, a3_low[1],
      f"{a3_worst_model} has the lowest mean diagnostic-reasoning coverage score "
      f"({axis3_model_stats[a3_worst_model]:.2f}) of the 6 doctor models. In this episode its "
-     f"final diagnostic checklist scored only {a3_low[2]['overall_score']:.2f} against the "
+     f"final diagnostic checklist scored only {a3_low[2]['overall_score_gt']:.2f} against the "
      f"DSM-5-derived ground-truth criteria.",
      axis3_model_stats, None),
     ("efficiency", "high", a4_best_model, a4_high[1],

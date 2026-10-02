@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-evaluation_v4.md — Per-Judge Radar Chart (z-score)
+evaluation_v5.md — Per-Judge Radar Chart (z-score)
 
 Reads the CSV produced by reporting/summarize_v4_metrics_csv.py and draws one
 radar chart per judge (patient/judge model group), one polygon per doctor
@@ -49,6 +49,7 @@ if str(_REPO_ROOT) not in _sys.path:
 
 os.environ.setdefault("MS_RUN", "run_batch_20260912")
 
+from utils.metric_compat import episode_mean_qts, turn_qts, csv_qts, csv_hypothesis
 from utils.paths import ANALYSIS_ROOT
 
 # (axis label, CSV field)
@@ -56,9 +57,9 @@ from utils.paths import ANALYSIS_ROOT
 # the loose union of high|moderate|low_likely — see eval/evaluate_turns.py's
 # rigid_truth_set and reporting/plot_v4_rigid_vs_loose.py.
 METRICS = [
-    ("Hypothesis Q.\n(Jaccard)", "jaccard_rigid"),
-    ("Question Q.\n(IAS)", "ias"),
-    ("Efficiency\n(Turn Count, reversed)", "turn_count"),
+    ("Hypothesis Q.\n(Jaccard)", "jaccard"),
+    ("Question Q.\n(QTS)", "qts"),
+    ("Efficiency\n(Total Turns, reversed)", "turn_count"),
     ("Decision Q.\n(Final Acc.)", "final_accuracy_pct"),
     ("Decision Q.\n(Evidence\nSufficiency)", "diagnostic_evidence_sufficiency_pred"),
 ]
@@ -88,6 +89,14 @@ DOCTOR_NAME_CANONICAL = {
 # judges' plots even if the two runs spelled its directory name differently.
 PALETTE = ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00",
            "#56B4E9", "#999999", "#000000", "#F0E442"]
+
+
+def _field(row: dict, field: str) -> str | None:
+    if field == "qts":
+        return csv_qts(row)
+    if field in ("jaccard", "precision", "recall"):
+        return csv_hypothesis(row, field)
+    return row.get(field)
 
 
 def _to_float(s: str) -> float | None:
@@ -141,7 +150,7 @@ def main() -> None:
 
         complete, dropped = [], []
         for r in judge_rows:
-            values = [_to_float(r[field]) for _, field in METRICS]
+            values = [_to_float(_field(r, field)) for _, field in METRICS]
             if all(v is None for v in values):
                 dropped.append(r["doctor"])
                 continue

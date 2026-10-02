@@ -1,13 +1,26 @@
 #!/usr/bin/env python3
 """
-Diagnostic Reasoning Quality Evaluation — spec §4.6
+Diagnostic Decision Quality — Diagnostic Evidence Sufficiency
 
-For each episode, extracts the doctor's final diagnostic_checklist (or falls
-back to the free-text `reason` field for older logs), then uses an LLM judge
-to evaluate coverage of the ground-truth disease's required criteria.
+For each episode, scores whether the interview gathered enough evidence to
+support the DOCTOR'S OWN final diagnosis ("_pred"): the doctor's stated
+ICD-10 code (possibly JSON-wrapped — see eval/common.py) is resolved
+to a disease id via disorder_icd10.json (icd10_accepted_codes), and that
+disease's required criteria are scored by
+eval/score_diagnostic_reasoning.score_episode() (hybrid: algorithmic
+symptom groups + LLM-judged non-symptom requirements against the doctor's
+final diagnostic_checklist, falling back to the free-text `reason`).
+
+Episodes whose diagnosis does not resolve to a disease id get
+overall_score_pred = None (no LLM call).
+
+[DEACTIVATED] "_gt" variant (evidence sufficiency for the ground-truth
+disease) — not part of the headline set; disabling it removes one scalar
+judge call per episode whose final diagnosis is wrong or unresolved.
 
 Outputs:
   results/<run_dir>/diagnostic_reasoning_eval.json
+  results/<run_dir>/diagnostic_reasoning_scalar_cache.json
   (printed summary to stdout)
 
 Usage:
@@ -33,6 +46,9 @@ import numpy as np
 BASE_DIR = Path(__file__).resolve().parent.parent
 from utils.paths import ANALYSIS_ROOT, LOGS_ROOT, RESULTS_ROOT
 KG_DIR   = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN"
+DISORDER_ICD10_FILE = KG_DIR / "disorder_icd10.json"
+
+from eval.common import load_code2id as _load_code2id, resolve_disease_id as _resolve_predicted_id
 
 
 def _parse_args() -> argparse.Namespace:
@@ -43,6 +59,7 @@ def _parse_args() -> argparse.Namespace:
                    help="Logs dir (default: logs/<run_dir>)")
     p.add_argument("--style", default=None,
                    help="Only process logs whose filename ends in _<style> (e.g. 'plain').")
+    # [DEACTIVATED] --skip-pred: _gt is no longer scored, so skipping _pred would leave nothing.
     return p.parse_args()
 
 
@@ -180,26 +197,29 @@ def _print_summary(
         print("No episodes evaluated.")
         return
 
-    all_scores = [ep["overall_score"] for ep in episode_results if not ep.get("_parse_error")]
+    pred_scores = [ep["overall_score_pred"] for ep in episode_results
+                   if ep.get("overall_score_pred") is not None and not ep.get("_parse_error")]
     parse_errors = sum(1 for ep in episode_results if ep.get("_parse_error"))
+    pred_missing = sum(1 for ep in episode_results if ep.get("overall_score_pred") is None)
 
-    print("\n=== Diagnostic Reasoning Quality — Summary ===")
-    if all_scores:
-        print(f"  Mean overall score  : {np.mean(all_scores):.4f}")
-        print(f"  Median              : {np.median(all_scores):.4f}")
-        print(f"  Std dev             : {np.std(all_scores):.4f}")
-        print(f"  Min / Max           : {min(all_scores):.4f} / {max(all_scores):.4f}")
-    print(f"  Episodes evaluated  : {len(episode_results)}")
+    print("\n=== Diagnostic Evidence Sufficiency (_pred) — Summary ===")
+    if pred_scores:
+        print(f"  Mean score          : {np.mean(pred_scores):.4f}")
+        print(f"  Median              : {np.median(pred_scores):.4f}")
+        print(f"  Std dev             : {np.std(pred_scores):.4f}")
+        print(f"  Min / Max           : {min(pred_scores):.4f} / {max(pred_scores):.4f}")
+    print(f"  Episodes evaluated  : {len(episode_results)} "
+          f"({pred_missing} with unresolved diagnosis -> None)")
     if parse_errors:
         print(f"  Judge parse errors  : {parse_errors}")
 
-    # Per-disease breakdown
+    # Per-disease breakdown, grouped by ground truth
     by_disease: dict[str, list[float]] = defaultdict(list)
     for ep in episode_results:
-        if not ep.get("_parse_error"):
-            by_disease[ep["ground_truth"]].append(ep["overall_score"])
+        if ep.get("overall_score_pred") is not None and not ep.get("_parse_error"):
+            by_disease[ep["ground_truth"]].append(ep["overall_score_pred"])
 
-    print("\n  Per-disease (mean score):")
+    print("\n  Per ground-truth disease (mean _pred score):")
     print(f"    {'Code':<8} {'Score':>7}  {'N':>4}  Disease")
     print(f"    {'-'*50}")
     for did in sorted(by_disease, key=lambda x: int(x[1:])):
@@ -240,6 +260,7 @@ def main() -> None:
         sys.exit(1)
 
     out_path = results_dir / "diagnostic_reasoning_eval.json"
+    code2id = _load_code2id()
 
     # Scalar cache: judge_checklist() only ever sees the doctor's own
     # self-reported checklist text + the GT's non-symptom requirements — it
@@ -260,6 +281,7 @@ def main() -> None:
 
     episode_results: list[dict] = []
     skipped = 0
+    pred_unresolved = 0
 
     for log_file in log_files:
         gt = _gt_id(log_file.stem)
@@ -283,46 +305,82 @@ def main() -> None:
         has_structured = isinstance(checklist_data, dict)
         final_confirmed, final_denied = _load_final_cumulative_evidence(results_dir, log_file.stem)
 
-        print(f"  Scoring {log_file.stem}  [{gt}]  has_checklist={has_structured} "
-              f"evidence_symptoms={len(final_confirmed)} ...",
+        predicted_id = _resolve_predicted_id(diagnosis, code2id)
+
+        if predicted_id is None:
+            pred_note = "pred=unresolved"
+            pred_unresolved += 1
+        else:
+            pred_note = f"pred={predicted_id}"
+
+        print(f"  Scoring {log_file.stem}  [gt={gt}]  has_checklist={has_structured} "
+              f"evidence_symptoms={len(final_confirmed)}  {pred_note} ...",
               flush=True)
 
-        result = score_episode(
-            disease_id            = gt,
-            doctor_checklist      = checklist_data,
-            criteria              = criteria,
-            sym_names             = sym_names,
-            llm_chat              = _llm_chat,
-            cumulative_confirmed  = final_confirmed,
-            cumulative_denied     = final_denied,
-            scalar_cache          = scalar_cache,
-        )
+        # [DEACTIVATED] _gt variant (ground-truth disease's criteria).
+        # result_gt = score_episode(
+        #     disease_id            = gt,
+        #     doctor_checklist      = checklist_data,
+        #     criteria              = criteria,
+        #     sym_names             = sym_names,
+        #     llm_chat              = _llm_chat,
+        #     cumulative_confirmed  = final_confirmed,
+        #     cumulative_denied     = final_denied,
+        #     scalar_cache          = scalar_cache,
+        # )
+
+        if predicted_id is None:
+            result_pred = None
+        else:
+            result_pred = score_episode(
+                disease_id            = predicted_id,
+                doctor_checklist      = checklist_data,
+                criteria              = criteria,
+                sym_names             = sym_names,
+                llm_chat              = _llm_chat,
+                cumulative_confirmed  = final_confirmed,
+                cumulative_denied     = final_denied,
+                scalar_cache          = scalar_cache,
+            )
+
+        def _detail(result: dict | None) -> dict | None:
+            if result is None:
+                return None
+            return {
+                "scoring_method":     result.get("scoring_method", {}),
+                "symptom_satisfaction_score":   result.get("symptom_satisfaction_score"),
+                "symptom_group_scores":         result.get("symptom_group_scores", {}),
+                "duration_score":               result.get("duration_score"),
+                "functional_impairment_score":  result.get("functional_impairment_score"),
+                "traumatic_stressor_score":     result.get("traumatic_stressor_score"),
+                "psychosocial_stressor_score":  result.get("psychosocial_stressor_score"),
+                "additional_requirements_score": result.get("additional_requirements_score"),
+                "symptom_criterion_evaluations": result.get("criterion_evaluations", []),
+                "judge_notes": {
+                    "duration_verified":             result.get("duration_verified"),
+                    "functional_impairment_verified": result.get("functional_impairment_verified"),
+                    "traumatic_stressor_verified":    result.get("traumatic_stressor_verified"),
+                    "psychosocial_stressor_verified": result.get("psychosocial_stressor_verified"),
+                    "additional_requirements_coverage": result.get("additional_requirements_coverage"),
+                    "additional_requirements_notes":    result.get("additional_requirements_notes"),
+                },
+            }
+
+        pred_detail = _detail(result_pred)
 
         episode_results.append({
             "log_file":           log_file.stem,
             "ground_truth":       gt,
             "ground_truth_name":  id2name.get(gt, gt),
             "doctor_diagnosis":   diagnosis,
+            "predicted_diagnosis_id": predicted_id,
+            "predicted_diagnosis_name": id2name.get(predicted_id, predicted_id) if predicted_id else None,
             "has_structured_checklist": has_structured,
-            "scoring_method":     result.get("scoring_method", {}),
-            "overall_score":      result.get("overall_score", 0.0),
-            "symptom_satisfaction_score":   result.get("symptom_satisfaction_score"),
-            "symptom_group_scores":         result.get("symptom_group_scores", {}),
-            "duration_score":               result.get("duration_score"),
-            "functional_impairment_score":  result.get("functional_impairment_score"),
-            "traumatic_stressor_score":     result.get("traumatic_stressor_score"),
-            "psychosocial_stressor_score":  result.get("psychosocial_stressor_score"),
-            "additional_requirements_score": result.get("additional_requirements_score"),
-            "_parse_error":       result.get("_parse_error", False),
-            "symptom_criterion_evaluations": result.get("criterion_evaluations", []),
-            "judge_notes": {
-                "duration_verified":             result.get("duration_verified"),
-                "functional_impairment_verified": result.get("functional_impairment_verified"),
-                "traumatic_stressor_verified":    result.get("traumatic_stressor_verified"),
-                "psychosocial_stressor_verified": result.get("psychosocial_stressor_verified"),
-                "additional_requirements_coverage": result.get("additional_requirements_coverage"),
-                "additional_requirements_notes":    result.get("additional_requirements_notes"),
-            },
+            "overall_score_pred": result_pred.get("overall_score") if result_pred is not None else None,
+            "_parse_error":       result_pred.get("_parse_error", False) if result_pred is not None else False,
+            # "overall_score_gt": result_gt.get("overall_score", 0.0),          # [DEACTIVATED]
+            # **{f"{k}_gt": v for k, v in (_detail(result_gt) or {}).items()},  # [DEACTIVATED]
+            **({f"{k}_pred": v for k, v in pred_detail.items()} if pred_detail is not None else {}),
         })
 
     _print_summary(episode_results, id2name)
@@ -341,6 +399,7 @@ def main() -> None:
 
     if skipped:
         print(f"({skipped} episodes skipped)")
+    print(f"_pred: {pred_unresolved} unresolved (doctor's diagnosis didn't map to a disease id)")
 
 
 if __name__ == "__main__":

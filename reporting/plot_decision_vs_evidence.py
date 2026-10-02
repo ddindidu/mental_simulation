@@ -39,8 +39,20 @@ if str(_REPO_ROOT) not in _sys.path:
     _sys.path.insert(0, str(_REPO_ROOT))
 
 from utils.paths import ANALYSIS_ROOT, RESULTS_ROOT, RUN_ROOT
-from reporting.plot_overcommitment_by_judge import EXCLUDE_DOCTORS, _order_rank
+from reporting.plot_overcommitment_by_judge import EXCLUDE_DOCTORS, MODEL_ORDER
 from reporting.plot_v4_radar_by_judge import DOCTOR_NAME_CANONICAL
+
+# Local model order for this chart only (swaps qwen3-235b <-> llama-3.3-70b-instruct
+# relative to plot_overcommitment_by_judge.MODEL_ORDER, which other v4 figures
+# still use as-is — not shared, to avoid reordering every other consumer of it).
+_LOCAL_MODEL_ORDER = list(MODEL_ORDER)
+_i, _j = _LOCAL_MODEL_ORDER.index("qwen3-235b"), _LOCAL_MODEL_ORDER.index("llama-3.3-70b-instruct")
+_LOCAL_MODEL_ORDER[_i], _LOCAL_MODEL_ORDER[_j] = _LOCAL_MODEL_ORDER[_j], _LOCAL_MODEL_ORDER[_i]
+_LOCAL_ORDER_RANK = {name: i for i, name in enumerate(_LOCAL_MODEL_ORDER)}
+
+
+def _order_rank(doctor: str) -> int:
+    return _LOCAL_ORDER_RANK.get(doctor, len(_LOCAL_MODEL_ORDER))
 
 
 def discover_combos() -> list[tuple[str, str, str, Path, Path]]:
@@ -72,7 +84,7 @@ def joined_episodes(eff_path: Path, dr_path: Path, style: str | None) -> list[tu
         log_file = row.get("log_file")
         if not log_file or (style and not log_file.endswith(f"_{style}")):
             continue
-        score = row.get("overall_score")
+        score = row.get("overall_score_pred")
         acc = acc_by_log.get(log_file)
         if score is None or acc is None:
             continue
@@ -82,14 +94,14 @@ def joined_episodes(eff_path: Path, dr_path: Path, style: str | None) -> list[tu
 # Stack order bottom-to-top: correct segments first, then incorrect;
 # "supported" (high reasoning) before "under-supported" (low reasoning)
 # within each. Colors: green family = correct, red family = incorrect;
-# darker = supported, lighter = under-supported. "Supported" segments also
-# get a diagonal-dash hatch so the correct/incorrect vs. supported/
+# darker = supported, lighter = under-supported. "Under-supported" segments
+# also get a diagonal-dash hatch so the correct/incorrect vs. supported/
 # under-supported split reads even without color (e.g. print, CVD).
 CATEGORIES = [
-    ("correct_high", "Correct and Supported", "#083D77", "//"),
-    ("correct_low", "Correct but Under-supported", "#9BD1E5", None),
-    ("incorrect_high", "Incorrect but Supported", "#FFA5AB", "//"),
-    ("incorrect_low", "Incorrect and Under-supported", "#BF2829", None),
+    ("correct_high", "Correct and Supported", "#083D77", None),
+    ("correct_low", "Correct but Under-supported", "#9BD1E5", "//"),
+    ("incorrect_high", "Incorrect but Supported", "#FFA5AB", None),
+    ("incorrect_low", "Incorrect and Under-supported", "#BF2829", "//"),
 ]
 
 
@@ -163,22 +175,23 @@ def main() -> None:
             for xi, (v, b) in enumerate(zip(vals, bottom)):
                 if v > 4:
                     ax.text(xi, b + v / 2, f"{v:.0f}%", ha="center", va="center",
-                            fontsize=14, color="white", fontweight="bold",
+                            fontsize=16, color="white", fontweight="bold",
                             backgroundcolor=color,
                             zorder=4)
             bottom += vals
 
         ax.set_xticks(x)
-        ax.set_xticklabels([DOCTOR_NAME_CANONICAL.get(d, d) for d in doctors], fontsize=16)
+        ax.set_xticklabels([DOCTOR_NAME_CANONICAL.get(d, d) for d in doctors], fontsize=18,
+                            rotation=15, ha="right")
         ax.set_ylim(0, 100)
-        ax.set_ylabel("Share of Interviews (%)", fontsize=17)
-        ax.tick_params(axis="y", labelsize=15)
+        ax.set_ylabel("Share of Interviews (%)", fontsize=19)
+        ax.tick_params(axis="y", labelsize=17)
         ax.grid(axis="y", color="#E4EBF5", linewidth=0.8, zorder=0)
         ax.spines[["top", "right"]].set_visible(False)
         # ax.set_title(f"Judge: {judge}", fontsize=13, fontweight="bold", pad=14)
 
-        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.1), ncol=2,
-                  fontsize=14, frameon=False)
+        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.22), ncol=2,
+                  fontsize=16, frameon=False)
 
         # style_note = f"style={style}" if style else "all styles"
         # fig.suptitle(

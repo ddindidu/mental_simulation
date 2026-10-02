@@ -55,7 +55,7 @@ EVAL_PIPELINE: list[list[str]] = [
     ["eval/symptom_diagnosis.py"],
     ["eval/evaluate_final_diagnosis.py"],
     ["eval/evaluate_turns.py"],
-    ["eval/evaluate_turns_strict.py"],
+    # ["eval/evaluate_turns_strict.py"],  # [DEACTIVATED] non-headline; 1 LLM call per log
     ["eval/evaluate_efficiency.py"],
     ["eval/evaluate_question.py"],
     ["eval/evaluate_diagnostic_reasoning.py"],

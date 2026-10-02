@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
-Efficiency Metrics Plotter  (spec §4.5)
-Reads efficiency_eval.json and generates per-disorder subplots for each
-efficiency metric — matching the grid style of turn_eval / question_eval plots.
+Diagnostic Efficiency Plotter (evaluation_v5.md §3, + Final Accuracy §4.1)
+Reads efficiency_eval.json and generates per-disorder subplots (one point per
+episode, x = episode index within that disorder) plus an "Overall" panel
+(one point per disorder = that disorder's episode mean).
 
 Outputs saved to analysis/<run_dir>/efficiency/:
-  efficiency_eval_plot.png            combined (accuracy + cssr + redundant_ratio)
-  efficiency_eval_plot_accuracy.png
-  efficiency_eval_plot_cssr.png
-  efficiency_eval_plot_turns.png
-  efficiency_eval_plot_tfirst.png
-  efficiency_eval_plot_monotonicity.png
-  efficiency_eval_plot_redundancy.png
-  efficiency_eval_plot_overcommit.png
+  efficiency_eval_plot.png                combined: per-episode stacked bar
+                                          (1st-Confidence Turn | Overcommitment
+                                          Turns) = Total Turns; red edge = wrong dx
+  efficiency_eval_plot_turns.png          Total Turns
+  efficiency_eval_plot_first_confident.png 1st-Confidence Turn (reached episodes only)
+  efficiency_eval_plot_overcommit.png     Overcommitment Turns
+  efficiency_eval_plot_accuracy.png       Final Accuracy
 
 Usage:
   python plot_efficiency_eval.py results/.../efficiency_eval.json
@@ -68,37 +68,43 @@ def load_and_group(json_path: Path) -> dict[str, list[dict]]:
 
 METRICS = [
     # (key, label, color, marker, higher_is_better, y_center_zero)
-    ("final_accuracy",                "Accuracy",          "#1f77b4", "o",  True,  False),
-    ("cssr",                          "CSSR",              "#ff7f0e", "s",  True,  True),
-    ("turn_count",                    "Turn Count",        "#8c564b", "D",  False, False),
-    ("time_to_first_correct_narrowing","T-First",          "#9467bd", "^",  False, False),
-    ("monotonicity_violations",       "Mono. Violations",  "#e377c2", "v",  False, False),
-    ("redundant_turn_ratio",          "Redundant Ratio",   "#2ca02c", "P",  False, False),
-    ("overcommitment_turns",          "Overcommit Turns",  "#d62728", "X",  False, False),
+    ("turn_count",                        "Total Turns",          "#8c564b", "D", False, False),
+    ("time_to_first_confident_narrowing", "1st-Confidence Turn",  "#9467bd", "^", False, False),
+    ("overcommitment_conf",               "Overcommitment Turns", "#d62728", "X", False, False),
+    ("final_accuracy",                    "Final Accuracy",       "#1f77b4", "o", True,  False),
 ]
 METRIC_KEYS    = [m[0] for m in METRICS]
 METRIC_LABELS  = {m[0]: m[1] for m in METRICS}
 METRIC_COLORS  = {m[0]: m[2] for m in METRICS}
 METRIC_MARKERS = {m[0]: m[3] for m in METRICS}
 
-# Metrics shown in the combined plot (0-1 or near-0-1 range)
-COMBINED_METRICS = ("final_accuracy", "cssr", "redundant_turn_ratio")
+TTFIN = "time_to_first_confident_narrowing"
+
+
+def _metric_value(r: dict, metric: str) -> float | None:
+    """Per-episode value; the 1st-Confidence Turn sentinel (T+1 = never
+    reached) is treated as missing rather than plotted as a turn number."""
+    v = r.get(metric)
+    if metric == TTFIN and v is not None and v > r.get("turn_count", v):
+        return None
+    return v
 
 
 # ── Per-disorder subplot ───────────────────────────────────────────────────────
 
 def _run_nums(runs: list[dict]) -> list[int]:
-    nums = []
-    for r in runs:
-        m = re.search(r"_(\d+)$", r["log_file"])
-        nums.append(int(m.group(1)) if m else len(nums) + 1)
-    return nums
+    """x position: 1-based episode index within the panel."""
+    return list(range(1, len(runs) + 1))
 
 
 def _draw_single_metric(ax, runs: list[dict], title: str, metric: str,
                          color: str, marker: str, label: str, center_zero: bool):
-    run_nums = _run_nums(runs)
-    vals     = [r[metric] for r in runs]
+    pts = [(x, v) for x, r in zip(_run_nums(runs), runs) if (v := _metric_value(r, metric)) is not None]
+    if not pts:
+        ax.set_title(title, fontsize=9, fontweight="bold")
+        return
+    run_nums = [x for x, _ in pts]
+    vals     = [v for _, v in pts]
     mean_val = float(np.mean(vals))
 
     ax.scatter(run_nums, vals, color=color, alpha=0.7, s=35, marker=marker, zorder=3)
@@ -121,79 +127,57 @@ def _draw_single_metric(ax, runs: list[dict], title: str, metric: str,
     for y in ax.get_yticks():
         ax.axhline(y, color="lightgray", linewidth=0.4, zorder=0)
 
-    ax.set_xlim(min(run_nums) - 0.7, max(run_nums) + 0.7)
-    ax.set_xticks(run_nums)
+    ax.set_xlim(0.3, len(runs) + 0.7)
     ax.tick_params(labelsize=7)
-    ax.set_xlabel("Run", fontsize=8)
+    ax.set_xlabel("Episode", fontsize=8)
     ax.set_ylabel(label, fontsize=8)
     ax.set_title(title, fontsize=9, fontweight="bold")
     ax.legend(loc="upper right", fontsize=7.5)
 
 
 def _draw_combined(ax, runs: list[dict], title: str):
-    run_nums = _run_nums(runs)
+    """Stacked bar per episode: 1st-Confidence Turn (bottom) + Overcommitment
+    Turns (top) = Total Turns. Episodes that never reached the 1st-confidence
+    turn are drawn as a single hatched Total-Turns bar. Bar edge red = the
+    final diagnosis was wrong."""
+    xs = _run_nums(runs)
+    for x, r in zip(xs, runs):
+        T = r["turn_count"]
+        t1 = _metric_value(r, TTFIN)
+        edge = "#d62728" if r.get("final_accuracy", 0.0) < 1.0 else "none"
+        if t1 is None:
+            ax.bar(x, T, color="#cfcfcf", hatch="//", edgecolor=edge, linewidth=0.8, width=0.75)
+        else:
+            ax.bar(x, t1, color=METRIC_COLORS[TTFIN], edgecolor=edge, linewidth=0.8, width=0.75)
+            ax.bar(x, T - t1, bottom=t1, color=METRIC_COLORS["overcommitment_conf"],
+                   edgecolor=edge, linewidth=0.8, width=0.75)
 
-    # Right axis: turn_count bars
-    ax2 = ax.twinx()
-    turn_counts = [r["turn_count"] for r in runs]
-    ax2.bar(run_nums, turn_counts, color="gray", alpha=0.15, width=0.7, zorder=0)
-    ax2.set_ylabel("Turn Count", fontsize=7, color="gray")
-    ax2.tick_params(axis="y", labelsize=6, colors="gray")
-    max_tc = max(turn_counts)
-    ax2.set_ylim(0, max_tc * 1.5)
-    for x, tc in zip(run_nums, turn_counts):
-        ax2.text(x, tc + max_tc * 0.03, str(tc),
-                 ha="center", va="bottom", fontsize=6, color="gray")
-
-    # Left axis: 0-1 bounded metrics
-    for metric in COMBINED_METRICS:
-        vals     = [r[metric] for r in runs]
-        mean_val = float(np.mean(vals))
-        color    = METRIC_COLORS[metric]
-        marker   = METRIC_MARKERS[metric]
-        lbl      = f"{METRIC_LABELS[metric]} (μ={mean_val:+.2f})"
-        ax.scatter(run_nums, vals, color=color, alpha=0.6, s=28, marker=marker, zorder=3)
-        ax.axhline(mean_val, color=color, linewidth=1.4, linestyle="--", alpha=0.8,
-                   zorder=2, label=lbl)
-
-    # Reference lines
-    ax.axhline(0, color="black", linewidth=0.5, alpha=0.35, zorder=1)
-    ax.axhline(1, color="black", linewidth=0.5, alpha=0.35, linestyle=":", zorder=1)
-
-    all_vals = [r[m] for r in runs for m in COMBINED_METRICS]
-    lo = min(min(all_vals) - 0.15, -0.1)
-    hi = max(max(all_vals) + 0.15,  1.1)
-    ax.set_ylim(lo, hi)
-    for y in np.arange(round(lo, 1), hi + 0.05, 0.2):
-        ax.axhline(y, color="lightgray", linewidth=0.4, zorder=0)
-
-    ax.set_xlim(min(run_nums) - 0.7, max(run_nums) + 0.7)
-    ax.set_xticks(run_nums)
+    acc = float(np.mean([r.get("final_accuracy", 0.0) for r in runs]))
+    mean_t = float(np.mean([r["turn_count"] for r in runs]))
+    ax.text(0.98, 0.97, f"Total μ={mean_t:.1f}  Acc={acc:.0%}", transform=ax.transAxes,
+            ha="right", va="top", fontsize=7.5)
+    ax.set_xlim(0.3, len(runs) + 0.7)
     ax.tick_params(labelsize=7)
-    ax.set_xlabel("Run", fontsize=8)
-    ax.set_ylabel("Score / Rate", fontsize=8)
+    ax.set_xlabel("Episode", fontsize=8)
+    ax.set_ylabel("Turns", fontsize=8)
     ax.set_title(title, fontsize=9, fontweight="bold")
-    ax.set_zorder(ax2.get_zorder() + 1)
-    ax.patch.set_visible(False)
-    ax.legend(loc="upper right", fontsize=6.5, ncol=1, framealpha=0.75)
+    ax.grid(axis="y", color="lightgray", linewidth=0.4)
+    ax.set_axisbelow(True)
 
 
 # ── Overall-panel helper ───────────────────────────────────────────────────────
 
 def _overall_runs(groups: dict[str, list[dict]]) -> list[dict]:
-    """Aggregate per-disorder means into per-run-index overall entries."""
-    by_run: dict[int, list[dict]] = defaultdict(list)
-    for runs in groups.values():
-        for r in runs:
-            m = re.search(r"_(\d+)$", r["log_file"])
-            rn = int(m.group(1)) if m else 0
-            by_run[rn].append(r)
-
+    """One entry per disorder holding that disorder's episode means (the
+    1st-Confidence Turn mean is over reached episodes only)."""
     overall = []
-    for rn in sorted(by_run.keys()):
-        entries = by_run[rn]
-        agg = {k: float(np.mean([e[k] for e in entries])) for k in METRIC_KEYS}
-        agg["log_file"] = f"OVERALL_{rn}"
+    for did, runs in groups.items():
+        agg: dict = {"log_file": did}
+        for k in METRIC_KEYS:
+            vals = [v for r in runs if (v := _metric_value(r, k)) is not None]
+            agg[k] = float(np.mean(vals)) if vals else None
+        if agg[TTFIN] is None:
+            agg[TTFIN] = agg["turn_count"] + 1  # keep the "never reached" sentinel
         overall.append(agg)
     return overall
 
@@ -224,10 +208,11 @@ def plot_combined(groups: dict[str, list[dict]], out_path: Path,
         short = name[:40] + "..." if len(name) > 40 else name
         _draw_combined(axes[i], groups[did], f"{did}: {short}")
 
-    _draw_combined(axes[n_dis], overall, "Overall Average")
+    _draw_combined(axes[n_dis], overall, "Overall (one bar per disorder mean)")
     _hide_extra(axes, n_dis + 1)
 
-    fig.suptitle("Efficiency Metrics — Combined View (Accuracy / CSSR / Redundant Ratio)",
+    fig.suptitle("Diagnostic Efficiency — 1st-Confidence Turn (purple) + Overcommitment Turns (red) "
+                 "= Total Turns; hatched = never reached; red edge = wrong final dx",
                  fontsize=13, fontweight="bold", y=1.005)
     plt.tight_layout()
     fig.savefig(out_path, dpi=200, bbox_inches="tight")
@@ -250,11 +235,11 @@ def plot_metric(groups: dict[str, list[dict]], metric: str, out_path: Path,
         _draw_single_metric(axes[i], groups[did], f"{did}: {short}",
                             metric, color, marker, label, center_zero)
 
-    _draw_single_metric(axes[n_dis], overall, "Overall Average",
+    _draw_single_metric(axes[n_dis], overall, "Overall (per-disorder means)",
                         metric, color, marker, label, center_zero)
     _hide_extra(axes, n_dis + 1)
 
-    fig.suptitle(f"Efficiency — {label}", fontsize=13, fontweight="bold", y=1.005)
+    fig.suptitle(f"Diagnostic Efficiency — {label}", fontsize=13, fontweight="bold", y=1.005)
     plt.tight_layout()
     fig.savefig(out_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
@@ -300,13 +285,10 @@ def main() -> None:
     plot_combined(groups, args.output / "efficiency_eval_plot.png", id2name, overall)
 
     fname_map = {
-        "final_accuracy":                 "accuracy",
-        "cssr":                           "cssr",
-        "turn_count":                     "turns",
-        "time_to_first_correct_narrowing":"tfirst",
-        "monotonicity_violations":        "monotonicity",
-        "redundant_turn_ratio":           "redundancy",
-        "overcommitment_turns":           "overcommit",
+        "turn_count":                        "turns",
+        "time_to_first_confident_narrowing": "first_confident",
+        "overcommitment_conf":               "overcommit",
+        "final_accuracy":                    "accuracy",
     }
     for metric, fname in fname_map.items():
         plot_metric(groups, metric,

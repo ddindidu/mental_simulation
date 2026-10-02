@@ -1,29 +1,21 @@
 #!/usr/bin/env python3
 """
-evaluation_v5.md — Final Accuracy vs. Diagnostic Evidence Sufficiency
+evaluation_v5.md — QTS vs. Diagnostic Evidence Sufficiency (doctor-average level)
 
 Scatters one point per (judge, doctor) combo from the CSV produced by
 reporting/summarize_v4_metrics_csv.py:
 
-  x = final_accuracy_pct                    (§4, whether the stated final
-                                              diagnosis' disease ID matches GT)
-  y = diagnostic_evidence_sufficiency_pred     (§4, whether enough evidence was
-                                              actually collected during the
-                                              interview to satisfy the GT
-                                              disease's required criteria)
+  x = qts                                    (§2, Question Targeting Score)
+  y = diagnostic_evidence_sufficiency_pred      (§4, evidence sufficiency vs. GT criteria)
 
-These answer different questions — a model can land on the right diagnosis
-without having gathered the evidence that justifies it (high x, low y), or
-gather thorough evidence and still name the wrong disease (low x, high y).
-Point color = doctor model (same canonical palette as the other v4 scripts,
-so a model keeps its color everywhere); marker shape = judge. Combos missing
-diagnostic_evidence_sufficiency_pred (LLM-judge stage not yet run) are skipped
-and reported on stderr rather than silently dropped.
+Point color = doctor model (same canonical palette as the other v4 scripts);
+marker shape = judge. Combos missing either field are skipped (reported on
+stderr). Same convention as plot_v4_precision_vs_recall.py.
 
 Usage:
-  python reporting/plot_v4_accuracy_vs_reasoning.py [--csv PATH] [-o OUT.png]
+  python reporting/plot_v4_ias_vs_reasoning.py [--csv PATH] [-o OUT.png]
 
-  MS_RUN=run_batch_20260912 python reporting/plot_v4_accuracy_vs_reasoning.py \\
+  MS_RUN=run_batch_20260912 python reporting/plot_v4_ias_vs_reasoning.py \\
       --csv saved/run_batch_20260912/analysis/v4_metrics_summary_plain.csv
 """
 from __future__ import annotations
@@ -41,10 +33,9 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in _sys.path:
     _sys.path.insert(0, str(_REPO_ROOT))
 
-# Source root for this v4 figure family: run_batch_20260912, unless the
-# caller has already set MS_RUN (setdefault never overrides an explicit env).
 os.environ.setdefault("MS_RUN", "run_batch_20260912")
 
+from utils.metric_compat import episode_mean_qts, turn_qts, csv_qts, csv_hypothesis
 from utils.paths import ANALYSIS_ROOT
 from reporting.plot_v4_radar_by_judge import DOCTOR_NAME_CANONICAL
 
@@ -61,8 +52,6 @@ SELECTED_DOCTORS = {
     "qwen3-235b",
 }
 
-# Same palette + per-model assignment convention as plot_v4_radar_by_judge.py
-# and plot_v4_efficiency_bars.py, so a model keeps its color across all v4 figures.
 PALETTE = ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00",
            "#56B4E9", "#999999", "#000000", "#F0E442"]
 MARKERS = ["o", "^", "s", "D", "P", "X"]
@@ -99,7 +88,7 @@ def main() -> None:
 
     points, skipped = [], []
     for r in rows:
-        x = _to_float(r["final_accuracy_pct"])
+        x = _to_float(csv_qts(r))
         y = _to_float(r["diagnostic_evidence_sufficiency_pred"])
         if x is None or y is None:
             skipped.append(f"{r['judge']}/{r['doctor']}")
@@ -107,12 +96,20 @@ def main() -> None:
         points.append((r["judge"], r["doctor"], x, y))
 
     if skipped:
-        print(f"Skipped (missing final accuracy or diagnostic evidence sufficiency score): {', '.join(skipped)}", file=sys.stderr)
+        print(f"Skipped (missing ias or diagnostic_evidence_sufficiency_pred): {', '.join(skipped)}", file=sys.stderr)
     if not points:
-        print("No combo has both final_accuracy_pct and diagnostic_evidence_sufficiency_pred.")
+        print("No combo has both ias and diagnostic_evidence_sufficiency_pred.")
         return
 
     fig, ax = plt.subplots(figsize=(8.5, 7))
+
+    xs = [p[2] for p in points]
+    ys = [p[3] for p in points]
+    x_pad = (max(xs) - min(xs)) * 0.15 or 0.02
+    y_pad = (max(ys) - min(ys)) * 0.15 or 0.02
+    x_lo, x_hi = min(xs) - x_pad, max(xs) + x_pad
+    y_lo, y_hi = min(ys) - y_pad, max(ys) + y_pad
+
     seen_models: set[str] = set()
     annotations = []
     for judge, doctor, x, y in points:
@@ -130,19 +127,14 @@ def main() -> None:
                            fontsize=12, color="#3a3a38")
         annotations.append((ann, x, y, y_off))
 
-    xs = [p[2] for p in points]
-    ys = [p[3] for p in points]
-    x_pad = (max(xs) - min(xs)) * 0.15 or 2
-    y_pad = (max(ys) - min(ys)) * 0.15 or 0.02
-    ax.set_xlim(min(xs) - x_pad, max(xs) + x_pad)
-    ax.set_ylim(min(ys) - y_pad, max(ys) + y_pad)
+    ax.set_xlim(x_lo, x_hi)
+    ax.set_ylim(y_lo, y_hi)
 
-    ax.set_xlabel("Final Accuracy (%)", fontsize=14, color="#52514e")
-    ax.set_ylabel("Evidence Sufficiency", fontsize=14, color="#52514e")
+    ax.set_xlabel("QTS (Question Targeting Score)", fontsize=14, color="#52514e")
+    ax.set_ylabel("Diagnostic Evidence Sufficiency", fontsize=14, color="#52514e")
     ax.tick_params(axis="both", labelsize=12)
     # ax.set_title(
-    #     "evaluation_v5.md §4 — Final Accuracy vs. Diagnostic Evidence Sufficiency\n"
-    #     "(color = doctor model; marker shape = judge)",
+    #     "evaluation_v5.md §2 vs §4 — IAS vs. Diagnostic Evidence Sufficiency",
     #     fontsize=12, fontweight="bold",
     # )
     ax.grid(color="#e1e0d9", linewidth=1, zorder=0)
@@ -155,9 +147,6 @@ def main() -> None:
                    markeredgecolor="white", markersize=10, label=JUDGE_NAME_CANONICAL.get(j, j))
         for j in judges
     ]
-    # legend: models (dropped — doctor identity is already given by the
-    # canonical-name point annotations, same convention as
-    # plot_v4_precision_vs_recall.py)
     ax.legend(handles=judge_handles, title="Judge", loc="lower right",
               fontsize=12, frameon=False)
 
@@ -207,7 +196,8 @@ def main() -> None:
                     moved_any = True
         if not moved_any:
             break
-    out_path = Path(args.out) if args.out else ANALYSIS_ROOT / "v4_accuracy_vs_reasoning.png"
+
+    out_path = Path(args.out) if args.out else ANALYSIS_ROOT / "v4_ias_vs_reasoning.png"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=180, bbox_inches="tight")
     print(f"[saved] {out_path}")

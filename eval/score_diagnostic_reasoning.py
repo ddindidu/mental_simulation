@@ -1,5 +1,13 @@
 """
-Diagnostic Reasoning Quality Scoring — spec §4.6 (Final Diagnosis Axis)
+Diagnostic Evidence Sufficiency Scoring — spec §4.6 (Final Diagnosis Axis)
+
+NOTE: this module is disease-id-agnostic — score_episode()/compute_score()
+take whatever `disease_id` (or `did`) is passed and score against THAT
+disease's criteria. eval/evaluate_diagnostic_reasoning.py calls it twice per
+episode: once with the ground-truth disease ("_gt" — evidence sufficiency
+for the correct diagnosis, regardless of what the doctor said) and once with
+the doctor's own stated final diagnosis ("_pred" — evidence sufficiency for
+the diagnosis the doctor actually gave).
 
 Evaluates whether the required criteria for the ground-truth diagnosis were
 actually covered during the interview, using HYBRID scoring:

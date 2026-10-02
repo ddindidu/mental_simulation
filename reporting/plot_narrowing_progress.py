@@ -24,9 +24,9 @@ its first-turn differential down to a single diagnosis) still left to do":
   -   0% once the doctor's own stated list has collapsed to exactly 1
   -  50% once half the *distance* from |P_1| down to 1 has been covered
 
-Each line is also labeled with the model's mean Information Acquisition
-Score (IAS, from question_eval.json's llm_judge.mean_ias — see
-evaluation_v4.md §2) for that judge, so narrowing behavior and question
+Each line is also labeled with the model's mean Question Targeting
+Score (QTS, from question_eval.json's llm_judge.mean_qts — see
+evaluation_v5.md §2) for that judge, so narrowing behavior and question
 quality can be read off the same legend.
 
 Each episode is resampled onto a common 0-100% grid via linear interpolation
@@ -54,6 +54,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in _sys.path:
     _sys.path.insert(0, str(_REPO_ROOT))
 
+from utils.metric_compat import episode_mean_qts, turn_qts, csv_qts, csv_hypothesis
 from utils.paths import ANALYSIS_ROOT, RESULTS_ROOT, RUN_ROOT
 from reporting.plot_v4_radar_by_judge import DOCTOR_NAME_CANONICAL
 
@@ -120,7 +121,7 @@ def load_mean_ias(patient: str, judge: str, doctor: str, style: str | None) -> f
         data = [ep for ep in data if str(ep.get("log_file", "")).endswith(f"_{style}")]
     ias_vals = []
     for ep in data:
-        v = (ep.get("episode_metrics") or {}).get("llm_judge", {}).get("mean_ias")
+        v = episode_mean_qts(ep)
         if v is not None:
             ias_vals.append(v)
     return float(np.mean(ias_vals)) if ias_vals else None
@@ -221,7 +222,7 @@ def main() -> None:
             mean = mat.mean(axis=0)
             ias_str = f"{ias:.2f}" if ias is not None else "n/a"
             y_off = (rank - mid) * 15
-            ax.annotate(f"{mean[-1]:.0f}% (IAS={ias_str})", (x_pct[-1], mean[-1]),
+            ax.annotate(f"{mean[-1]:.0f}% (QTS={ias_str})", (x_pct[-1], mean[-1]),
                         textcoords="offset points", xytext=(8, y_off), fontsize=12,
                         color=color, va="center", fontweight="bold",
                         arrowprops=dict(arrowstyle="-", color=color, lw=0.8, alpha=0.6))

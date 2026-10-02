@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-evaluation_v4.md — Turn Count vs. Diagnostic Reasoning Ability, Open vs. Closed (combined)
+evaluation_v5.md — Turn Count vs. Diagnostic Evidence Sufficiency, Open vs. Closed (combined)
 
 Single-panel version of plot_v4_turncount_vs_reasoning_by_openness.py: all
 (judge, doctor) points from the CSV produced by reporting/summarize_v4_metrics_csv.py
@@ -10,7 +10,7 @@ the same plot — so the two within-group turn-count -> reasoning-ability
 relationships are visible together instead of split across two panels.
 
   x = turn_count                             (§3, mean patient turns per episode)
-  y = diagnostic_reasoning_overall_score     (§4)
+  y = diagnostic_evidence_sufficiency_pred     (§4)
 
 Point color = open-weight vs. closed/proprietary (2-way categorical); marker
 shape = judge; each point is direct-labeled with its doctor model name since
@@ -94,16 +94,16 @@ def main() -> None:
     points, skipped = [], []
     for r in rows:
         x = _to_float(r["turn_count"])
-        y = _to_float(r["diagnostic_reasoning_overall_score"])
+        y = _to_float(r["diagnostic_evidence_sufficiency_pred"])
         if x is None or y is None:
             skipped.append(f"{r['judge']}/{r['doctor']}")
             continue
         points.append((r["judge"], r["doctor"], x, y))
 
     if skipped:
-        print(f"Skipped (missing turn_count or diagnostic reasoning score): {', '.join(skipped)}", file=sys.stderr)
+        print(f"Skipped (missing turn_count or diagnostic evidence sufficiency score): {', '.join(skipped)}", file=sys.stderr)
     if not points:
-        print("No combo has both turn_count and diagnostic_reasoning_overall_score.")
+        print("No combo has both turn_count and diagnostic_evidence_sufficiency_pred.")
         return
 
     fig, ax = plt.subplots(figsize=(10.5, 7.2))
@@ -138,10 +138,10 @@ def main() -> None:
     y_pad = (max(ys_all) - min(ys_all)) * 0.12 or 0.02
     ax.set_ylim(min(ys_all) - y_pad, max(ys_all) + y_pad)
 
-    ax.set_xlabel("Turn Count — §3, mean patient turns per episode", fontsize=10, color="#52514e")
-    ax.set_ylabel("Diagnostic Reasoning Ability (overall_score) — §4, higher = better", fontsize=10, color="#52514e")
+    ax.set_xlabel("Total Turns — §3, mean patient turns per episode", fontsize=10, color="#52514e")
+    ax.set_ylabel("Diagnostic Evidence Sufficiency (for the final dx) — §4, higher = better", fontsize=10, color="#52514e")
     # ax.set_title(
-    #     "evaluation_v4.md — Turn Count vs. Diagnostic Reasoning Ability\n"
+    #     "evaluation_v5.md — Turn Count vs. Diagnostic Evidence Sufficiency\n"
     #     "(color = open-weight vs. closed/proprietary; marker shape = judge; dashed = within-group fit)",
     #     fontsize=12, fontweight="bold",
     # )

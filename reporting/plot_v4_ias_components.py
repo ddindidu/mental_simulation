@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-evaluation_v4.md — IAS Components: Diagnostic Relevance vs. Redundancy Penalty
+Evaluation — QTS Components: Diagnostic Relevance vs. Redundancy Penalty
 
-IAS (Information Acquisition Score, §2 of evaluation_v4.md) decomposes as:
+QTS (Question Targeting Score, formerly IAS) decomposes as:
 
-    IAS = DRS x (1 - RP)
+    QTS = DRS x (1 - RP)
 
   DRS (diagnostic relevance)  = |S(q_t) ∩ I_t| / |S(q_t)|   — mean per episode,
                                   over all llm_judge-scored turns
@@ -45,6 +45,7 @@ if str(_REPO_ROOT) not in _sys.path:
 
 os.environ.setdefault("MS_RUN", "run_batch_20260912")
 
+from utils.metric_compat import episode_mean_qts, turn_qts, csv_qts, csv_hypothesis
 from utils.paths import ANALYSIS_ROOT, RESULTS_ROOT
 
 MARKERS = ["o", "^", "s", "D", "P", "X"]
@@ -70,7 +71,7 @@ def load_components(style: str | None) -> dict[tuple[str, str], dict]:
             if style and not str(ep.get("log_file", "")).endswith(f"_{style}"):
                 continue
             jm = (ep.get("episode_metrics") or {}).get("llm_judge") or {}
-            if jm.get("mean_ias") is None:
+            if episode_mean_qts(ep) is None:
                 continue
             drs_vals = [
                 sbm["llm_judge"]["diagnostic_relevance"]
@@ -82,7 +83,7 @@ def load_components(style: str | None) -> dict[tuple[str, str], dict]:
             k = (judge, doctor)
             by_key[k]["drs"].append(float(np.mean(drs_vals)))
             by_key[k]["rp"].append(jm["mean_redundancy"])
-            by_key[k]["ias"].append(jm["mean_ias"])
+            by_key[k]["ias"].append(episode_mean_qts(ep))
 
     out = {}
     for k, v in by_key.items():
@@ -133,7 +134,7 @@ def main() -> None:
     ax.set_xlabel("Diagnostic Relevance (DRS) — mean per episode, higher = better", fontsize=10, color="#52514e")
     ax.set_ylabel("1 − Redundancy Penalty — mean per episode, higher = better", fontsize=10, color="#52514e")
     # ax.set_title(
-    #     "evaluation_v4.md §2 — IAS decomposition: Diagnostic Relevance vs. Non-Redundancy\n"
+    #     "evaluation_v5.md §2 — IAS decomposition: Diagnostic Relevance vs. Non-Redundancy\n"
     #     "(point color = mean IAS; marker shape = judge)",
     #     fontsize=12, fontweight="bold",
     # )
@@ -143,7 +144,7 @@ def main() -> None:
         ax.spines[spine].set_visible(False)
 
     cbar = fig.colorbar(sc, ax=ax, pad=0.02)
-    cbar.set_label("Mean IAS", fontsize=9.5, color="#52514e")
+    cbar.set_label("Mean QTS", fontsize=9.5, color="#52514e")
 
     judge_handles = [
         plt.Line2D([0], [0], marker=marker_of[j], color="w", markerfacecolor="#6da7ec",

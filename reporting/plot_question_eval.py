@@ -1,27 +1,30 @@
 #!/usr/bin/env python3
 """
-Information Acquisition Evaluation Plotter (IAS / ECR)
+Diagnostic Question Quality plotter — QTS (evaluation_v5.md §2)
 
-Reads *_result.json + log .txt files, runs SemanticSimilarityMapper (no LLM needed),
-computes per-turn IAS/ECR scores, and generates visualisations:
-  - question_eval_semantic.json                  (saved directly under --output)
-  - question_eval/question_eval_plot.png         (IAS + ECR + redundancy combined)
-  - question_eval/question_eval_plot_ias.png
-  - question_eval/question_eval_plot_ecr.png
-  - question_eval/question_eval_plot_redundancy.png
+Reads results/<run_dir>/question_eval.json (written by eval/evaluate_question.py,
+llm_judge mapper) and plots per-turn QTS and its two components:
+  QTS = DRS × (1 − RP)
+  DRS = diagnostic relevance, RP = redundancy penalty
 
-For LLM-based mappers (llm_judge / hybrid), run evaluate_question.py separately;
-this script is intentionally LLM-free for reproducible offline analysis.
+Outputs (analysis/<run_dir>/question_eval/):
+  question_eval_plot.png              QTS + DRS + RP combined
+  question_eval_plot_qts.png
+  question_eval_plot_relevance.png
+  question_eval_plot_redundancy.png
+
+Previously this script re-scored questions with SemanticSimilarityMapper and
+wrote question_eval_semantic.json; that mapper almost never fired (~99.5% of
+turns scored 0), so it is no longer used.
 
 Usage:
-  python plot_question_eval.py --results results/path/dir --logs logs/path/dir
+  python plot_question_eval.py --results results/path/to/combo
   python plot_question_eval.py   # auto via get_run_dir()
 """
 from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -35,142 +38,40 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-from utils.paths import ANALYSIS_ROOT, LOGS_ROOT, RESULTS_ROOT
-DISORDER_ICD10_FILE = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" / "EN" / "disorder_icd10.json"
+from utils.paths import ANALYSIS_ROOT, RESULTS_ROOT
+from utils.metric_compat import turn_qts
 
-from eval.question_score import (
-    SemanticSimilarityMapper,
-    load_all_symptoms,
-    load_criteria,
-    safety_screening_compliance,
-)
-from eval.informative_question_score import score_question, DEFAULT_PROBABILITY_MODE
+MAPPER = "llm_judge"
 
 
-# ── Log parsing: questions & inference candidates per turn ─────────────────────
-
-def _extract_questions_and_candidates(log_file: Path) -> list[tuple[str, list[str]]]:
-    text = log_file.read_text(encoding="utf-8")
-    blocks = re.findall(r"={10} OUTPUT \[doctor\] ={10}\n(.*?)\n={37}", text, re.DOTALL)
-
-    questions: list[str] = []
-    cands_per_turn: list[list[str]] = []
-
-    for b in blocks:
-        b = b.strip()
-        try:
-            p = json.loads(b)
-            if isinstance(p, dict) and "question" in p:
-                questions.append(p["question"])
-            elif isinstance(p, dict) and "candidates" in p and "note" in p and "diagnosis" not in p:
-                cands_per_turn.append(p.get("candidates", []))
-        except (json.JSONDecodeError, ValueError):
-            continue
-
-    follow_ups = questions[1:] if len(questions) > 1 else []
-    return list(zip(follow_ups, cands_per_turn))
-
-
-def _log_sort_key(name: str) -> tuple[int, int]:
-    m = re.match(r"D(\d+)_(\d+)", name)
-    return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
-
-
-def _build_code_to_id() -> dict[str, str]:
-    """Return {icd10_code: disease_id} from disorder_icd10.json."""
-    with open(DISORDER_ICD10_FILE, encoding="utf-8") as f:
-        mapping = json.load(f)
-    code2id: dict[str, str] = {}
-    for k, v in mapping.items():
-        for code in v.get("icd10_accepted_codes") or [v["icd10_code"]]:
-            code2id[code.strip().upper()] = k
-    return code2id
-
-
-# ── Metric computation ─────────────────────────────────────────────────────────
-
-def compute_question_metrics(results_dir: Path, logs_dir: Path) -> list[dict]:
-    all_symptoms = load_all_symptoms()
-    criteria     = load_criteria()
-    code2id      = _build_code_to_id()
-    mapper       = SemanticSimilarityMapper()
-
-    result_paths = sorted(results_dir.glob("*_result.json"),
-                          key=lambda p: _log_sort_key(p.stem.replace("_result", "")))
-    if not result_paths:
-        print(f"[error] No *_result.json found in {results_dir}", file=sys.stderr)
+def load_episodes(results_dir: Path) -> list[dict]:
+    """question_eval.json -> [{log_file, ground_truth, turns: [{turn, qts,
+    diagnostic_relevance, redundancy_penalty} | {turn, skipped}]}]."""
+    path = results_dir / "question_eval.json"
+    if not path.exists():
+        print(f"[error] {path} not found — run eval/evaluate_question.py first", file=sys.stderr)
         sys.exit(1)
-
-    all_episodes: list[dict] = []
-    skipped = 0
-
-    for res_path in result_paths:
-        result   = json.loads(res_path.read_text(encoding="utf-8"))
-        log_name = result["log_file"]
-        gt_m = re.match(r"(D\d+)", log_name)
-        if not gt_m:
-            continue
-        gt = gt_m.group(1)
-
-        log_file = logs_dir / f"{log_name}.txt"
-        if not log_file.exists():
-            skipped += 1
-            continue
-
-        q_and_cands = _extract_questions_and_candidates(log_file)
-        turns_data  = result.get("turns", [])
-
-        turns_out: list[dict] = []
-        asked_per_turn: list[set[str]] = []
-
-        for i, turn_data in enumerate(turns_data):
-            t = turn_data["turn"]
-            cumulative_confirmed = set(turn_data.get("cumulative_confirmed", []))
-            cumulative_denied    = set(turn_data.get("cumulative_denied", []))
-
-            if i >= len(q_and_cands):
-                turns_out.append({"turn": t, "skipped": True})
-                asked_per_turn.append(set())
+    episodes = []
+    for ep in json.loads(path.read_text(encoding="utf-8")):
+        turns = []
+        for t in ep.get("turns", []):
+            sc = (t.get("scores_by_mapper") or {}).get(MAPPER)
+            if sc is None:
+                turns.append({"turn": t["turn"], "skipped": True})
                 continue
-
-            question, raw_cands = q_and_cands[i]
-            candidate_ids = [
-                code2id[c.strip().upper()]
-                for c in raw_cands
-                if code2id.get(c.strip().upper())
-            ]
-
-            score = score_question(
-                question, candidate_ids,
-                cumulative_confirmed, cumulative_denied,
-                all_symptoms, criteria, mapper,
-                probability_mode=DEFAULT_PROBABILITY_MODE,
-            )
-
-            asked_per_turn.append(set(score["question_targets"]))
-            turns_out.append({
-                "turn":              t,
-                "question":          question,
-                "candidate_ids":     candidate_ids,
-                **score,
+            turns.append({
+                "turn":                 t["turn"],
+                "qts":                  turn_qts(sc),
+                "diagnostic_relevance": sc.get("diagnostic_relevance"),
+                "redundancy_penalty":   sc.get("redundancy_penalty"),
             })
-
-        safety = safety_screening_compliance(asked_per_turn)
-        all_episodes.append({
-            "log_file":                    log_name,
-            "ground_truth":                gt,
-            "safety_screening_compliance": safety,
-            "turns":                       turns_out,
-        })
-
-    if skipped:
-        print(f"  [{skipped} episodes skipped — log missing]")
-    return all_episodes
+        episodes.append({"log_file": ep["log_file"], "ground_truth": ep["ground_truth"], "turns": turns})
+    return episodes
 
 
 # ── Build per-disorder stats ────────────────────────────────────────────────────
 
-QMETRICS = ("ias", "ecr", "redundancy_penalty")
+QMETRICS = ("qts", "diagnostic_relevance", "redundancy_penalty")
 
 def build_stats(episodes: list[dict]):
     stats_by_dis: dict = defaultdict(lambda: defaultdict(lambda: {m: [] for m in QMETRICS}))
@@ -216,17 +117,17 @@ def build_stats(episodes: list[dict]):
 
 METRIC_IDX = {m: i + 1 for i, m in enumerate(QMETRICS)}
 COLORS  = {
-    "ias":                "#1f77b4",
-    "ecr":                "#17becf",
-    "redundancy_penalty": "#d62728",
+    "qts":                  "#1f77b4",
+    "diagnostic_relevance": "#17becf",
+    "redundancy_penalty":   "#d62728",
 }
 MARKERS = {
-    "ias": "o", "ecr": "D", "redundancy_penalty": "v",
+    "qts": "o", "diagnostic_relevance": "D", "redundancy_penalty": "v",
 }
 YLABELS = {
-    "ias":                "IAS",
-    "ecr":                "ECR",
-    "redundancy_penalty": "Redundancy Penalty",
+    "qts":                  "QTS",
+    "diagnostic_relevance": "Diagnostic Relevance (DRS)",
+    "redundancy_penalty":   "Redundancy Penalty (RP)",
 }
 
 
@@ -313,7 +214,7 @@ def _draw_combined(ax, turn_data: dict, series: dict, title: str):
                     zorder=3, linestyle=ls)
 
     ax2 = ax.twinx()
-    counts = [len([v for v in turn_data[t]["ias"] if not np.isnan(v)]) for t in turns]
+    counts = [len([v for v in turn_data[t]["qts"] if not np.isnan(v)]) for t in turns]
     ax2.bar(turns, counts, color="gray", alpha=0.15, width=0.7, zorder=0)
     ax2.set_ylabel("# Samples", fontsize=7, color="gray")
     ax2.tick_params(axis="y", labelsize=6, colors="gray")
@@ -380,9 +281,9 @@ def plot_all(episodes: list[dict], results_dir: Path) -> None:
 
     # Per-metric
     metric_names = {
-        "ias":                "ias",
-        "ecr":                "ecr",
-        "redundancy_penalty": "redundancy",
+        "qts":                  "qts",
+        "diagnostic_relevance": "relevance",
+        "redundancy_penalty":   "redundancy",
     }
     for metric, fname_suffix in metric_names.items():
         def _fn(ax, td, ser, title, _m=metric):
@@ -399,9 +300,7 @@ CRITERIA_FILE_PATH = BASE_DIR / "mentalbench" / "resources" / "knowledge_graph" 
 
 def print_summary(episodes: list[dict]) -> None:
     stats: dict[str, list] = {m: [] for m in QMETRICS}
-    safety_covered = []
     for ep in episodes:
-        safety_covered.append(ep["safety_screening_compliance"].get("all_covered", False))
         for turn in ep["turns"]:
             if turn.get("skipped"):
                 continue
@@ -410,7 +309,7 @@ def print_summary(episodes: list[dict]) -> None:
                 if v is not None:
                     stats[m].append(float(v))
 
-    print("\n=== Question Metrics Summary (Semantic Mapper) ===")
+    print(f"\n=== Question Metrics Summary ({MAPPER} mapper, per scored turn) ===")
     hdr = f"{'Metric':<28} {'Mean':>8}  {'Std':>8}  {'N':>6}"
     print(hdr)
     print("-" * len(hdr))
@@ -418,28 +317,21 @@ def print_summary(episodes: list[dict]) -> None:
         vals = stats[m]
         if vals:
             print(f"{YLABELS[m]:<28} {np.mean(vals):>8.4f}  {np.std(vals):>8.4f}  {len(vals):>6}")
-    rate = sum(safety_covered) / len(safety_covered) if safety_covered else 0.0
-    print(f"\nSafety-critical coverage: {rate:.1%} of episodes")
 
 
 # ── Main ────────────────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--results", type=Path, default=None)
-    parser.add_argument("--logs",    type=Path, default=None)
+    parser.add_argument("--results", type=Path, default=None,
+                        help="Dir containing question_eval.json (default: results/<run_dir>)")
     parser.add_argument("--output",  type=Path, default=None,
                         help="Directory to write outputs (default: analysis/<run_dir>)")
     args = parser.parse_args()
 
-    if args.results is None or args.logs is None:
+    if args.results is None:
         from utils.llm import get_run_dir as _get_run_dir
-        run_dir = _get_run_dir()
-        if args.results is None:
-            args.results = RESULTS_ROOT / run_dir
-        if args.logs is None:
-            args.logs = LOGS_ROOT / run_dir
-
+        args.results = RESULTS_ROOT / _get_run_dir()
     if args.output is None:
         try:
             rel = args.results.resolve().relative_to((RESULTS_ROOT).resolve())
@@ -447,23 +339,8 @@ def main():
         except ValueError:
             args.output = ANALYSIS_ROOT / args.results.name
 
-    args.output.mkdir(parents=True, exist_ok=True)
-    print(f"Results dir : {args.results}")
-    print(f"Logs dir    : {args.logs}")
-    print(f"Output dir  : {args.output}")
-    print("Running SemanticSimilarityMapper (no LLM calls)...")
-
-    episodes = compute_question_metrics(args.results, args.logs)
-    if not episodes:
-        print("[error] No data computed.", file=sys.stderr)
-        sys.exit(1)
-
-    out_json = args.output / "question_eval_semantic.json"
-    out_json.write_text(json.dumps(episodes, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"  Saved → {out_json}")
-
+    episodes = load_episodes(args.results)
     print_summary(episodes)
-    print("\nGenerating plots...")
     plots_dir = args.output / "question_eval"
     plots_dir.mkdir(parents=True, exist_ok=True)
     plot_all(episodes, plots_dir)

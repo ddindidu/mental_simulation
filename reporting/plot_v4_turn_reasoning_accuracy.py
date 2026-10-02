@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-evaluation_v4.md — Turn Count, Diagnostic Reasoning Ability, and Final Accuracy (combined)
+evaluation_v5.md — Turn Count, Diagnostic Evidence Sufficiency, and Final Accuracy (combined)
 
 Three metrics, one figure. A 2D scatter can only give two axes cleanly, so
 the third (final accuracy) rides as point color on a sequential ramp rather
@@ -9,7 +9,7 @@ pattern used by plot_v4_ias_components.py for IAS. One point per (judge,
 doctor) combo from the CSV produced by reporting/summarize_v4_metrics_csv.py:
 
   x = turn_count                             (§3, mean patient turns per episode)
-  y = diagnostic_reasoning_overall_score     (§4, evidence-gathering thoroughness)
+  y = diagnostic_evidence_sufficiency_pred     (§4, evidence-gathering thoroughness)
   color = final_accuracy_pct                 (§4, whether the stated diagnosis
                                               was actually correct)
 
@@ -86,7 +86,7 @@ def main() -> None:
     points, skipped = [], []
     for r in rows:
         x = _to_float(r["turn_count"])
-        y = _to_float(r["diagnostic_reasoning_overall_score"])
+        y = _to_float(r["diagnostic_evidence_sufficiency_pred"])
         c = _to_float(r["final_accuracy_pct"])
         if x is None or y is None or c is None:
             skipped.append(f"{r['judge']}/{r['doctor']}")
@@ -94,9 +94,9 @@ def main() -> None:
         points.append((r["judge"], r["doctor"], x, y, c))
 
     if skipped:
-        print(f"Skipped (missing turn_count / diagnostic reasoning / final accuracy): {', '.join(skipped)}", file=sys.stderr)
+        print(f"Skipped (missing turn_count / diagnostic evidence sufficiency / final accuracy): {', '.join(skipped)}", file=sys.stderr)
     if not points:
-        print("No combo has turn_count, diagnostic_reasoning_overall_score, and final_accuracy_pct all present.")
+        print("No combo has turn_count, diagnostic_evidence_sufficiency_pred, and final_accuracy_pct all present.")
         return
 
     xs = [p[2] for p in points]
@@ -123,10 +123,10 @@ def main() -> None:
     ax.set_xlim(min(xs) - x_pad, max(xs) + x_pad)
     ax.set_ylim(min(ys) - y_pad, max(ys) + y_pad)
 
-    ax.set_xlabel("Turn Count — §3, mean patient turns per episode", fontsize=10, color="#52514e")
-    ax.set_ylabel("Diagnostic Reasoning Ability (overall_score) — §4, higher = better", fontsize=10, color="#52514e")
+    ax.set_xlabel("Total Turns — §3, mean patient turns per episode", fontsize=10, color="#52514e")
+    ax.set_ylabel("Diagnostic Evidence Sufficiency (for the final dx) — §4, higher = better", fontsize=10, color="#52514e")
     # ax.set_title(
-    #     "evaluation_v4.md — Turn Count x Diagnostic Reasoning x Final Accuracy\n"
+    #     "evaluation_v5.md — Turn Count x Diagnostic Evidence Sufficiency x Final Accuracy\n"
     #     "(point color = final accuracy; marker shape = judge)",
     #     fontsize=12, fontweight="bold",
     # )

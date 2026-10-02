@@ -28,7 +28,7 @@ DOCTOR_VARIANTS = [
 ]
 
 STEPS = [
-    "eval/evaluate_turns_strict.py",
+    # "eval/evaluate_turns_strict.py",  # [DEACTIVATED] non-headline metrics
     "eval/evaluate_question.py",
     "reporting/plot_question_eval.py",
     "reporting/plot_efficiency_eval.py",

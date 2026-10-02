@@ -1,25 +1,19 @@
 #!/usr/bin/env python3
 """
-Main Evaluation — Cross-Model Comparison Visualization (non-stratified)
+Main Evaluation — Cross-Model Comparison Visualization (evaluation_v5.md headline metrics)
 
-Companion to summarize_ablation_all_dimensions.py, but over the full episode
-set (no correct/incorrect split). Reads the comparison tables already produced
-by summarize_comparisons.py and summarize_question_eval.py and renders:
+For every (patient, judge) bucket with a
+analysis/<patient>/<judge>/comparison/headline_comparison.json (written by
+reporting/summarize_comparisons.py), renders:
 
-  analysis/<judge>/<judge>/comparison/main_eval_all_dimensions.png
-      12-panel bar chart, one panel per metric, grouped by the 4 dimensions
-  analysis/<judge>/<judge>/comparison/main_eval_normalized_heatmap.png
-      model x metric heatmap of min-max normalized scores (higher = better,
-      lower-is-better metrics sign-flipped before normalizing)
-
-Sources (per doctor model), already aggregated by other scripts:
-  analysis/<j>/<j>/comparison/inference_eval_comparison.json
-  analysis/<j>/<j>/comparison/efficiency_eval_comparison.json
-  analysis/<j>/<j>/comparison/diagnostic_reasoning_comparison.json
-  analysis/<j>/<j>/comparison/question_eval_comparison.json
+  comparison/main_eval_all_dimensions.png
+      one row per dimension, one bar panel per headline metric
+  comparison/main_eval_normalized_heatmap.png
+      model x metric heatmap of per-column min-max normalized scores
+      (darker = better; lower-is-better metrics sign-flipped first)
 
 Usage:
-  python reporting/summarize_main_eval_findings.py [--judge JUDGE]
+  MS_RUN=run_batch_20260912 python reporting/summarize_main_eval_findings.py
 """
 from __future__ import annotations
 
@@ -39,26 +33,31 @@ if str(_REPO_ROOT) not in _sys.path:
 warnings.filterwarnings("ignore")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-from utils.paths import ANALYSIS_ROOT, LOGS_ROOT, RESULTS_ROOT
+from utils.paths import ANALYSIS_ROOT
+from reporting.headline_metrics import HEADLINE, DIMENSION_NAMES
 
 MODEL_ORDER = [
     "gpt-5.4",
     "gpt-5.6-luna",
+    "gemini-3.8-flash",
     "gemini-3.5-flash",
     "gemini-3.1-flash-lite",
     "claude-sonnet-5",
     "claude-haiku-4.5",
     "llama-3.3-70b-instruct",
+    "qwen3-235b",
     "qwen3-235b-a22b-2507",
 ]
 MODEL_LABELS = {
     "gpt-5.4":                 "GPT-5.4",
     "gpt-5.6-luna": "GPT-5.6 Luna",
+    "gemini-3.8-flash":        "Gemini 3.8 Flash",
     "gemini-3.5-flash":        "Gemini 3.5 Flash",
     "gemini-3.1-flash-lite":   "Gemini 3.1 Lite",
     "claude-sonnet-5":     "Claude Sonnet 5",
     "claude-haiku-4.5":    "Claude Haiku 4.5",
     "llama-3.3-70b-instruct":  "Llama 3.3 70B",
+    "qwen3-235b":              "Qwen3 235B",
     "qwen3-235b-a22b-2507":    "Qwen3 235B",
 }
 
@@ -67,9 +66,11 @@ MODEL_COLORS = {
     "gpt-5.6-luna": "#3AA89C",
     "gemini-3.1-flash-lite":   "#4580C4",
     "gemini-3.5-flash":        "#F07C35",
+    "gemini-3.8-flash":        "#F07C35",
     "claude-sonnet-5":     "#D9A03C",
     "claude-haiku-4.5":    "#A0A0A0",   
     "llama-3.3-70b-instruct":  "#5BA04E",
+    "qwen3-235b":              "#9B6ABE",
     "qwen3-235b-a22b-2507":    "#9B6ABE",
 }
 
@@ -80,126 +81,58 @@ def _load(path: Path) -> list[dict]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _index_by_model(rows: list[dict]) -> dict[str, dict]:
-    return {r["model"]: r for r in rows}
+def _plot_bucket(cmp_dir: Path, rows: list[dict], plt) -> None:
+    by_model = {r["model"]: r for r in rows}
+    models = [m for m in MODEL_ORDER if m in by_model] + sorted(m for m in by_model if m not in MODEL_ORDER)
+    labels = [MODEL_LABELS.get(m, m).replace(" ", "\n") for m in models]
+    colors = [MODEL_COLORS.get(m, "#777777") for m in models]
 
-
-def main() -> None:
-    p = argparse.ArgumentParser()
-    p.add_argument("--judge", default="gemini-3.5-flash")
-    args = p.parse_args()
-
-    cmp_dir = ANALYSIS_ROOT / args.judge / args.judge / "comparison"
-
-    inf = _index_by_model(_load(cmp_dir / "inference_eval_comparison.json"))
-    eff = _index_by_model(_load(cmp_dir / "efficiency_eval_comparison.json"))
-    dr  = _index_by_model(_load(cmp_dir / "diagnostic_reasoning_comparison.json"))
-    q   = _index_by_model(_load(cmp_dir / "question_eval_comparison.json"))
-
-    models = [m for m in MODEL_ORDER if m in inf]
-
-    try:
-        import matplotlib
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-    except ImportError:
-        print("[skip] matplotlib not available")
-        return
-
-    labels = [MODEL_LABELS[m].replace(" ", "\n") for m in models]
-    colors = [MODEL_COLORS[m] for m in models]
-
-    # ── Figure 1: 12-panel bar chart ──────────────────────────────────────
-    PANELS = [
-        ("Inference Quality", [
-            ("accuracy",        "Accuracy\n(exact set match)",  inf, False),
-            ("recall",          "Recall\n(truth coverage)",     inf, False),
-            ("jaccard",         "Jaccard Index",                inf, False),
-        ]),
-        ("Information Acquisition (cosine)", [
-            ("cosine_conditional_mean_ias", "Cond. Mean\nIAS",       q, False),
-            ("cosine_conditional_mean_ecr", "Cond. Mean\nECR",       q, False),
-            ("cosine_ecr_positive_rate",    "ECR-Positive\nRate",    q, False),
-        ]),
-        ("Efficiency", [
-            ("final_accuracy",        "Final Accuracy\n(exact diagnosis)", eff, False),
-            ("cssr",                  "CSSR\n(candidate narrowing)",       eff, False),
-            ("redundant_turn_ratio",  "Redundant Turn\nRatio (↓ better)",  eff, True),
-        ]),
-        ("Diagnostic Reasoning", [
-            ("overall_score",                 "Overall Score",            dr, False),
-            ("functional_impairment_score",   "Functional\nImpairment",   dr, False),
-            ("additional_requirements_score", "Additional\nRequirements", dr, False),
-        ]),
-    ]
-
-    fig, axes = plt.subplots(4, 3, figsize=(15, 18))
+    # ── Figure 1: one row per dimension, one panel per headline metric ─────
+    dims = list(DIMENSION_NAMES)
+    n_cols = max(sum(1 for *_, d, _ in HEADLINE if d == dim) for dim in dims)
+    fig, axes = plt.subplots(len(dims), n_cols, figsize=(4.2 * n_cols, 4.2 * len(dims)), squeeze=False)
     fig.patch.set_facecolor("#F1F4F9")
-
-    for row_i, (dim_label, metrics) in enumerate(PANELS):
-        for col_i, (metric, m_label, table, lower_better) in enumerate(metrics):
+    for row_i, dim in enumerate(dims):
+        metrics = [(k, lbl, lower) for k, lbl, d, lower in HEADLINE if d == dim]
+        for col_i in range(n_cols):
             ax = axes[row_i][col_i]
+            if col_i >= len(metrics):
+                ax.set_visible(False)
+                continue
+            key, m_label, lower_better = metrics[col_i]
             ax.set_facecolor("#FFFFFF")
-
             xs = np.arange(len(models))
-            vals = [table.get(m, {}).get(metric, 0) or 0 for m in models]
-
-            bars = ax.bar(xs, vals, 0.6, color=colors, alpha=0.88, zorder=3,
-                          edgecolor="white", linewidth=0.6)
-
+            vals = [by_model[m].get(key) for m in models]
+            ax.bar(xs, [v if v is not None else 0 for v in vals], 0.6, color=colors, alpha=0.88,
+                   zorder=3, edgecolor="white", linewidth=0.6)
             for xi, v in zip(xs, vals):
-                ax.text(xi, v, f"{v:.3f}", ha="center",
-                        va="bottom" if v >= 0 else "top", fontsize=6.5,
-                        color="#1C2333")
-
+                ax.text(xi, v or 0, f"{v:.3f}" if v is not None else "n/a", ha="center",
+                        va="bottom", fontsize=6.5, color="#1C2333")
             ax.set_xticks(xs)
             ax.set_xticklabels(labels, fontsize=6.5, ha="center")
             ax.tick_params(axis="y", labelsize=7)
-            title = m_label + ("  (↓ lower better)" if lower_better and "↓" not in m_label else "")
-            ax.set_title(title, fontsize=8, fontweight="bold", pad=4)
+            ax.set_title(m_label + ("  (↓ lower better)" if lower_better else ""),
+                         fontsize=8.5, fontweight="bold", pad=4)
             ax.grid(axis="y", color="#E4EBF5", linewidth=0.8, zorder=0)
             ax.spines[["top", "right", "left"]].set_visible(False)
             ax.spines["bottom"].set_color("#DDE3EF")
-            ax.axhline(0, color="#B9C3D6", linewidth=0.7, zorder=1)
-
             if col_i == 0:
-                ax.set_ylabel(dim_label, fontsize=8.5, color="#6B7A99", fontweight="bold")
-
-    fig.suptitle("Main Evaluation — Cross-Model Comparison (all episodes, unstratified)",
+                ax.set_ylabel(DIMENSION_NAMES[dim], fontsize=8.5, color="#6B7A99", fontweight="bold")
+    fig.suptitle(f"Main Evaluation — Headline Metrics by Doctor Model ({cmp_dir.parent.relative_to(ANALYSIS_ROOT)})",
                  fontsize=13, fontweight="bold", y=1.001, color="#1C2333")
-    plt.tight_layout(rect=[0, 0, 1, 1])
+    plt.tight_layout()
     out1 = cmp_dir / "main_eval_all_dimensions.png"
     fig.savefig(out1, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
     plt.close(fig)
     print(f"[saved] {out1}")
 
     # ── Figure 2: normalized model x metric heatmap ───────────────────────
-    HEATMAP_METRICS = [
-        ("Accuracy",              inf, "accuracy",                           False),
-        ("Recall",                inf, "recall",                             False),
-        ("Jaccard",               inf, "jaccard",                            False),
-        ("Weighted Recall",       inf, "weighted_recall",                    False),
-        ("Q: Cond. IAS",          q,   "cosine_conditional_mean_ias",        False),
-        ("Q: Cond. ECR",          q,   "cosine_conditional_mean_ecr",        False),
-        ("Final Accuracy",        eff, "final_accuracy",                     False),
-        ("CSSR",                  eff, "cssr",                               False),
-        ("Turn Count",            eff, "turn_count",                         True),
-        ("Redundant Turn Ratio",  eff, "redundant_turn_ratio",               True),
-        ("DR: Overall",           dr,  "overall_score",                      False),
-        ("DR: Symptom Satisfaction", dr, "symptom_satisfaction_score",       False),
-        ("DR: Func. Impairment",  dr,  "functional_impairment_score",        False),
-        ("DR: Addl. Requirements",dr,  "additional_requirements_score",      False),
-    ]
-
-    raw = np.full((len(models), len(HEATMAP_METRICS)), np.nan)
+    raw = np.full((len(models), len(HEADLINE)), np.nan)
     for mi, model in enumerate(models):
-        for ci, (_, table, metric, lower_better) in enumerate(HEATMAP_METRICS):
-            v = table.get(model, {}).get(metric)
+        for ci, (key, _, _, lower_better) in enumerate(HEADLINE):
+            v = by_model[model].get(key)
             if v is not None:
                 raw[mi, ci] = -v if lower_better else v
-
-    # min-max normalize per column to [0, 1] so metrics of different scale
-    # are visually comparable on one heatmap
     norm = np.full_like(raw, np.nan)
     for ci in range(raw.shape[1]):
         col = raw[:, ci]
@@ -209,48 +142,45 @@ def main() -> None:
         lo, hi = valid.min(), valid.max()
         norm[:, ci] = 0.5 if hi == lo else (col - lo) / (hi - lo)
 
-    col_labels = [h[0] for h in HEATMAP_METRICS]
-    row_labels = [MODEL_LABELS[m] for m in models]
-
-    fig2, ax2 = plt.subplots(figsize=(15, 5))
+    fig2, ax2 = plt.subplots(figsize=(13, 0.6 * len(models) + 2.5))
     fig2.patch.set_facecolor("#F1F4F9")
-    ax2.set_facecolor("#F1F4F9")
-
     im = ax2.imshow(norm, cmap="YlGnBu", vmin=0, vmax=1, aspect="auto")
-
-    ax2.set_xticks(range(len(col_labels)))
-    ax2.set_xticklabels(col_labels, rotation=35, ha="right", fontsize=8)
-    ax2.set_yticks(range(len(row_labels)))
-    ax2.set_yticklabels(row_labels, fontsize=9)
-
-    for yi, model in enumerate(models):
-        ax2.add_patch(plt.Rectangle((-0.55 - 0.35, yi - 0.5), 0.35, 1,
-                                     color=MODEL_COLORS[model], transform=ax2.transData,
-                                     clip_on=False))
-
+    ax2.set_xticks(range(len(HEADLINE)))
+    ax2.set_xticklabels([f"{lbl}{' (↓)' if lower else ''}" for _, lbl, _, lower in HEADLINE],
+                        rotation=35, ha="right", fontsize=8)
+    ax2.set_yticks(range(len(models)))
+    ax2.set_yticklabels([MODEL_LABELS.get(m, m) for m in models], fontsize=9)
     for ri in range(len(models)):
-        for ci in range(len(HEATMAP_METRICS)):
+        for ci, (_, _, _, lower_better) in enumerate(HEADLINE):
             v = raw[ri, ci]
             if not np.isnan(v):
-                shown = -v if HEATMAP_METRICS[ci][3] else v
-                text_color = "white" if norm[ri, ci] > 0.6 else "#1C2333"
-                ax2.text(ci, ri, f"{shown:.3f}", ha="center", va="center",
-                         fontsize=6.5, color=text_color, fontweight="bold")
-
+                ax2.text(ci, ri, f"{-v if lower_better else v:.3f}", ha="center", va="center",
+                         fontsize=6.5, color="white" if norm[ri, ci] > 0.6 else "#1C2333",
+                         fontweight="bold")
     cbar = fig2.colorbar(im, ax=ax2, shrink=0.7, pad=0.02)
-    cbar.set_label("Normalized rank within metric\n(darker = better, per-column min-max)", fontsize=8)
+    cbar.set_label("Normalized within metric\n(darker = better)", fontsize=8)
     cbar.ax.tick_params(labelsize=7)
-
-    ax2.set_title(
-        "Main Evaluation — Normalized Cross-Model Profile "
-        "(lower-is-better metrics sign-flipped before normalizing)",
-        fontsize=10, fontweight="bold", color="#1C2333", pad=14,
-    )
+    ax2.set_title("Main Evaluation — Normalized Cross-Model Profile "
+                  "(lower-is-better metrics sign-flipped; blank = not available)",
+                  fontsize=10, fontweight="bold", color="#1C2333", pad=14)
     plt.tight_layout()
     out2 = cmp_dir / "main_eval_normalized_heatmap.png"
     fig2.savefig(out2, dpi=150, bbox_inches="tight", facecolor=fig2.get_facecolor())
     plt.close(fig2)
     print(f"[saved] {out2}")
+
+
+def main() -> None:
+    argparse.ArgumentParser().parse_args()
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    cmp_dirs = sorted(p.parent for p in ANALYSIS_ROOT.glob("*/*/comparison/headline_comparison.json"))
+    if not cmp_dirs:
+        print("No headline_comparison.json found — run reporting/summarize_comparisons.py first")
+    for cmp_dir in cmp_dirs:
+        _plot_bucket(cmp_dir, _load(cmp_dir / "headline_comparison.json"), plt)
 
 
 if __name__ == "__main__":

@@ -1,63 +1,40 @@
 """
-Information Acquisition Score (IAS) and Expected Candidate Reduction (ECR)
-============================================================================
+Question Targeting Score (QTS)
+==============================
 
-Turn-level scoring for the "정보 수집 능력" (information acquisition) evaluation
-dimension — replaces "Question Quality" (DCS / composite_score / mandatory_first
-/ edge_alignment, still available in question_score.py for reference/ablation)
-as the reported question-quality axis in the evaluation pipeline.
+Turn-level scoring for the **Diagnostic Question Quality** evaluation
+dimension (formerly "Information Acquisition Score (IAS)" — renamed; the
+formula is unchanged).
 
-  IAS = DRS * (1 - RP)             "did the question ask for relevant, unresolved info?"
-  ECR = 1 - E[|C_t+1|] / |C_t|     "how much does the question narrow the candidate set?"
+  QTS = DRS * (1 - RP)     "did the question target relevant, still-unresolved symptoms?"
 
-These are two INDEPENDENT metrics — do not multiply them together. Both are
-computed and reported per turn, alongside every intermediate quantity used to
-derive them, for debugging / case-study inspection.
+Computed and reported per turn, alongside every intermediate quantity used to
+derive it, for debugging / case-study inspection.
 
-Design decisions (locked in with the user):
+Design decisions:
 
 - Evidence state stays 3-state: CONFIRMED / DENIED / UNKNOWN. No AMBIGUOUS
   label. The symptom-extraction judge (eval/symptom_diagnosis.py) already
-  errs toward UNKNOWN on ambiguous patient replies ("Do NOT speculate...
-  Err toward UNKNOWN (omit) rather than guessing"), so UNKNOWN already means
+  errs toward UNKNOWN on ambiguous patient replies, so UNKNOWN already means
   "unresolved" regardless of *why* — a clarifying re-ask of an ambiguous
   answer is never mistaken for a redundant one.
 
-- "Required" criteria = MUST_INCLUDE mandatory-pool symptoms ONLY, tracked at
+- C_t (the candidate set QTS is computed against) is the DOCTOR'S OWN stated
+  candidate list at that turn (ICD-10 → disease ID), not the KG reference
+  candidate set — QTS asks "given what the doctor is considering, was this
+  question well-targeted?".
+
+- "Required" symptoms = MUST_INCLUDE mandatory-pool symptoms ONLY, tracked at
   individual-symptom granularity (no group/min_count gating — a group is not
   treated as "already satisfied" once min_count members are confirmed, since
   asking about individual mandatory symptoms one at a time is the natural
   conversational unit). Non-symptom requirements (min_duration,
   functional_impairment_required, additional_requirements) are OUT OF SCOPE
-  for this MVP — the pipeline has no evidence extraction for them yet.
+  — the pipeline has no per-turn evidence extraction for them yet.
 
-- mandatory_first_compliance is dropped as an independent axis; required-ness
-  now folds directly into `I_t = discriminative ∪ required` for IAS.
-
-- ECR candidate filtering is presence-based (Option A: does the symptom sit in
-  the disorder's pool, y/n) but restricted to MANDATORY-pool membership. This
-  matters for consistency: under compute_reference_candidates()
-  (question_score.py), a candidate is excluded from C_t ONLY when a MANDATORY
-  symptom is denied — denying (or confirming) an optional/associated symptom
-  never changes candidate-set membership. So:
-    - confirming a symptom never excludes a candidate  -> "positive" branch is
-      always the full C_t (size unchanged).
-    - denying a symptom excludes exactly the candidates for which that
-      symptom is mandatory -> "negative" branch shrinks by that count.
-  Using plain pool-membership (mandatory ∪ optional) instead would make ECR
-  disagree with the candidate-set definition that accuracy/recall/jaccard use
-  elsewhere in the pipeline (optional-symptom denial would appear to reduce
-  the candidate set when it actually doesn't).
-
-- Multi-symptom questions: ECR = mean over UNRESOLVED targeted symptoms only
-  (per_target_mean). Already-resolved targets are dropped from the average
-  rather than counted as 0 — IAS's redundancy_penalty already penalizes
-  re-asking resolved symptoms, so this avoids double-penalizing the same
-  question on two different metrics.
-
-- probability_mode default = "candidate_frequency", using the same
-  mandatory-pool-membership rule as the filtering step for consistency.
-  Configurable via config.json -> evaluation.information_acquisition.
+DEACTIVATED (kept below for reference / easy reactivation, not called by the
+pipeline): Expected Candidate Reduction (ECR). See
+expected_candidate_reduction() and the commented-out call in score_question().
 """
 from __future__ import annotations
 
@@ -86,8 +63,8 @@ from eval.question_score import (  # reuse KG loaders + mappers, do not duplicat
     safety_screening_compliance,
 )
 
-_IAS_CFG = (CONFIG.get("evaluation") or {}).get("information_acquisition") or {}
-DEFAULT_PROBABILITY_MODE = _IAS_CFG.get("probability_mode", "candidate_frequency")
+_QTS_CFG = (CONFIG.get("evaluation") or {}).get("information_acquisition") or {}
+DEFAULT_PROBABILITY_MODE = _QTS_CFG.get("probability_mode", "candidate_frequency")  # ECR only (deactivated)
 
 
 # ── KG helpers (mandatory-only, symptom-level) ─────────────────────────────────
@@ -97,7 +74,7 @@ def mandatory_symptom_ids(disorder_id: str, criteria: dict) -> set[str]:
     return {s for pool in _mandatory_pools(disorder_id, criteria) for s in pool}
 
 
-# ── §2 Discriminative symptoms ─────────────────────────────────────────────────
+# ── Discriminative symptoms ────────────────────────────────────────────────────
 
 def get_discriminative_symptoms(candidates: list[str], criteria: dict) -> set[str]:
     """
@@ -115,7 +92,7 @@ def get_discriminative_symptoms(candidates: list[str], criteria: dict) -> set[st
     return {s for s, c in counts.items() if 0 < c < n}
 
 
-# ── §3 Required diagnostic requirements (MVP: mandatory symptoms only) ────────
+# ── Required symptoms (mandatory symptoms only) ───────────────────────────────
 
 def get_required_symptoms(candidates: list[str], criteria: dict) -> set[str]:
     """
@@ -145,7 +122,7 @@ def get_unresolved_symptoms(symptom_universe: set[str], confirmed: set[str], den
     return symptom_universe - (confirmed | denied)
 
 
-# ── §4 Diagnostic Relevance Score ──────────────────────────────────────────────
+# ── Diagnostic Relevance Score ─────────────────────────────────────────────────
 
 def diagnostic_relevance_score(
     question_targets: list[str],
@@ -155,7 +132,7 @@ def diagnostic_relevance_score(
     """
     DRS_t = |S(q_t) ∩ I_t| / |S(q_t)|,  I_t = S_disc,t ∪ R_t
     Returns (drs, discriminative_symptoms, required_symptoms, informative_symptoms).
-    DRS = 0.0 when question_targets is empty (edge case §13).
+    DRS = 0.0 when question_targets is empty.
     """
     q = set(question_targets)
     disc = get_discriminative_symptoms(candidates, criteria)
@@ -167,7 +144,7 @@ def diagnostic_relevance_score(
     return round(len(overlap) / len(q), 4), disc, req, informative
 
 
-# ── §5 Redundancy Penalty ──────────────────────────────────────────────────────
+# ── Redundancy Penalty ─────────────────────────────────────────────────────────
 
 def redundancy_penalty(
     question_targets: list[str],
@@ -189,9 +166,9 @@ def redundancy_penalty(
     return round(len(resolved_targets) / len(q), 4), resolved_targets
 
 
-# ── §6 Information Acquisition Score ───────────────────────────────────────────
+# ── Question Targeting Score ───────────────────────────────────────────────────
 
-def information_acquisition_score(
+def question_targeting_score(
     question_targets: list[str],
     candidates: list[str],
     criteria: dict,
@@ -199,17 +176,17 @@ def information_acquisition_score(
     cumulative_denied: set[str],
 ) -> dict:
     """
-    IAS_t = DRS_t * (1 - RP_t)
+    QTS_t = DRS_t * (1 - RP_t)
 
     Returns a dict with the score plus every intermediate/debug quantity:
-      ias, diagnostic_relevance, redundancy_penalty,
+      qts, diagnostic_relevance, redundancy_penalty,
       question_targets, discriminative_targets, required_targets, resolved_targets,
       discriminative_symptoms, required_symptoms, candidate_symptoms,
       resolved_symptoms, unresolved_symptoms
     """
     drs, disc, req, informative = diagnostic_relevance_score(question_targets, candidates, criteria)
     rp, resolved_targets = redundancy_penalty(question_targets, cumulative_confirmed, cumulative_denied)
-    ias = round(drs * (1 - rp), 4)
+    qts = round(drs * (1 - rp), 4)
 
     q = set(question_targets)
     candidate_symptoms = get_candidate_symptoms(candidates, criteria)
@@ -217,7 +194,7 @@ def information_acquisition_score(
     resolved_candidate_symptoms = candidate_symptoms - unresolved_candidate_symptoms
 
     return {
-        "ias": ias,
+        "qts": qts,
         "diagnostic_relevance": drs,
         "redundancy_penalty": rp,
         "question_targets": sorted(q),
@@ -233,7 +210,10 @@ def information_acquisition_score(
     }
 
 
-# ── §7-9 Expected Candidate Reduction ──────────────────────────────────────────
+# ── [DEACTIVATED] Expected Candidate Reduction ────────────────────────────────
+# Not part of the headline metric set. Kept for reference; re-enable by
+# un-commenting the call in score_question() and the ECR aggregates in
+# compute_episode_question_metrics().
 
 def _answer_probability(
     symptom_id: str,
@@ -267,21 +247,10 @@ def expected_candidate_reduction(
     answer_probs: Optional[dict] = None,
 ) -> tuple[Optional[float], dict]:
     """
-    ECR_t = mean over unresolved targeted symptoms of:
+    [DEACTIVATED] ECR_t = mean over unresolved targeted symptoms of:
         1 - [P(+)*|C_pos| + P(-)*|C_neg|] / |C_t|
-
-    Candidate filtering (Option A, mandatory-only — see module docstring):
-      |C_pos| = |C_t|                       (confirming never excludes)
-      |C_neg| = |C_t| - |mandatory_holders| (denying excludes mandatory holders)
-
-    multi_target_mode = "per_target_mean" (only mode implemented): resolved
-    targets are dropped from the average, not counted as 0 (avoids double-
-    penalizing redundancy, which IAS already scores).
-
-    Returns (ecr, debug) where debug holds unresolved_targets + per-target detail.
-      ecr = None  if len(candidates) == 0 (undefined)
-      ecr = 0.0   if len(candidates) == 1, or question_targets is empty,
-                  or all targeted symptoms are already resolved
+    with |C_pos| = |C_t| (confirming never excludes) and
+    |C_neg| = |C_t| - |mandatory_holders| (denying excludes mandatory holders).
     """
     n = len(candidates)
     q = set(question_targets)
@@ -338,34 +307,35 @@ def score_question(
     answer_probs: Optional[dict] = None,
 ) -> dict:
     """
-    Map `question` to targeted symptom IDs via `mapper`, then compute IAS and ECR
-    for that turn. Returns the full IAS debug dict plus `ecr`, `ecr_debug`,
-    `candidate_disorders`, and `probability_mode`.
+    Map `question` to targeted symptom IDs via `mapper`, then compute QTS for
+    that turn. Returns the full QTS debug dict plus `candidate_disorders`.
     """
     q_syms = mapper.map(question, all_symptoms)
-    ias_result = information_acquisition_score(
+    qts_result = question_targeting_score(
         q_syms, candidates, criteria, cumulative_confirmed, cumulative_denied
     )
-    ecr, ecr_debug = expected_candidate_reduction(
-        q_syms, candidates, criteria,
-        cumulative_confirmed, cumulative_denied,
-        probability_mode=probability_mode, answer_probs=answer_probs,
-    )
+    # [DEACTIVATED] ECR — not a headline metric.
+    # ecr, ecr_debug = expected_candidate_reduction(
+    #     q_syms, candidates, criteria,
+    #     cumulative_confirmed, cumulative_denied,
+    #     probability_mode=probability_mode, answer_probs=answer_probs,
+    # )
     return {
-        **ias_result,
-        "ecr": ecr,
-        "ecr_debug": ecr_debug,
+        **qts_result,
+        # "ecr": ecr,
+        # "ecr_debug": ecr_debug,
+        # "probability_mode": probability_mode,
         "candidate_disorders": sorted(candidates),
-        "probability_mode": probability_mode,
     }
 
 
 # ── Episode-level aggregate metrics ───────────────────────────────────────────
 
-def compute_episode_information_metrics(turns: list[dict], mapper_name: str) -> dict:
+def compute_episode_question_metrics(turns: list[dict], mapper_name: str) -> dict:
     """
-    Per-episode aggregate IAS/ECR metrics for one mapper.
-    Active turns = candidate_size > 1 (discrimination/reduction still possible).
+    Per-episode QTS aggregate for one mapper.
+
+    Headline: mean_qts = mean of per-turn QTS over ALL scored turns.
     """
 
     def _mean(lst: list) -> Optional[float]:
@@ -383,29 +353,26 @@ def compute_episode_information_metrics(turns: list[dict], mapper_name: str) -> 
     if not scored:
         return {}
 
-    all_ias = [s.get("ias", 0.0) for s in scored]
-    all_ecr = [s["ecr"] for s in scored if s.get("ecr") is not None]
+    all_qts = [s.get("qts", 0.0) for s in scored]
     all_rp = [s.get("redundancy_penalty", 0.0) for s in scored]
 
-    active_s = [s for s, sz in zip(scored, sizes) if sz > 1]
-    active_ias = [s.get("ias", 0.0) for s in active_s]
-    active_ecr = [s["ecr"] for s in active_s if s.get("ecr") is not None]
-
-    half = max(1, (len(active_ecr) + 1) // 2)
-    early_ecr = active_ecr[:half]
+    # [DEACTIVATED] active-turn (|C_t| > 1) conditional means and ECR aggregates.
+    # active_s = [s for s, sz in zip(scored, sizes) if sz > 1]
+    # active_qts = [s.get("qts", 0.0) for s in active_s]
+    # all_ecr = [s["ecr"] for s in scored if s.get("ecr") is not None]
+    # active_ecr = [s["ecr"] for s in active_s if s.get("ecr") is not None]
+    # half = max(1, (len(active_ecr) + 1) // 2)
+    # early_ecr = active_ecr[:half]
 
     return {
-        # all turns
-        "mean_ias": _mean(all_ias),
-        "mean_ecr": _mean(all_ecr),
-        "mean_redundancy": _mean(all_rp),
-        # active turns only
-        "active_turn_count": len(active_s),
-        "conditional_mean_ias": _mean(active_ias),
-        "conditional_mean_ecr": _mean(active_ecr),
-        "ecr_positive_rate": (
-            sum(1 for e in active_ecr if e > 0) / len(active_ecr) if active_ecr else None
-        ),
-        "redundancy_rate": _mean(all_rp),
-        "early_ecr_mean": _mean(early_ecr),
+        "mean_qts": _mean(all_qts),
+        "mean_redundancy": _mean(all_rp),  # QTS component, kept for debugging
+        # "active_turn_count": len(active_s),
+        # "conditional_mean_qts": _mean(active_qts),
+        # "mean_ecr": _mean(all_ecr),
+        # "conditional_mean_ecr": _mean(active_ecr),
+        # "ecr_positive_rate": (
+        #     sum(1 for e in active_ecr if e > 0) / len(active_ecr) if active_ecr else None
+        # ),
+        # "early_ecr_mean": _mean(early_ecr),
     }

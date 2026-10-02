@@ -1,26 +1,22 @@
 #!/usr/bin/env python3
 """
-Efficiency Evaluation — spec §4.5
+Diagnostic Efficiency (+ Final Accuracy for Diagnostic Decision Quality)
 
-Metrics per episode (computed from the KG-deterministic CandidateSet sizes):
-  final_accuracy               : 1.0 if final diagnosis matches ground truth
-  turn_count                   : total patient turns
-  cssr                         : (size[0] − size[T-1]) / T
-  time_to_first_correct_narrowing : first turn where the reference candidate set
-                                     (high|moderate|low) has collapsed to exactly {gt}
-  time_to_first_confident_narrowing : first turn where the reference candidate set
-                                     has collapsed to exactly {final_diagnosis}, regardless
-                                     of correctness — measures convergence speed independent
-                                     of final_accuracy
-  monotonicity_violations      : turns where ref candidate set grew
-  redundant_turn_ratio         : fraction of consecutive turns with no candidate set change
-  overcommitment_turns         : turns after first size-1 collapse (to ANY single
-                                     candidate, not necessarily gt or final_diagnosis)
-                                     until episode end
-  overcommitment_conf          : turns after the set collapses specifically to
-                                     {final_diagnosis} until episode end — true complement
-                                     of time_to_first_confident_narrowing (turn_count ==
-                                     ttfin + overcommitment_conf whenever ttfin is reached)
+Metrics per episode. C_t = high_likely ∪ moderate_likely ∪ low_likely from
+the per-turn candidate_set written by symptom_diagnosis.py.
+
+  turn_count                        (main) total patient turns T
+  time_to_first_confident_narrowing (sub)  "1st-confidence turn": first turn t
+                                           (1-indexed) with C_t == {final_diagnosis_id},
+                                           regardless of correctness; sentinel T+1
+                                           if never reached / no resolvable final dx
+  overcommitment_conf               (sub)  "overcommitment turns": T − ttfin, or 0
+                                           if ttfin was never reached
+  final_accuracy                    (Decision Quality) 1.0 if the final dx's
+                                           ICD-10 code maps to the ground-truth id
+
+[DEACTIVATED] cssr, time_to_first_correct_narrowing, monotonicity_violations,
+redundant_turn_ratio, overcommitment_turns — not part of the headline set.
 
 Requires result JSONs produced by symptom_diagnosis.py (with candidate_set per turn).
 
@@ -45,6 +41,7 @@ import numpy as np
 import argparse
 
 from utils.llm import get_run_dir as _get_run_dir
+from eval.common import load_code2id as _load_code2id, read_final_diagnosis
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 from utils.paths import ANALYSIS_ROOT, LOGS_ROOT, RESULTS_ROOT
@@ -70,31 +67,9 @@ def _load_id2name() -> dict[str, str]:
     return {k: v["name"] for k, v in data.items()}
 
 
-def _load_code2id() -> dict[str, str]:
-    """Return {icd10_code: disease_id} from disorder_icd10.json."""
-    icd10_path = KG_DIR / "disorder_icd10.json"
-    data = json.loads(icd10_path.read_text(encoding="utf-8"))
-    code2id: dict[str, str] = {}
-    for k, v in data.items():
-        for code in v.get("icd10_accepted_codes") or [v["icd10_code"]]:
-            code2id[code.strip().upper()] = k
-    return code2id
-
-
 def _log_sort_key(name: str) -> tuple[int, int]:
     m = re.match(r"D(\d+)_(\d+)", name)
     return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
-
-
-def _extract_final_diagnosis(log_file: Path) -> str:
-    """Read doctor_memory.final_diagnosis.diagnosis from the .json log — always
-    present there (profile_batch_worker.py persists it unconditionally)."""
-    json_path = log_file.with_suffix(".json")
-    try:
-        data = json.loads(json_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return ""
-    return str(data.get("final_diagnosis") or "").strip()
 
 
 def score_efficiency_episode(
@@ -111,24 +86,10 @@ def score_efficiency_episode(
     # Final accuracy: final diagnosis' ICD-10 code resolves to the ground-truth disease ID
     final_accuracy = 1.0 if final_diagnosis_id and final_diagnosis_id == ground_truth else 0.0
 
-    # CSSR
-    cssr = (candidate_sizes[0] - candidate_sizes[-1]) / T
-
-    # time_to_first_correct_narrowing: first turn where the reference candidate
-    # set (high | moderate | low) has collapsed to exactly {ground_truth}.
-    # This must use the SAME "candidate set size == 1" condition as
-    # overcommitment_turns below so the two metrics are true complements.
-    ttfcn = T + 1  # sentinel: never reached
-    for i, ids in enumerate(all_candidates_per_turn):
-        if ids == {ground_truth}:
-            ttfcn = i + 1  # 1-indexed
-            break
-
-    # time_to_first_confident_narrowing: first turn where the reference candidate
-    # set has collapsed to exactly {final_diagnosis_id}, i.e. the disease the doctor
-    # actually settled on — regardless of whether that diagnosis is correct.
-    # Isolates convergence speed from final_accuracy (unlike ttfcn, this is never
-    # driven to the sentinel purely by an incorrect final diagnosis).
+    # time_to_first_confident_narrowing ("1st-confidence turn"): first turn
+    # where the reference candidate set has collapsed to exactly
+    # {final_diagnosis_id} — the disease the doctor actually settled on,
+    # regardless of correctness.
     ttfin = T + 1  # sentinel: never reached
     if final_diagnosis_id:
         for i, ids in enumerate(all_candidates_per_turn):
@@ -136,44 +97,26 @@ def score_efficiency_episode(
                 ttfin = i + 1  # 1-indexed
                 break
 
-    # monotonicity_violations: turns where size grew
-    mono_violations = sum(
-        1 for i in range(1, T) if candidate_sizes[i] > candidate_sizes[i - 1]
-    )
-
-    # redundant_turn_ratio: consecutive turns with no size change
-    redundant = sum(
-        1 for i in range(1, T) if candidate_sizes[i] == candidate_sizes[i - 1]
-    )
-    redundant_turn_ratio = redundant / max(T - 1, 1)
-
-    # overcommitment_turns: turns AFTER ref first collapses to size 1, before end
-    # (counts turns where doctor kept asking even though ref set was already singleton)
-    first_size_one = next(
-        (i for i, s in enumerate(candidate_sizes) if s == 1), None
-    )
-    if first_size_one is None or first_size_one >= T - 1:
-        overcommitment_turns = 0
-    else:
-        overcommitment_turns = (T - 1) - first_size_one
-
-    # overcommitment_conf: turns AFTER the candidate set collapses to exactly
-    # {final_diagnosis_id} (ttfin), before end — the true complement of
-    # time_to_first_confident_narrowing (turn_count == ttfin + overcommitment_conf
-    # whenever ttfin is reached). 0 if never reached (ttfin stayed at sentinel),
-    # same convention as overcommitment_turns.
+    # overcommitment_conf: turns spent after ttfin until the episode ends.
+    # turn_count == ttfin + overcommitment_conf whenever ttfin is reached.
     overcommitment_conf = 0 if ttfin > T else T - ttfin
 
+    # [DEACTIVATED] non-headline efficiency metrics.
+    # cssr = (candidate_sizes[0] - candidate_sizes[-1]) / T
+    # ttfcn = next((i + 1 for i, ids in enumerate(all_candidates_per_turn)
+    #               if ids == {ground_truth}), T + 1)
+    # mono_violations = sum(1 for i in range(1, T) if candidate_sizes[i] > candidate_sizes[i - 1])
+    # redundant_turn_ratio = sum(1 for i in range(1, T)
+    #                            if candidate_sizes[i] == candidate_sizes[i - 1]) / max(T - 1, 1)
+    # first_size_one = next((i for i, s in enumerate(candidate_sizes) if s == 1), None)
+    # overcommitment_turns = (0 if first_size_one is None or first_size_one >= T - 1
+    #                         else (T - 1) - first_size_one)
+
     return {
-        "final_accuracy":                  final_accuracy,
-        "turn_count":                       T,
-        "cssr":                             round(cssr, 4),
-        "time_to_first_correct_narrowing":  ttfcn,
+        "final_accuracy":                    final_accuracy,
+        "turn_count":                        T,
         "time_to_first_confident_narrowing": ttfin,
-        "monotonicity_violations":          mono_violations,
-        "redundant_turn_ratio":             round(redundant_turn_ratio, 4),
-        "overcommitment_turns":             overcommitment_turns,
-        "overcommitment_conf":              overcommitment_conf,
+        "overcommitment_conf":               overcommitment_conf,
     }
 
 
@@ -228,7 +171,7 @@ def evaluate() -> list[dict]:
             skipped += 1
             continue
 
-        final_diag = _extract_final_diagnosis(log_file) if log_file.exists() else ""
+        final_diag = read_final_diagnosis(log_file) if log_file.exists() else ""
         final_diag_id = code2id.get(final_diag.strip().upper()) if final_diag else None
 
         metrics = score_efficiency_episode(
@@ -269,18 +212,13 @@ def evaluate() -> list[dict]:
 
 def _print_summary(aggregate: dict[str, list], episode_results: list[dict]) -> None:
     METRIC_LABELS = [
-        ("final_accuracy",                 "Final Accuracy"),
-        ("turn_count",                     "Mean Turn Count"),
-        ("cssr",                           "CSSR (Candidate Shrinkage Rate)"),
-        ("time_to_first_correct_narrowing","Time to First Correct Narrowing"),
-        ("time_to_first_confident_narrowing","Time to First Confident Narrowing"),
-        ("monotonicity_violations",        "Monotonicity Violations (mean)"),
-        ("redundant_turn_ratio",           "Redundant Turn Ratio"),
-        ("overcommitment_turns",           "Overcommitment Turns (mean)"),
-        ("overcommitment_conf",            "Overcommitment Turns, Confidence-based (mean)"),
+        ("turn_count",                        "Total Turns (mean)"),
+        ("time_to_first_confident_narrowing", "1st-Confidence Turn (mean)"),
+        ("overcommitment_conf",               "Overcommitment Turns (mean)"),
+        ("final_accuracy",                    "Final Accuracy"),
     ]
 
-    print("\n=== Efficiency Evaluation Summary ===")
+    print("\n=== Diagnostic Efficiency Summary ===")
     for key, label in METRIC_LABELS:
         vals = aggregate.get(key, [])
         if vals:

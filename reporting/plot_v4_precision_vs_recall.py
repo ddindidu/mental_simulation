@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-evaluation_v4.md — Precision vs. Recall (Inference Quality, §1)
+evaluation_v5.md — Precision vs. Recall (Inference Quality, §1)
 
 Scatters one point per (judge, doctor) combo from the CSV produced by
 reporting/summarize_v4_metrics_csv.py:
@@ -38,6 +38,7 @@ if str(_REPO_ROOT) not in _sys.path:
 
 os.environ.setdefault("MS_RUN", "run_batch_20260912")
 
+from utils.metric_compat import csv_hypothesis
 from utils.paths import ANALYSIS_ROOT
 from reporting.plot_v4_radar_by_judge import DOCTOR_NAME_CANONICAL
 
@@ -92,10 +93,9 @@ def main() -> None:
 
     points, skipped = [], []
     for r in rows:
-        # "rigid" (tier-priority) reference candidate set, not the loose union —
-        # see eval/evaluate_turns.py's rigid_truth_set.
-        x = _to_float(r["recall_rigid"])
-        y = _to_float(r["precision_rigid"])
+        # tier-priority reference candidate set (see eval/evaluate_turns.py)
+        x = _to_float(csv_hypothesis(r, "recall"))
+        y = _to_float(csv_hypothesis(r, "precision"))
         if x is None or y is None:
             skipped.append(f"{r['judge']}/{r['doctor']}")
             continue
@@ -141,7 +141,7 @@ def main() -> None:
     ax.set_ylabel("Precision", fontsize=14, color="#52514e")
     ax.tick_params(axis="both", labelsize=12)
     # ax.set_title(
-    #     "evaluation_v4.md §1 — Precision vs. Recall",
+    #     "evaluation_v5.md §1 — Precision vs. Recall",
     #     fontsize=12, fontweight="bold",
     # )
     ax.grid(color="#e1e0d9", linewidth=1, zorder=0)
@@ -164,7 +164,7 @@ def main() -> None:
     #                   bbox_to_anchor=(1.02, 1.0), fontsize=12, frameon=False)
     # ax.add_artist(leg1)
     # legend: judges
-    ax.legend(handles=judge_handles, title="Judge", loc="lower right",
+    ax.legend(handles=judge_handles, title="Patient & Judge", loc="lower right",
               # bbox_to_anchor=(1.02, 0.0), 
               fontsize=12, frameon=False)
 

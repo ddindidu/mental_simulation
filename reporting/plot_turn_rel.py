@@ -10,17 +10,18 @@ averaged across episodes so the x-axis reflects *diagnostic progress*
 regardless of each case's absolute length.
 
 Reads pre-computed JSON files from analysis/<run_dir>/:
-  - turn_eval.json               → inference metrics
-  - question_eval_semantic.json  → question metrics
+  - analysis/<combo>/turn_eval.json      → Hypothesis Quality
+  - results/<combo>/question_eval.json    → QTS (+ DRS, RP), llm_judge mapper
 
 Outputs (saved under --output/turn_rel/):
   turn_rel_inference.png
-  turn_rel_inference_accuracy.png
   turn_rel_inference_precision.png
   turn_rel_inference_recall.png
+  turn_rel_inference_jaccard.png
+  turn_rel_inference_weighted_recall.png
   turn_rel_question.png
-  turn_rel_question_ias.png
-  turn_rel_question_ecr.png
+  turn_rel_question_qts.png
+  turn_rel_question_relevance.png
   turn_rel_question_redundancy.png
 
 Usage:
@@ -45,25 +46,33 @@ import numpy as np
 
 BASE_DIR      = Path(__file__).resolve().parent.parent
 from utils.paths import ANALYSIS_ROOT, LOGS_ROOT, RESULTS_ROOT
+from reporting.plot_question_eval import load_episodes
 CRITERIA_FILE = BASE_DIR / "mentalbench/resources/knowledge_graph/EN/diagnostic_criteria.json"
 N_COLS        = 6
 
 BINS       = [0.0, 0.25, 0.5, 0.75, 1.0]
 BIN_LABELS = ["0%\n(start)", "25%", "50%", "75%", "100%\n(end)"]
 
-INF_METRICS = ("accuracy", "precision", "recall", "jaccard", "weighted_recall")
-Q_METRICS   = ("ias", "ecr", "redundancy_penalty")
+INF_METRICS = ("jaccard", "precision", "recall", "weighted_recall")
+Q_METRICS   = ("qts", "diagnostic_relevance", "redundancy_penalty")
 
-INF_COLORS  = {"accuracy": "#1f77b4", "precision": "#ff7f0e", "recall": "#2ca02c",
+INF_COLORS  = {"precision": "#ff7f0e", "recall": "#2ca02c",
                "jaccard": "#9467bd", "weighted_recall": "#8c564b"}
-INF_MARKERS = {"accuracy": "o", "precision": "s", "recall": "^",
-               "jaccard": "D", "weighted_recall": "v"}
-INF_LABELS  = {"accuracy": "Accuracy", "precision": "Precision", "recall": "Recall",
+INF_MARKERS = {"precision": "s", "recall": "^", "jaccard": "D", "weighted_recall": "v"}
+INF_LABELS  = {"precision": "Precision", "recall": "Recall",
                "jaccard": "Jaccard", "weighted_recall": "Weighted Recall"}
 
-Q_COLORS    = {"ias": "#1f77b4", "ecr": "#17becf", "redundancy_penalty": "#d62728"}
-Q_MARKERS   = {"ias": "o", "ecr": "D", "redundancy_penalty": "v"}
-Q_LABELS    = {"ias": "IAS", "ecr": "ECR", "redundancy_penalty": "Redundancy Penalty"}
+Q_COLORS    = {"qts": "#1f77b4", "diagnostic_relevance": "#17becf", "redundancy_penalty": "#d62728"}
+Q_MARKERS   = {"qts": "o", "diagnostic_relevance": "D", "redundancy_penalty": "v"}
+Q_LABELS    = {"qts": "QTS", "diagnostic_relevance": "Diagnostic Relevance",
+               "redundancy_penalty": "Redundancy Penalty"}
+
+
+def _headline_turn_rows(entries: list[dict]) -> list[dict]:
+    """turn_eval.json rows with jaccard/precision/recall set to the headline
+    (tier-priority) values — pre-v5 files keep those under *_rigid."""
+    return [{**e, **{m: e.get(f"{m}_rigid", e[m]) for m in ("jaccard", "precision", "recall")}}
+            for e in entries]
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -324,33 +333,36 @@ def main():
     inf_path = args.input / "turn_eval.json"
     if inf_path.exists():
         print(f"\nLoading {inf_path.name} …")
-        inf_data = json.loads(inf_path.read_text(encoding="utf-8"))
+        inf_data = _headline_turn_rows(json.loads(inf_path.read_text(encoding="utf-8")))
         s_dis, c_ser, s_ovr, c_ovr = _bin_inf(inf_data)
         dids = list(s_dis.keys())
 
         def _inf_comb(ax, bd, ser, title):
             _draw_combined(ax, bd, ser, title,
-                           ("accuracy", "precision", "recall"),
+                           INF_METRICS,
                            INF_COLORS, INF_MARKERS, INF_LABELS, INF_METRICS)
         _save_grid(dids, s_dis, c_ser, s_ovr, c_ovr, id2name, _inf_comb,
-                   "Inference Metrics — Relative Progress  (Accuracy / Precision / Recall)",
+                   "Diagnostic Hypothesis Quality — Relative Progress  (Jaccard / Precision / Recall / Weighted Recall)",
                    args.output / "turn_rel_inference.png")
 
-        for met in ("accuracy", "precision", "recall"):
+        for met in INF_METRICS:
             def _fn(ax, bd, ser, title, _m=met):
                 _draw_single(ax, bd, ser, title, _m,
                              INF_COLORS, INF_MARKERS, INF_LABELS, INF_METRICS)
             _save_grid(dids, s_dis, c_ser, s_ovr, c_ovr, id2name, _fn,
-                       f"Inference — {INF_LABELS[met]}  (Relative Progress)",
+                       f"Hypothesis Quality — {INF_LABELS[met]}  (Relative Progress)",
                        args.output / f"turn_rel_inference_{met}.png")
     else:
-        print(f"[skip] {inf_path} not found — run plot_turn_eval.py first")
+        print(f"[skip] {inf_path} not found — run eval/evaluate_turns.py first")
 
     # ── Question ───────────────────────────────────────────────────────────────
-    q_path = args.input / "question_eval_semantic.json"
+    try:
+        q_path = RESULTS_ROOT / args.input.resolve().relative_to(ANALYSIS_ROOT.resolve()) / "question_eval.json"
+    except ValueError:
+        q_path = args.input / "question_eval.json"
     if q_path.exists():
-        print(f"\nLoading {q_path.name} …")
-        q_data = json.loads(q_path.read_text(encoding="utf-8"))
+        print(f"\nLoading {q_path} …")
+        q_data = load_episodes(q_path.parent)
         s_dis, c_ser, s_ovr, c_ovr = _bin_q(q_data)
         dids = list(s_dis.keys())
 
@@ -359,19 +371,19 @@ def main():
                            Q_METRICS,
                            Q_COLORS, Q_MARKERS, Q_LABELS, Q_METRICS)
         _save_grid(dids, s_dis, c_ser, s_ovr, c_ovr, id2name, _q_comb,
-                   "Question Metrics — Relative Progress  (IAS / ECR / Redundancy)",
+                   "Diagnostic Question Quality — Relative Progress  (QTS / Diagnostic Relevance / Redundancy Penalty)",
                    args.output / "turn_rel_question.png")
 
-        fname_map = {"ias": "ias", "ecr": "ecr", "redundancy_penalty": "redundancy"}
+        fname_map = {"qts": "qts", "diagnostic_relevance": "relevance", "redundancy_penalty": "redundancy"}
         for met, fname in fname_map.items():
             def _fn(ax, bd, ser, title, _m=met):
                 _draw_single(ax, bd, ser, title, _m,
                              Q_COLORS, Q_MARKERS, Q_LABELS, Q_METRICS)
             _save_grid(dids, s_dis, c_ser, s_ovr, c_ovr, id2name, _fn,
-                       f"Question — {Q_LABELS[met]}  (Relative Progress)",
+                       f"Question Quality — {Q_LABELS[met]}  (Relative Progress)",
                        args.output / f"turn_rel_question_{fname}.png")
     else:
-        print(f"[skip] {q_path} not found — run plot_question_eval.py first")
+        print(f"[skip] {q_path} not found — run eval/evaluate_question.py first")
 
     print("\nDone.")
 

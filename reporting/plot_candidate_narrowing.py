@@ -11,7 +11,7 @@ while several diseases were still plausible?":
   still alive), both plotted against *relative* turn progress (0-100% of
   each episode's own length) rather than raw turn number.
 
-|C_t| is the reference candidate set (evaluation_v4.md's high_likely ∪
+|C_t| is the reference candidate set (evaluation_v5.md's high_likely ∪
 moderate_likely ∪ low_likely — every disease still consistent with
 confirmed/denied symptoms so far), ground-truth-deterministic and
 independent of what the doctor believes. It's eval/evaluate_efficiency.py's
