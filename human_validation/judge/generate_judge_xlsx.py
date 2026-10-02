@@ -87,7 +87,7 @@ class CaseData:
             ("Jaccard (mean over turns)", self._mean(t.get("jaccard") for t in self.turn_evals)),
             ("Precision (mean over turns)", self._mean(t.get("precision") for t in self.turn_evals)),
             ("Recall (mean over turns)", self._mean(t.get("recall") for t in self.turn_evals)),
-            ("IAS (mean over turns)", self._mean(t.get("ias") for t in self.question_turns)),
+            ("IAS (mean over turns)", self._mean(t.get("qts", t.get("ias")) for t in self.question_turns)),
             ("ECR (mean over turns)", self._mean(t.get("ecr") for t in self.question_turns)),
             ("Turn Count", self.efficiency.get("turn_count")),
             ("Turns to First Confident Narrowing", self.efficiency.get("time_to_first_confident_narrowing")),

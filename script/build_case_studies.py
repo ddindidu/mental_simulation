@@ -115,7 +115,7 @@ def aggregate_cases() -> list[dict]:
             if not turns or key not in cases:
                 continue
             cases[key]["mean_ias"] = statistics.fmean(
-                t["ias"] for t in turns
+                t.get("qts", t.get("ias")) for t in turns  # renamed ias -> qts
             )
             ecr_vals = [t["ecr"] for t in turns if t.get("ecr") is not None]
             cases[key]["mean_ecr"] = statistics.fmean(ecr_vals) if ecr_vals else 0.0
@@ -213,7 +213,7 @@ def render_case_md(c: dict, med: dict[str, float], axis_note: str) -> str:
         ecr_str = f"{t['ecr']:.2f}" if t.get("ecr") is not None else "n/a (single candidate)"
         lines.append(
             f"| {t['turn']} | {q_text} | {ecr_str} | "
-            f"{t['redundancy_penalty']} | {t['ias']:.2f} |"
+            f"{t['redundancy_penalty']} | {t.get('qts', t.get('ias')):.2f} |"
         )
     lines.append("")
     lines.append("## Dialogue transcript")
@@ -285,7 +285,7 @@ def render_case_md(c: dict, med: dict[str, float], axis_note: str) -> str:
                 f"> diagnostic_relevance={q.get('diagnostic_relevance')} "
                 f"redundancy_penalty={q['redundancy_penalty']} "
                 f"ECR={ecr_str} "
-                f"IAS={q['ias']:.2f}"
+                f"QTS={q.get('qts', q.get('ias')):.2f}"
             )
             lines.append("")
 
