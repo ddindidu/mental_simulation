@@ -44,6 +44,7 @@ from __future__ import annotations
 import argparse
 import json
 from collections import defaultdict
+import os
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -54,9 +55,12 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in _sys.path:
     _sys.path.insert(0, str(_REPO_ROOT))
 
+os.environ.setdefault("MS_RUN", "run_batch_20260912")
+
 from utils.metric_compat import episode_mean_qts, turn_qts, csv_qts, csv_hypothesis
 from utils.paths import ANALYSIS_ROOT, RESULTS_ROOT, RUN_ROOT
 from reporting.plot_v4_radar_by_judge import DOCTOR_NAME_CANONICAL
+
 
 DEFAULT_DOCTORS = [
     "gpt-5.4",
@@ -223,14 +227,19 @@ def main() -> None:
             ias_str = f"{ias:.2f}" if ias is not None else "n/a"
             y_off = (rank - mid) * 15
             ax.annotate(f"{mean[-1]:.0f}% (QTS={ias_str})", (x_pct[-1], mean[-1]),
-                        textcoords="offset points", xytext=(8, y_off), fontsize=12,
+                        textcoords="offset points", xytext=(8, y_off), fontsize=14,
                         color=color, va="center", fontweight="bold",
                         arrowprops=dict(arrowstyle="-", color=color, lw=0.8, alpha=0.6))
 
         ax.axhline(0, color="#BBBBBB", linewidth=0.8, zorder=0)
         # ax.set_title(f"Judge: {judge}", fontsize=12.5, fontweight="bold", pad=10)
-        ax.set_xlabel("Relative Turn Progress (%)", fontsize=14)
+        ax.set_xlabel("Relative Turn Progress (%)", fontsize=16)
         ax.set_xlim(0, 125)
+        xticks = [0, 20, 40, 60, 80, 100]
+        xtick_labels = [str(t) for t in xticks]
+        xtick_labels[0] = r"0" + "\n" + r"($t$=1)"
+        ax.set_xticks(xticks)
+        ax.set_xticklabels(xtick_labels)
         ax.set_ylim(-15, 108)
         yticks = [0, 20, 40, 60, 80, 100]
         ytick_labels = [str(t) for t in yticks]
@@ -238,11 +247,12 @@ def main() -> None:
         ytick_labels[-1] = r"100" + "\n" + r"($\hat{C}_t$=$\hat{C}_1$)"
         ax.set_yticks(yticks)
         ax.set_yticklabels(ytick_labels)
+        ax.tick_params(axis="both", labelsize=14)
         ax.grid(color="#E4EBF5", linewidth=0.8, zorder=0)
         ax.spines[["top", "right"]].set_visible(False)
-        ax.legend(loc="lower left", fontsize=12, frameon=False)
+        ax.legend(loc="lower left", fontsize=14, frameon=False)
 
-        ax.set_ylabel("Remaining Candidate Set Size (%)", fontsize=14)
+        ax.set_ylabel("Remaining Candidate Set Size (%)", fontsize=16)
 
         # style_note = f"style={style}" if style else "all styles"
         # fig.suptitle(

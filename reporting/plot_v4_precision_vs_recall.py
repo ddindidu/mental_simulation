@@ -118,10 +118,10 @@ def main() -> None:
 
     diag_lo = min(x_lo, y_lo)
     diag_hi = max(x_hi, y_hi)
-    ax.plot([diag_lo, diag_hi], [diag_lo, diag_hi], color="#c3c2b7", linewidth=1.2,
+    ax.plot([diag_lo, diag_hi], [diag_lo, diag_hi], color="#8a8977", linewidth=1.2,
             linestyle=":", zorder=1, clip_on=True)
     ax.annotate("precision = recall", (x_hi, min(x_hi, y_hi)), textcoords="offset points",
-                xytext=(-6, 4), ha="right", fontsize=10, color="#898781", style="italic")
+                xytext=(-6, 4), ha="right", fontsize=14, color="#5c5b55", style="italic")
 
     seen_models: set[str] = set()
     for judge, doctor, x, y in points:
@@ -132,14 +132,14 @@ def main() -> None:
                    edgecolors="white", linewidths=0.8, zorder=3, label=label)
         ax.annotate(DOCTOR_NAME_CANONICAL.get(doctor.lower(), doctor), (x, y),
                     textcoords="offset points", xytext=(7, 6),
-                    fontsize=12, color="#3a3a38")
+                    fontsize=14, color="#3a3a38")
 
     ax.set_xlim(x_lo, x_hi)
     ax.set_ylim(y_lo, y_hi)
 
-    ax.set_xlabel("Recall", fontsize=14, color="#52514e")
-    ax.set_ylabel("Precision", fontsize=14, color="#52514e")
-    ax.tick_params(axis="both", labelsize=12)
+    ax.set_xlabel("Recall", fontsize=16, color="#52514e")
+    ax.set_ylabel("Precision", fontsize=16, color="#52514e")
+    ax.tick_params(axis="both", labelsize=14)
     # ax.set_title(
     #     "evaluation_v5.md §1 — Precision vs. Recall",
     #     fontsize=12, fontweight="bold",
@@ -156,7 +156,7 @@ def main() -> None:
     ]
     judge_handles = [
         plt.Line2D([0], [0], marker=marker_of[j], color="w", markerfacecolor="#999999",
-                   markeredgecolor="white", markersize=10, label=JUDGE_NAME_CANONICAL.get(j, j))
+                   markeredgecolor="white", markersize=14, label=JUDGE_NAME_CANONICAL.get(j, j))
         for j in judges
     ]
     # legend: models
@@ -164,9 +164,11 @@ def main() -> None:
     #                   bbox_to_anchor=(1.02, 1.0), fontsize=12, frameon=False)
     # ax.add_artist(leg1)
     # legend: judges
-    ax.legend(handles=judge_handles, title="Patient & Judge", loc="lower right",
-              # bbox_to_anchor=(1.02, 0.0), 
-              fontsize=12, frameon=False)
+    ax.legend(handles=judge_handles, 
+              title="Patient & Judge", title_fontsize=16,
+              loc="lower right",
+              # bbox_to_anchor=(1.02, 0.0),
+              fontsize=16, frameon=False)
 
     fig.tight_layout()
     out_path = Path(args.out) if args.out else ANALYSIS_ROOT / "v4_precision_vs_recall.png"

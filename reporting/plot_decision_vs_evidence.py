@@ -175,7 +175,7 @@ def main() -> None:
             for xi, (v, b) in enumerate(zip(vals, bottom)):
                 if v > 4:
                     ax.text(xi, b + v / 2, f"{v:.0f}%", ha="center", va="center",
-                            fontsize=16, color="white", fontweight="bold",
+                            fontsize=18, color="white", fontweight="bold",
                             backgroundcolor=color,
                             zorder=4)
             bottom += vals
@@ -184,14 +184,14 @@ def main() -> None:
         ax.set_xticklabels([DOCTOR_NAME_CANONICAL.get(d, d) for d in doctors], fontsize=18,
                             rotation=15, ha="right")
         ax.set_ylim(0, 100)
-        ax.set_ylabel("Share of Interviews (%)", fontsize=19)
-        ax.tick_params(axis="y", labelsize=17)
+        ax.set_ylabel("Share of Interviews (%)", fontsize=21)
+        ax.tick_params(axis="y", labelsize=19)
         ax.grid(axis="y", color="#E4EBF5", linewidth=0.8, zorder=0)
         ax.spines[["top", "right"]].set_visible(False)
         # ax.set_title(f"Judge: {judge}", fontsize=13, fontweight="bold", pad=14)
 
         ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.22), ncol=2,
-                  fontsize=16, frameon=False)
+                  fontsize=18, frameon=False)
 
         # style_note = f"style={style}" if style else "all styles"
         # fig.suptitle(

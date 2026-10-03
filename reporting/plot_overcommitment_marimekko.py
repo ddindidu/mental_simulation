@@ -32,6 +32,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -41,6 +42,8 @@ import sys as _sys
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in _sys.path:
     _sys.path.insert(0, str(_REPO_ROOT))
+
+os.environ.setdefault("MS_RUN", "run_batch_20260912")
 
 from utils.paths import ANALYSIS_ROOT, RUN_ROOT
 from reporting.plot_overcommitment_by_judge import COLOR_CONFIDENT, COLOR_OVERCOMMIT, _order_rank
@@ -96,7 +99,7 @@ def main() -> None:
     )) * 1.06
 
     for judge, rows in panels:
-        fig, ax = plt.subplots(figsize=(8.5, 1.1 * len(rows) + 1.8))
+        fig, ax = plt.subplots(figsize=(11.5, 1.1 * len(rows) + 1.8))
 
         n_rows = len(rows)
         for i, (doctor, s) in enumerate(rows):
@@ -117,10 +120,10 @@ def main() -> None:
             if pinned_h > 0:
                 ax.barh(slot_bottom, pinned_mean, height=pinned_h, align="edge",
                         color=COLOR_PINNED, edgecolor="white", linewidth=0.6, zorder=3)
-                if pinned_h > 0.06:
+                if pinned_h > 0.10:
                     ax.text(pinned_mean + ymax * 0.012, slot_bottom + pinned_h / 2,
                             f"{pinned_mean:.1f}", ha="left", va="center", 
-                            fontsize=14,
+                            fontsize=16, fontweight="bold",
                               color=COLOR_PINNED)
 
             if narrow_h > 0:
@@ -132,26 +135,26 @@ def main() -> None:
                 # (matches plot_overcommitment_by_judge.py's labeling)
                 if narrow_h > 0.10 and t1c > ymax * 0.04:
                     ax.text(t1c - 1, slot_bottom + pinned_h + narrow_h / 2,
-                            f"{t1c:.1f}", ha="center", va="center", fontsize=14, color="white", fontweight="bold")
+                            f"{t1c:.1f}", ha="center", va="center", fontsize=16, color="white", fontweight="bold")
                 # overcommitment (turns after 1st confident) value, centered
                 # in its own segment — same convention as the t1c label above.
                 if narrow_h > 0.10 and oc > ymax * 0.04:
                     ax.text(t1c + oc / 2, slot_bottom + pinned_h + narrow_h / 2,
-                            f"+{oc:.1f}", ha="center", va="center", fontsize=14,
+                            f"+{oc:.1f}", ha="center", va="center", fontsize=16,
                             color="white", fontweight="bold")
                 if narrow_h > 0.06:
                     ax.text(t1c + oc + ymax * 0.012, slot_bottom + pinned_h + narrow_h / 2,
-                            f"{t1c + oc:.1f}", ha="left", va="center", fontsize=14, color="#1C2333")
+                            f"{t1c + oc:.1f}", ha="left", va="center", fontsize=16, fontweight="bold", color="#1C2333")
 
             # share labels inside the base of each bar (white, small) rather
             # than past the bar's end, which would collide with the value
             # label placed there.
             if pinned_h > 0.10 and pinned_mean > ymax * 0.04:
                 ax.text(ymax * 0.012, slot_bottom + pinned_h / 2, f"{pinned_frac*100:.0f}%",
-                        ha="left", va="center", fontsize=14, color="white", fontweight="bold")
+                        ha="left", va="center", fontsize=16, color="white", fontweight="bold")
             if narrow_h > 0.10 and (t1c + oc) > ymax * 0.04:
                 ax.text(ymax * 0.012, slot_bottom + pinned_h + narrow_h / 2, f"{narrow_frac*100:.0f}%",
-                        ha="left", va="center", fontsize=14, color="white", fontweight="bold")
+                        ha="left", va="center", fontsize=16, color="white", fontweight="bold")
 
         # Break each canonical name onto two lines (before the last word) so
         # long names don't force extra left margin on the y-axis.
@@ -170,19 +173,19 @@ def main() -> None:
         # ax.set_title(f"Judge: {judge}", fontsize=12.5, fontweight="bold", pad=10)
         ax.grid(axis="x", color="#E4EBF5", linewidth=0.8, zorder=0)
         ax.spines[["top", "right"]].set_visible(False)
-        ax.set_xlabel("Mean turn count", fontsize=16)
-        ax.tick_params(axis="x", labelsize=12)
+        ax.set_xlabel("Mean turn count", fontsize=18)
+        ax.tick_params(axis="x", labelsize=14)
 
         handles = [
             plt.Rectangle((0, 0), 1, 1, color=COLOR_PINNED,
-                          label="Single fixed candidate\n" + r"(non-narrowing case; $\hat{C}_{\{1,\dots\}}=1$)"),
+                          label="Single fixed candidate\n" + r"(non-narrowing case; $\hat{C}_1=1$)"),
             plt.Rectangle((0, 0), 1, 1, color=COLOR_CONFIDENT,
                           label="Turns to convergence\n" + r"(narrowing case; $\hat{C}_t > 1$)"),
             plt.Rectangle((0, 0), 1, 1, color=COLOR_OVERCOMMIT,
                           label="Extended inquiry\n" + r"(narrowing case; $\hat{C}_t = 1$)"),
         ]
-        ax.legend(handles=handles, fontsize=14, loc="center right",
-                  bbox_to_anchor=(1, 0.6), borderaxespad=0.0,
+        ax.legend(handles=handles, fontsize=16, loc="center right",
+                  bbox_to_anchor=(1, 0.5), borderaxespad=0.0,
                 )#frameon=False)
 
         style_note = f"style={style}" if style else "all styles"

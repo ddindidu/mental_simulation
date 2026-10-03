@@ -195,13 +195,13 @@ def main() -> None:
         ax.set_theta_direction(-1)
 
         ax.set_xticks(angles[:-1])
-        ax.set_xticklabels([label for label, _field in METRICS], fontsize=16)
+        ax.set_xticklabels([label for label, _field in METRICS], fontsize=18)
         ax.set_ylim(-zlim, zlim-0.5)
         yticks = np.linspace(-zlim, zlim-0.5, 6)
         ax.set_yticks(yticks)
-        ax.set_yticklabels([f"{t:+.1f}σ" for t in yticks], fontsize=10, color="gray")
-        ax.grid(color="lightgray", linewidth=0.7)
-        ax.spines["polar"].set_color("lightgray")
+        ax.set_yticklabels([f"{t:+.1f}σ" for t in yticks], fontsize=12, color="#5c5c5c")
+        ax.grid(color="#9a9a9a", linewidth=0.7)
+        ax.spines["polar"].set_color("#9a9a9a")
 
         # Dashed baseline ring at z=0 (the panel's per-metric mean).
         # ax.plot(angles, [0] * len(angles), color="dimgray", linewidth=1.2,
@@ -236,8 +236,8 @@ def main() -> None:
                        label=DOCTOR_NAME_CANONICAL.get(m, m))
             for m in models
         ]
-        ax.legend(handles=legend_handles, loc="upper right", fontsize=14,
-                  frameon=False, bbox_to_anchor=(1.2, 1.1))
+        ax.legend(handles=legend_handles, loc="upper right", fontsize=16,
+                  frameon=False, bbox_to_anchor=(1.3, 1.1))
 
         fig.tight_layout()
         out_path = Path(f"{out_prefix}{judge}.png")
