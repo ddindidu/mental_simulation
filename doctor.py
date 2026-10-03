@@ -455,6 +455,7 @@ def finalize_doctor_memory(  # store doctor memory when interview is finished
         "diagnosis": str(final_diagnosis.get("diagnosis") or ""),
         "candidates": list(final_diagnosis.get("candidates") or []),
         "reason": str(final_diagnosis.get("reason") or ""),
+        "diagnostic_checklist": final_diagnosis.get("diagnostic_checklist"),
     }
     return state
 
