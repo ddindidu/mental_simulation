@@ -174,17 +174,17 @@ def main() -> None:
         ax.grid(axis="x", color="#E4EBF5", linewidth=0.8, zorder=0)
         ax.spines[["top", "right"]].set_visible(False)
         ax.set_xlabel("Mean turn count", fontsize=18)
-        ax.tick_params(axis="x", labelsize=14)
+        ax.tick_params(axis="both", labelsize=18)
 
         handles = [
             plt.Rectangle((0, 0), 1, 1, color=COLOR_PINNED,
-                          label="Single fixed candidate\n" + r"(non-narrowing case; $\hat{C}_1=1$)"),
+                          label="No narrowing Episode"),
             plt.Rectangle((0, 0), 1, 1, color=COLOR_CONFIDENT,
-                          label="Turns to convergence\n" + r"(narrowing case; $\hat{C}_t > 1$)"),
+                          label="Before convergence"),
             plt.Rectangle((0, 0), 1, 1, color=COLOR_OVERCOMMIT,
-                          label="Extended inquiry\n" + r"(narrowing case; $\hat{C}_t = 1$)"),
+                          label="After convergence"),
         ]
-        ax.legend(handles=handles, fontsize=16, loc="center right",
+        ax.legend(handles=handles, fontsize=18, loc="center right",
                   bbox_to_anchor=(1, 0.5), borderaxespad=0.0,
                 )#frameon=False)
 
