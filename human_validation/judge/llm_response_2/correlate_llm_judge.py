@@ -37,10 +37,11 @@ THIS_DIR = Path(__file__).resolve().parent
 JUDGE_DIR = THIS_DIR.parent
 REPO_ROOT = JUDGE_DIR.parent.parent
 
-SCORES_PATH = THIS_DIR / "llm_judge_scores.json"
+JUDGE_FOLDER = sys.argv[1] if len(sys.argv) > 1 else "gpt-6-luna"
+SCORES_PATH = THIS_DIR / JUDGE_FOLDER / "llm_judge_scores.json"
 RESULTS_BASE = REPO_ROOT / "saved" / "run_batch_20260912" / "results" / "gpt-5.6-terra" / "gpt-5.6-terra"
 ANALYSIS_BASE = REPO_ROOT / "saved" / "run_batch_20260912" / "analysis" / "gpt-5.6-terra" / "gpt-5.6-terra"
-CSV_OUT_PATH = THIS_DIR / "llm_judge_vs_metrics.csv"
+CSV_OUT_PATH = THIS_DIR / JUDGE_FOLDER / "llm_judge_vs_metrics.csv"
 
 
 def _mean(vals) -> float | None:

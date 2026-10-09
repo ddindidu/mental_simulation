@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 LLM-as-judge scoring for the expert_response_2 validation round, using
-OpenAI "gpt-6-luna" as judge model.
+OpenAI "gpt-6-luna" (or claude-sonnet-4.6 via OpenRouter) as judge model.
 
 Scores the same 3 dimensions as
 human_validation/judge/expert_response_2/전문가 평가 가이드라인_2.docx:
@@ -27,7 +27,8 @@ actually needs.
 Usage:
   python human_validation/judge/llm_response_2/llm_judge.py --print-prompt D001-1   # inspect one filled prompt, no API call
   python human_validation/judge/llm_response_2/llm_judge.py --case D001-1           # run just one case
-  python human_validation/judge/llm_response_2/llm_judge.py                        # run all 46 cases
+  python human_validation/judge/llm_response_2/llm_judge.py                        # run all 46 cases (gpt-6-luna)
+  python human_validation/judge/llm_response_2/llm_judge.py --judge claude-sonnet-4.6   # via OpenRouter
 """
 from __future__ import annotations
 
@@ -56,9 +57,13 @@ from utils.turn_policy import policy_turns  # noqa: E402
 # FOLLOWS the question (q at t = the question of policy turn t - 1).
 TURN_NUMBERING = "policy"
 
-MODEL = "gpt-6-luna"
+# judge name -> (output folder, API route, model id)
+JUDGES = {
+    "gpt-6-luna": ("gpt-6-luna", "openai", "gpt-6-luna"),
+    "claude-sonnet-4.6": ("claude-sonnet-4.6", "openrouter", "anthropic/claude-sonnet-4.6"),
+}
+MODEL, ROUTE, OUT_DIR = "", "openai", THIS_DIR
 EXPERT_RESPONSE_2_DIR = JUDGE_DIR / "expert_response_2"
-OUT_DIR = THIS_DIR
 
 
 # ── Case discovery (same 46 cases as expert_response_2's xlsx sheets) ──────
@@ -84,7 +89,7 @@ def load_case_list() -> list[tuple[str, str, str]]:
     """[(sheet_name, profile_id, doctor), ...]"""
     import openpyxl
 
-    path = sorted(glob.glob(str(EXPERT_RESPONSE_2_DIR / "doctor_*1.xlsx")))[0]
+    path = sorted(glob.glob(str(EXPERT_RESPONSE_2_DIR / "doctor_*2_new.xlsx")))[0]
     wb = openpyxl.load_workbook(path, data_only=True)
     cases = []
     for sheet in wb.sheetnames:
@@ -203,24 +208,29 @@ def build_prompt(case: CaseData) -> str:
 
 # ── LLM call ─────────────────────────────────────────────────────────────
 
-_client = None
+_clients: dict = {}
 
 
-def _get_client():
-    global _client
-    if _client is None:
+def _get_client(route: str):
+    if route not in _clients:
         from openai import OpenAI
-        _client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-    return _client
+        if route == "openrouter":
+            _clients[route] = OpenAI(api_key=os.environ["OPENROUTER_API_KEY"],
+                                     base_url="https://openrouter.ai/api/v1")
+        else:
+            _clients[route] = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    return _clients[route]
 
 
 def call_llm(prompt: str) -> str:
-    client = _get_client()
+    client = _get_client(ROUTE)
+    extra = {"max_tokens": 2000} if ROUTE == "openrouter" else {}
     try:
         resp = client.chat.completions.create(
             model=MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.0,
+            **extra,
         )
     except Exception as e:
         if "temperature" not in str(e).lower():
@@ -264,10 +274,16 @@ def run_case(sheet: str, profile_id: str, doctor: str) -> dict:
 
 
 def main() -> None:
+    global MODEL, ROUTE, OUT_DIR
     ap = argparse.ArgumentParser()
+    ap.add_argument("--judge", choices=list(JUDGES), default="gpt-6-luna", help="judge model (default: gpt-6-luna)")
     ap.add_argument("--print-prompt", metavar="SHEET", help="print the built prompt for one sheet (e.g. D001-1) and exit, no API call")
     ap.add_argument("--case", metavar="SHEET", help="run only this one sheet")
+    ap.add_argument("--redo", action="store_true", help="rescore cases that already have a saved output")
     args = ap.parse_args()
+    folder, ROUTE, MODEL = JUDGES[args.judge]
+    OUT_DIR = THIS_DIR / folder
+    OUT_DIR.mkdir(exist_ok=True)
 
     cases = load_case_list()
     print(f"Loaded {len(cases)} cases from expert_response_2")
@@ -282,6 +298,12 @@ def main() -> None:
 
     if args.case:
         cases = [c for c in cases if c[0] == args.case]
+    elif not args.redo:
+        before = len(cases)
+        cases = [c for c in cases if not (OUT_DIR / f"{c[0]}.json").exists()]
+        skipped = before - len(cases)
+        if skipped:
+            print(f"Skipping {skipped} already-scored case(s) in {OUT_DIR} (use --redo to rescore)")
 
     all_results = []
     for sheet, profile_id, doctor in cases:
@@ -294,6 +316,18 @@ def main() -> None:
         if result["parsed"] is None:
             print(f"    [warn] failed to parse JSON from LLM response", file=sys.stderr)
         all_results.append(result)
+
+    # Rebuild the summary from every per-case file on disk (not just this
+    # run's), so a partial run (e.g. interrupted by a rate/credit limit)
+    # doesn't drop previously-scored cases.
+    all_by_sheet = {r["sheet"]: r for r in all_results}
+    for case_path in sorted(OUT_DIR.glob("*.json")):
+        if case_path.name == "llm_judge_scores.json":
+            continue
+        sheet = case_path.stem
+        if sheet not in all_by_sheet:
+            all_by_sheet[sheet] = json.loads(case_path.read_text(encoding="utf-8"))
+    all_results = [all_by_sheet[s] for s in sorted(all_by_sheet)]
 
     summary_path = OUT_DIR / "llm_judge_scores.json"
     summary_path.write_text(json.dumps(all_results, indent=2, ensure_ascii=False), encoding="utf-8")

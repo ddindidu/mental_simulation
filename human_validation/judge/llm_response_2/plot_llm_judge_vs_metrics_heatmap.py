@@ -10,6 +10,7 @@ Usage:
 from __future__ import annotations
 
 import csv
+import sys
 from pathlib import Path
 
 import matplotlib.font_manager as fm
@@ -18,7 +19,8 @@ import numpy as np
 from scipy import stats as scipy_stats
 
 THIS_DIR = Path(__file__).resolve().parent
-CSV_PATH = THIS_DIR / "llm_judge_vs_metrics.csv"
+JUDGE_FOLDER = sys.argv[1] if len(sys.argv) > 1 else "gpt-6-luna"
+CSV_PATH = THIS_DIR / JUDGE_FOLDER / "llm_judge_vs_metrics.csv"
 
 METRIC_ROWS = [
     ("jaccard_rigid_mean", "Jaccard (rigid)"),
@@ -100,7 +102,7 @@ def main() -> None:
     ax.set_ylabel("Automated metric (row)", fontsize=12)
     fig.suptitle("Automated metric vs. LLM-as-judge rating (episode level)", fontsize=13, y=1.02)
     fig.tight_layout()
-    out = THIS_DIR / "llm_judge_vs_metrics_correlation.png"
+    out = THIS_DIR / JUDGE_FOLDER / "llm_judge_vs_metrics_correlation.png"
     fig.savefig(out, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"[saved] {out}")
