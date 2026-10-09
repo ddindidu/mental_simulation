@@ -6,23 +6,11 @@ Alternative to plot_overcommitment_and_ratio_combined.py's two-row layout:
 puts the ratio AND the turn-count breakdown into ONE bar pair per doctor,
 one panel per judge, doctors along the y-axis:
 
-  Each doctor gets one slot holding two stacked-vertically bars:
-    Top    ("pinned@1"):  height = pinned@1 episode share of that doctor's
-                                    episodes (never runs a differential)
-                           length (x) = mean turn_count over those episodes
-                           (single color, not stacked — there's no
-                           "narrowing then overcommitting" phase to split)
-    Bottom ("narrowing"): height = narrowing episode share (starts >1,
-                                    narrows down)
-                           length (x) = STACKED, same as
-                                    plot_overcommitment_by_judge.py:
-                                      turn to 1st confident (|predicted|==1)
-                                    + overcommitment (turns after that)
-                                    = that group's mean turn_count
-
-So bar HEIGHT reads the population split (item 1) and bar LENGTH (with the
-bottom bar's stack) reads the confidence-timing breakdown (item 2) — both in
-one glyph per doctor instead of two stacked panels.
+  Each doctor gets one full-width bar (narrowing episodes only — the
+  no-narrowing/pinned@1 group is excluded from this plot), STACKED same as
+  plot_overcommitment_by_judge.py:
+    turn to 1st confident (|predicted|==1) + overcommitment (turns after that)
+    = that group's mean turn_count
 
 Usage:
   python reporting/plot_overcommitment_marimekko.py [--style plain] [-o OUT.png]
@@ -47,7 +35,7 @@ os.environ.setdefault("MS_RUN", "run_batch_20260912")
 
 from utils.paths import ANALYSIS_ROOT, RUN_ROOT
 from reporting.plot_overcommitment_by_judge import COLOR_CONFIDENT, COLOR_OVERCOMMIT, _order_rank
-from reporting.plot_pinned_at_1_turn_counts import COLOR_PINNED, turn_counts_by_group
+from reporting.plot_pinned_at_1_turn_counts import turn_counts_by_group
 from reporting.plot_v4_radar_by_judge import DOCTOR_NAME_CANONICAL
 
 SLOT_WIDTH = 0.86   # total height per doctor's bar pair (< 1.0 leaves a gap)
@@ -78,25 +66,21 @@ def main() -> None:
 
     judges = sorted(by_judge)
 
-    # Filter to doctors with usable data (at least one of the two groups
-    # non-empty and its mean(s) present) and fix a shared doctor order:
+    # Filter to doctors with usable data and fix a shared doctor order:
     # gpt-5.4, gemini-3.8-flash, claude-sonnet-5, qwen3-235b, llama-3.3-70b-instruct
     # (MODEL_ORDER's ascending rank already matches this).
     panels: list[tuple[str, list[tuple[str, dict]]]] = []
     for judge in judges:
         rows = [
             (d, s) for d, s in by_judge[judge]
-            if (s["pinned_n"] or s["real_n"]) and (s["pinned_mean"] is not None or s["real_t1c_mean"] is not None)
+            if s["real_n"] and s["real_t1c_mean"] is not None
         ]
         rows.sort(key=lambda x: _order_rank(x[0]))
         panels.append((judge, rows))
 
     ymax = max(
-        (s["pinned_mean"] or 0) for _j, rows in panels for _d, s in rows
-    )
-    ymax = max(ymax, max(
         (s["real_t1c_mean"] or 0) + (s["real_oc_mean"] or 0) for _j, rows in panels for _d, s in rows
-    )) * 1.06
+    ) * 1.06
 
     for judge, rows in panels:
         fig, ax = plt.subplots(figsize=(11.5, 1.1 * len(rows) + 1.8))
@@ -106,55 +90,26 @@ def main() -> None:
             # First row in `rows` (gpt-5.4, ...) plotted at the top.
             slot_bottom = (n_rows - 1 - i) * SLOT_GAP
 
-            total_n = s["pinned_n"] + s["real_n"]
-            pinned_frac = s["pinned_n"] / total_n if total_n else 0.0
-            narrow_frac = 1.0 - pinned_frac
-
-            pinned_h = pinned_frac * SLOT_WIDTH
-            narrow_h = narrow_frac * SLOT_WIDTH
-
-            pinned_mean = s["pinned_mean"] or 0.0
             t1c = s["real_t1c_mean"] or 0.0
             oc = s["real_oc_mean"] or 0.0
 
-            if pinned_h > 0:
-                ax.barh(slot_bottom, pinned_mean, height=pinned_h, align="edge",
-                        color=COLOR_PINNED, edgecolor="white", linewidth=0.6, zorder=3)
-                if pinned_h > 0.10:
-                    ax.text(pinned_mean + ymax * 0.012, slot_bottom + pinned_h / 2,
-                            f"{pinned_mean:.1f}", ha="left", va="center", 
-                            fontsize=16, fontweight="bold",
-                              color=COLOR_PINNED)
-
-            if narrow_h > 0:
-                ax.barh(slot_bottom + pinned_h, t1c, height=narrow_h, align="edge",
-                        color=COLOR_CONFIDENT, edgecolor="white", linewidth=0.6, zorder=3)
-                ax.barh(slot_bottom + pinned_h, oc, height=narrow_h, align="edge", left=t1c,
-                        color=COLOR_OVERCOMMIT, edgecolor="white", linewidth=0.6, zorder=3)
-                # turn-to-1st-confident value, centered in its own segment
-                # (matches plot_overcommitment_by_judge.py's labeling)
-                if narrow_h > 0.10 and t1c > ymax * 0.04:
-                    ax.text(t1c - 1, slot_bottom + pinned_h + narrow_h / 2,
-                            f"{t1c:.1f}", ha="center", va="center", fontsize=16, color="white", fontweight="bold")
-                # overcommitment (turns after 1st confident) value, centered
-                # in its own segment — same convention as the t1c label above.
-                if narrow_h > 0.10 and oc > ymax * 0.04:
-                    ax.text(t1c + oc / 2, slot_bottom + pinned_h + narrow_h / 2,
-                            f"+{oc:.1f}", ha="center", va="center", fontsize=16,
-                            color="white", fontweight="bold")
-                if narrow_h > 0.06:
-                    ax.text(t1c + oc + ymax * 0.012, slot_bottom + pinned_h + narrow_h / 2,
-                            f"{t1c + oc:.1f}", ha="left", va="center", fontsize=16, fontweight="bold", color="#1C2333")
-
-            # share labels inside the base of each bar (white, small) rather
-            # than past the bar's end, which would collide with the value
-            # label placed there.
-            if pinned_h > 0.10 and pinned_mean > ymax * 0.04:
-                ax.text(ymax * 0.012, slot_bottom + pinned_h / 2, f"{pinned_frac*100:.0f}%",
-                        ha="left", va="center", fontsize=16, color="white", fontweight="bold")
-            if narrow_h > 0.10 and (t1c + oc) > ymax * 0.04:
-                ax.text(ymax * 0.012, slot_bottom + pinned_h + narrow_h / 2, f"{narrow_frac*100:.0f}%",
-                        ha="left", va="center", fontsize=16, color="white", fontweight="bold")
+            ax.barh(slot_bottom, t1c, height=SLOT_WIDTH, align="edge",
+                    color=COLOR_CONFIDENT, edgecolor="white", linewidth=0.6, zorder=3)
+            ax.barh(slot_bottom, oc, height=SLOT_WIDTH, align="edge", left=t1c,
+                    color=COLOR_OVERCOMMIT, edgecolor="white", linewidth=0.6, zorder=3)
+            # turn-to-1st-confident value, centered in its own segment
+            # (matches plot_overcommitment_by_judge.py's labeling)
+            if t1c > ymax * 0.04:
+                ax.text(t1c - 1, slot_bottom + SLOT_WIDTH / 2,
+                        f"{t1c:.1f}", ha="center", va="center", fontsize=16, color="white", fontweight="bold")
+            # overcommitment (turns after 1st confident) value, centered
+            # in its own segment — same convention as the t1c label above.
+            if oc > ymax * 0.04:
+                ax.text(t1c + oc / 2, slot_bottom + SLOT_WIDTH / 2,
+                        f"+{oc:.1f}", ha="center", va="center", fontsize=16,
+                        color="white", fontweight="bold")
+            ax.text(t1c + oc + ymax * 0.012, slot_bottom + SLOT_WIDTH / 2,
+                    f"{t1c + oc:.1f}", ha="left", va="center", fontsize=16, fontweight="bold", color="#1C2333")
 
         # Break each canonical name onto two lines (before the last word) so
         # long names don't force extra left margin on the y-axis.
@@ -177,8 +132,6 @@ def main() -> None:
         ax.tick_params(axis="both", labelsize=18)
 
         handles = [
-            plt.Rectangle((0, 0), 1, 1, color=COLOR_PINNED,
-                          label="No narrowing Episode"),
             plt.Rectangle((0, 0), 1, 1, color=COLOR_CONFIDENT,
                           label="Before convergence"),
             plt.Rectangle((0, 0), 1, 1, color=COLOR_OVERCOMMIT,
