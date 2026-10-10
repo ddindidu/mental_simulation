@@ -117,7 +117,7 @@ AXIS_ORDER = [
 
 MODEL_LABELS = {
     "gpt-5.4": "GPT-5.4",
-    "gpt-5.4-mini-2026-03-17": "GPT-5.4-mini",
+    "gpt-5.6-luna": "GPT-5.6-luna",
     "gemini-3.5-flash": "Gemini-3.5-flash",
     "gemini-3.1-flash-lite": "Gemini-3.1-flash-lite",
     "qwen3-235b-a22b-2507": "Qwen3-235B",
