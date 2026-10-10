@@ -34,12 +34,25 @@ if str(_REPO_ROOT) not in _sys.path:
 os.environ.setdefault("MS_RUN", "run_batch_20260912")
 
 from utils.paths import ANALYSIS_ROOT, RUN_ROOT
-from reporting.plot_overcommitment_by_judge import COLOR_CONFIDENT, COLOR_OVERCOMMIT, _order_rank
+from reporting.plot_overcommitment_by_judge import COLOR_CONFIDENT, COLOR_OVERCOMMIT, MODEL_ORDER
 from reporting.plot_pinned_at_1_turn_counts import turn_counts_by_group
 from reporting.plot_v4_radar_by_judge import DOCTOR_NAME_CANONICAL
 
 SLOT_WIDTH = 0.86   # total height per doctor's bar pair (< 1.0 leaves a gap)
 SLOT_GAP = 1.0       # y-distance between slot centers
+
+# Local model order for this chart only (GPT, Gemini, Claude, Llama, Qwen —
+# swaps qwen3-235b <-> llama-3.3-70b-instruct relative to
+# plot_overcommitment_by_judge.MODEL_ORDER, which other v4 figures still use
+# as-is — not shared, to avoid reordering every other consumer of it).
+_LOCAL_MODEL_ORDER = list(MODEL_ORDER)
+_i, _j = _LOCAL_MODEL_ORDER.index("qwen3-235b"), _LOCAL_MODEL_ORDER.index("llama-3.3-70b-instruct")
+_LOCAL_MODEL_ORDER[_i], _LOCAL_MODEL_ORDER[_j] = _LOCAL_MODEL_ORDER[_j], _LOCAL_MODEL_ORDER[_i]
+_LOCAL_ORDER_RANK = {name: i for i, name in enumerate(_LOCAL_MODEL_ORDER)}
+
+
+def _order_rank(doctor: str) -> int:
+    return _LOCAL_ORDER_RANK.get(doctor, len(_LOCAL_MODEL_ORDER))
 
 
 def main() -> None:
