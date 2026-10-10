@@ -30,6 +30,7 @@ import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+from adjustText import adjust_text
 
 import sys as _sys
 _REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -121,25 +122,27 @@ def main() -> None:
     ax.plot([diag_lo, diag_hi], [diag_lo, diag_hi], color="#8a8977", linewidth=1.2,
             linestyle=":", zorder=1, clip_on=True)
     ax.annotate("precision = recall", (x_hi, min(x_hi, y_hi)), textcoords="offset points",
-                xytext=(-6, 4), ha="right", fontsize=14, color="#5c5b55", style="italic")
+                xytext=(-6, 4), ha="right", fontsize=17, color="#5c5b55", style="italic")
 
     seen_models: set[str] = set()
+    texts = []
     for judge, doctor, x, y in points:
         color = color_of[doctor.lower()]
         label = doctor if doctor.lower() not in seen_models else None
         seen_models.add(doctor.lower())
         ax.scatter(x, y, color=color, marker=marker_of[judge], s=170,
                    edgecolors="white", linewidths=0.8, zorder=3, label=label)
-        ax.annotate(DOCTOR_NAME_CANONICAL.get(doctor.lower(), doctor), (x, y),
-                    textcoords="offset points", xytext=(7, 6),
-                    fontsize=14, color="#3a3a38")
+        texts.append(ax.text(x, y, DOCTOR_NAME_CANONICAL.get(doctor.lower(), doctor),
+                              fontsize=17, color="#3a3a38"))
 
     ax.set_xlim(x_lo, x_hi)
     ax.set_ylim(y_lo, y_hi)
+    adjust_text(texts, ax=ax, expand=(1.3, 1.6),
+                arrowprops=dict(arrowstyle="-", color="#9a9a9a", lw=0.8))
 
-    ax.set_xlabel("Recall", fontsize=16, color="#52514e")
-    ax.set_ylabel("Precision", fontsize=16, color="#52514e")
-    ax.tick_params(axis="both", labelsize=14)
+    ax.set_xlabel("Recall", fontsize=19, color="#52514e")
+    ax.set_ylabel("Precision", fontsize=19, color="#52514e")
+    ax.tick_params(axis="both", labelsize=17)
     # ax.set_title(
     #     "evaluation_v5.md §1 — Precision vs. Recall",
     #     fontsize=12, fontweight="bold",
@@ -154,21 +157,23 @@ def main() -> None:
                    markeredgecolor="white", markersize=10, label=DOCTOR_NAME_CANONICAL.get(d, d))
         for d in canonical_doctors
     ]
+    legend_judge_order = ["gpt-5.6-terra", "gemini-3.1-pro-preview"]
+    legend_judges = [j for j in legend_judge_order if j in judges] + [j for j in judges if j not in legend_judge_order]
     judge_handles = [
         plt.Line2D([0], [0], marker=marker_of[j], color="w", markerfacecolor="#999999",
                    markeredgecolor="white", markersize=14, label=JUDGE_NAME_CANONICAL.get(j, j))
-        for j in judges
+        for j in legend_judges
     ]
     # legend: models
     # leg1 = ax.legend(handles=model_handles, title="Doctor model", loc="upper left",
     #                   bbox_to_anchor=(1.02, 1.0), fontsize=12, frameon=False)
     # ax.add_artist(leg1)
     # legend: judges
-    ax.legend(handles=judge_handles, 
-              title="Patient & Judge", title_fontsize=16,
+    ax.legend(handles=judge_handles,
+              title="Patient & Judge", title_fontsize=19,
               loc="lower right",
               # bbox_to_anchor=(1.02, 0.0),
-              fontsize=16, frameon=False)
+              fontsize=19, frameon=True)
 
     fig.tight_layout()
     out_path = Path(args.out) if args.out else ANALYSIS_ROOT / "v4_precision_vs_recall.png"
