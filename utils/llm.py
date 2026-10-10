@@ -138,7 +138,10 @@ def _normalize_role_configs() -> tuple[dict[str, Any], dict[str, Any], dict[str,
             model = block.get("model") or legacy_model or default_model
             o = {**shared_openai, **(block.get("openai") or {})}
             g = {**shared_gemini, **(block.get("gemini") or {})}
-            return {"provider": prov, "model": str(model), "openai": o, "gemini": g}
+            out = {"provider": prov, "model": str(model), "openai": o, "gemini": g}
+            if block.get("api_model_override"):
+                out["api_model_override"] = str(block["api_model_override"])
+            return out
 
         return (
             one("patient", "gpt-4o-mini"),
@@ -246,6 +249,10 @@ def get_doctor_model_name() -> str:
 
 def get_judge_model_name() -> str:
     return str(_judge_cfg.get("model") or "")
+
+
+def get_judge_provider() -> str:
+    return str(_judge_cfg.get("provider") or "")
 
 
 def _model_slug(model: str) -> str:
@@ -694,7 +701,12 @@ def _chat_gemini(messages: list[dict], max_new_tokens: int, role: Role) -> str:
 
     cfg = _cfg_for_role(role)
     g = _gen_for_role(role)
-    model_name = str(cfg["model"])
+    # api_model_override: call a different model than cfg["model"] names, while
+    # get_run_dir()/_model_slug() (which read cfg["model"] directly) keep using
+    # the original name for the logs/results/analysis folder path — lets a run
+    # swap which model actually answers without splitting its save location
+    # from the existing run's folder.
+    model_name = str(cfg.get("api_model_override") or cfg["model"])
 
     system_instruction, contents = _messages_to_gemini(messages)
 
