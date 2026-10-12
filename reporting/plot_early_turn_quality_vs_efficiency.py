@@ -50,10 +50,10 @@ EARLY_N = 3
 PALETTE = ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00"]
 
 METRICS = [
-    ("early_jaccard", "Early Jaccard (turns 1-3)"),
-    ("early_precision", "Early Precision (turns 1-3)"),
-    ("early_recall", "Early Recall (turns 1-3)"),
-    ("early_qts", "Early QTS (turns 1-3)"),
+    ("early_jaccard", "Early Jaccard"),
+    ("early_precision", "Early Precision"),
+    ("early_recall", "Early Recall"),
+    ("early_qts", "Early QTS"),
 ]
 
 
@@ -180,7 +180,7 @@ def draw(all_rows: list[dict], correct_rows: list[dict], wrong_rows: list[dict],
     doctors = sorted({r["doctor"] for r in all_rows})
     x = np.arange(1, 5)
 
-    fig, axes = plt.subplots(len(metrics), 2, figsize=(10, 3.75 * len(metrics)))
+    fig, axes = plt.subplots(len(metrics), 2, figsize=(8, 3.75 * len(metrics)))
     if len(metrics) == 1:
         axes = axes.reshape(1, 2)
 
@@ -212,24 +212,25 @@ def draw(all_rows: list[dict], correct_rows: list[dict], wrong_rows: list[dict],
                            marker="o", markersize=8, zorder=5, label="Average (across doctors)")
 
             ax.set_xticks(x)
-            ax.set_xticklabels(["Q1\n(worst)", "Q2", "Q3", "Q4\n(best)"], fontsize=11)
+            ax.set_xticklabels(["Q1", "Q2", "Q3", "Q4"], fontsize=12)
             ax.set_ylim(ylim)
             ax.invert_yaxis()
+            ax.tick_params(axis="y", labelsize=12)
             ax.grid(color="#E4EBF5", linewidth=0.8, zorder=0)
             ax.spines[["top", "right"]].set_visible(False)
             if col_i == 0:
                 ax.set_ylabel("Efficiency (Total Turn Count)", fontsize=12)
-            ax.set_xlabel(label, fontsize=12)
+            ax.set_xlabel(label, fontsize=14)
 
     fig.text(0.29, 1.0, "Correct cases", ha="center", fontsize=14, fontweight="bold")
-    fig.text(0.74, 1.0, "Wrong cases", ha="center", fontsize=14, fontweight="bold")
+    fig.text(0.78, 1.0, "Wrong cases", ha="center", fontsize=14, fontweight="bold")
 
     handles, labels = axes[0, 0].get_legend_handles_labels()
     # bbox_to_anchor is in figure-fraction units, so a fixed offset shrinks in
     # absolute terms as the figure gets shorter (fewer metric rows) — scale it
     # by the reference (4-row) figure's proportions to keep the same gap.
-    legend_y = -0.03 * (4 / len(metrics))
-    fig.legend(handles, labels, loc="lower center", ncol=3, fontsize=10.5, frameon=False,
+    legend_y = -0.035 * (4 / len(metrics))
+    fig.legend(handles, labels, loc="lower center", ncol=3, fontsize=12, frameon=False,
                bbox_to_anchor=(0.5, legend_y))
     fig.tight_layout()
     fig.savefig(out_path, dpi=150, bbox_inches="tight")
