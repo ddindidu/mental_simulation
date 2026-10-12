@@ -7,6 +7,12 @@ Same data (episode-level, T > EARLY_N, early-window metric from turns 1-3
 vs. remaining_turns = turn_count - EARLY_N), but instead of a doctor-collapsed
 quartile trend, fits:
 
+jaccard/precision/recall here are already episode-mean metrics: each is the
+mean of that one episode's own turns 1-3 (jaccard_rigid / precision_rigid /
+recall_rigid), not a cross-episode pooled value — the turn-weighted-pooled
+vs. episode-mean distinction from evaluation_v5.md's combo-level aggregation
+doesn't apply within a single episode.
+
   (1) per-correctness regression, doctor + setting fixed effects:
         remaining_turns_i = b0 + b1 * X_i + Doctor_FE + Judge_FE + e_i
       run separately on the correct (final_accuracy=1) and wrong subsets.

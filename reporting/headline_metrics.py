@@ -15,8 +15,11 @@ load_combo(patient, judge, doctor, style) joins the four eval outputs of one
                                  the final dx is unresolved / not scored)
 
 pooled_means(episodes) aggregates them the same way
-reporting/summarize_v4_metrics_csv.py does: hypothesis metrics pooled over
-all (episode, turn) rows, everything else a mean over episodes with a value.
+reporting/summarize_v4_metrics_csv.py does: episode-mean throughout — each
+episode counts once (hypothesis metrics are already turn-averaged per episode
+in load_combo; everything else is already one value per episode) — rather
+than a flat mean over all (episode, turn) rows, which would weight episodes
+with more turns more heavily.
 """
 from __future__ import annotations
 
@@ -123,10 +126,15 @@ def load_combo(patient: str, judge: str, doctor: str, style: str | None = "plain
 
 
 def pooled_means(episodes: list[dict]) -> dict[str, float | None]:
+    """Episode-mean: hypothesis metrics use each episode's own per-episode
+    mean (`e[m]`, already turn-averaged within the episode in load_combo),
+    averaged again across episodes — every episode counts equally regardless
+    of its turn count. Everything else is already one value per episode, so
+    it's a plain mean over episodes with a value."""
     out: dict[str, float | None] = {}
-    n_turns = sum(e["n_turns"] for e in episodes)
     for m in HYPOTHESIS:
-        out[m] = sum(e[f"{m}_sum"] for e in episodes) / n_turns if n_turns else None
+        vals = [e[m] for e in episodes if e.get(m) is not None]
+        out[m] = sum(vals) / len(vals) if vals else None
     for k in HEADLINE_KEYS:
         if k in HYPOTHESIS:
             continue

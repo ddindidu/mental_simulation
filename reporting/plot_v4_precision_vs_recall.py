@@ -121,8 +121,8 @@ def main() -> None:
     diag_hi = max(x_hi, y_hi)
     ax.plot([diag_lo, diag_hi], [diag_lo, diag_hi], color="#8a8977", linewidth=1.2,
             linestyle=":", zorder=1, clip_on=True)
-    ax.annotate("precision = recall", (x_hi, min(x_hi, y_hi)), textcoords="offset points",
-                xytext=(-6, 4), ha="right", fontsize=17, color="#5c5b55", style="italic")
+    diag_label = ax.annotate("precision = recall", (x_hi, min(x_hi, y_hi)), textcoords="offset points",
+                              xytext=(-6, 4), ha="right", fontsize=17, color="#5c5b55", style="italic")
 
     seen_models: set[str] = set()
     texts = []
@@ -137,7 +137,7 @@ def main() -> None:
 
     ax.set_xlim(x_lo, x_hi)
     ax.set_ylim(y_lo, y_hi)
-    adjust_text(texts, ax=ax, expand=(1.3, 1.6),
+    adjust_text(texts + [diag_label], ax=ax, expand=(1.3, 1.6),
                 arrowprops=dict(arrowstyle="-", color="#9a9a9a", lw=0.8))
 
     ax.set_xlabel("Recall", fontsize=19, color="#52514e")

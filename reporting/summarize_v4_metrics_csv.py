@@ -43,6 +43,7 @@ import json
 import os
 import re
 import statistics as st
+from collections import defaultdict
 from pathlib import Path
 
 import sys as _sys
@@ -140,14 +141,27 @@ def load_turn_eval(path: Path, style: str | None) -> dict | None:
     data = _filter_style(_load_list(path), style)
     if not data:
         return None
-    # Mean over all (episode, turn) rows. *_rigid holds the tier-priority
-    # reference-set value in both pre- and post-refactor turn_eval.json.
+    # Episode-mean: each episode's own mean over its turns is computed first,
+    # then those per-episode means are averaged — every episode counts
+    # equally regardless of how many turns it ran, unlike a flat mean over
+    # all (episode, turn) rows (which would weight longer episodes more).
+    # *_rigid holds the tier-priority reference-set value in both pre- and
+    # post-refactor turn_eval.json.
+    by_episode: dict[str, list[dict]] = defaultdict(list)
+    for d in data:
+        by_episode[d.get("log_file")].append(d)
+
+    def _episode_mean(field: str) -> float | None:
+        ep_means = [st.mean(vals) for rows in by_episode.values()
+                    if (vals := [r.get(field) for r in rows if r.get(field) is not None])]
+        return st.mean(ep_means) if ep_means else None
+
     return {
         "n": len(data),
-        "jaccard":         _mean([d.get("jaccard_rigid") for d in data]),
-        "precision":       _mean([d.get("precision_rigid") for d in data]),
-        "recall":          _mean([d.get("recall_rigid") for d in data]),
-        "weighted_recall": _mean([d.get("weighted_recall") for d in data]),
+        "jaccard":         _episode_mean("jaccard_rigid"),
+        "precision":       _episode_mean("precision_rigid"),
+        "recall":          _episode_mean("recall_rigid"),
+        "weighted_recall": _episode_mean("weighted_recall"),
     }
 
 

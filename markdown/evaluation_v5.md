@@ -7,7 +7,7 @@ code (see [Deactivated](#deactivated-metrics)).
 
 | Dimension | Main | Sub |
 |---|---|---|
-| **Diagnostic Hypothesis Quality** | Jaccard, Precision, Recall, Weighted Recall | — |
+| **Diagnostic Hypothesis Quality** | Jaccard, Precision, Recall | — |
 | **Diagnostic Question Quality** | Question Targeting Score (QTS) | — |
 | **Diagnostic Efficiency** | Total Turns | 1st-Confidence Turn, Overcommitment Turns |
 | **Diagnostic Decision Quality** | Final Accuracy, Diagnostic Evidence Sufficiency | — |
@@ -79,15 +79,11 @@ Recall    = |P ∩ R| / |R|
 Jaccard   = |P ∩ R| / |P ∪ R|
 ```
 
-**Weighted Recall** uses all three tiers. `gt` is forced into `H`, and the
-tiers are made disjoint:
-
-```
-WR = 1 − (2·|H∖P| + 1·|M∖P| + 0.5·|L∖P|) / (2·|H| + 1·|M| + 0.5·|L|)
-```
-
-**Aggregation:** each metric is computed per (episode, turn). A combo's
-reported value is the mean over all (episode, turn) rows.
+**Aggregation:** each metric is computed per (episode, turn). Each episode's
+own mean over its turns is taken first; a combo's reported value is then the
+mean of those per-episode means (episode-mean) — every episode counts equally
+regardless of how many turns it ran, unlike a flat mean over all (episode,
+turn) rows, which would weight longer episodes more heavily.
 
 > `gt` is always in `R` and in `H`, so a doctor who names only the correct
 > disease is never penalized for an algorithmic tier miss.
@@ -211,13 +207,13 @@ still counts. Results are cached by content hash in
 
 | Dimension | Per-episode/turn file | Headline fields |
 |---|---|---|
-| Hypothesis | `analysis/<combo>/turn_eval.json` | `jaccard`, `precision`, `recall`, `weighted_recall` |
+| Hypothesis | `analysis/<combo>/turn_eval.json` | `jaccard`, `precision`, `recall` |
 | Question | `results/<combo>/question_eval.json` | `episode_metrics.llm_judge.mean_qts`; per turn `scores_by_mapper.llm_judge.qts` |
 | Efficiency | `results/<combo>/efficiency_eval.json` | `turn_count`, `time_to_first_confident_narrowing`, `overcommitment_conf` |
 | Decision | `efficiency_eval.json`, `diagnostic_reasoning_eval.json` | `final_accuracy`, `overall_score_pred` |
 
 `reporting/summarize_v4_metrics_csv.py` writes one row per (patient, judge,
-doctor) combo with the columns `jaccard, precision, recall, weighted_recall,
+doctor) combo with the columns `jaccard, precision, recall,
 qts, turn_count, turn_to_1st_confident, overcommitment_conf,
 final_accuracy_pct, diagnostic_evidence_sufficiency_pred`.
 
@@ -263,7 +259,6 @@ un-commenting.
 | ECR (Expected Candidate Reduction), active-turn conditional means, safety-critical coverage | `question_targeting_score.py`, `evaluate_question.py` | none |
 | Cosine-similarity question mapper | `evaluate_question.py` | none (local embedding model; compute only) |
 | CSSR, Turn to 1st correct, monotonicity violations, redundant-turn ratio, `overcommitment_turns` (first size-1 collapse) | `evaluate_efficiency.py` | none |
-| Evidence Sufficiency `_gt` (scored against the ground-truth disease's criteria) | `evaluate_diagnostic_reasoning.py` | **1 scalar-judge call per episode where the final diagnosis ≠ `gt` or is unresolved** |
 | Semantic-mapper IAS (`question_eval_semantic.json`) | `reporting/plot_question_eval.py` (now plots the `llm_judge` QTS instead) | none |
 
 **LLM calls that remain:**
@@ -281,8 +276,7 @@ un-commenting.
    - Efficiency → Diagnostic Efficiency
    - Reliable Diagnosis → Diagnostic Decision Quality
 2. **Reference set.** Precision/Recall/Jaccard now use the tier-priority
-   reference set instead of the `high ∪ moderate ∪ low` union. Weighted
-   Recall is promoted to a headline metric.
+   reference set instead of the `high ∪ moderate ∪ low` union.
 3. **IAS → QTS.** Renamed. The formula is unchanged and the `llm_judge` mapper
    is the only mapper. ECR is dropped.
 4. **Efficiency.** The headline set is Total Turns, 1st-Confidence Turn, and
