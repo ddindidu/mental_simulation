@@ -88,12 +88,12 @@ EVAL_PIPELINE: list[list[str]] = [
     ["eval/evaluate_efficiency.py"],
     ["eval/evaluate_question.py"],
     ["eval/evaluate_diagnostic_reasoning.py"],
-    ["reporting/plot_question_eval.py"],
-    ["reporting/plot_efficiency_eval.py"],
-    ["reporting/summarize_efficiency.py"],
-    ["reporting/plot_turn_abs.py"],
-    ["reporting/plot_turn_rel.py"],
-    ["reporting/plot_confusion.py"],
+    ["reporting/per_model/plot_question_eval.py"],
+    ["reporting/per_model/plot_efficiency_eval.py"],
+    ["reporting/per_model/summarize_efficiency.py"],
+    ["reporting/per_model/plot_turn_abs.py"],
+    ["reporting/per_model/plot_turn_rel.py"],
+    ["reporting/per_model/plot_confusion.py"],
 ]
 
 

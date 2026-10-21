@@ -212,7 +212,7 @@ still counts. Results are cached by content hash in
 | Efficiency | `results/<combo>/efficiency_eval.json` | `turn_count`, `time_to_first_confident_narrowing`, `overcommitment_conf` |
 | Decision | `efficiency_eval.json`, `diagnostic_reasoning_eval.json` | `final_accuracy`, `overall_score_pred` |
 
-`reporting/summarize_v4_metrics_csv.py` writes one row per (patient, judge,
+`reporting/cross_model/summarize_v4_metrics_csv.py` writes one row per (patient, judge,
 doctor) combo with the columns `jaccard, precision, recall,
 qts, turn_count, turn_to_1st_confident, overcommitment_conf,
 final_accuracy_pct, diagnostic_evidence_sufficiency_pred`.
@@ -229,19 +229,22 @@ final_accuracy_pct, diagnostic_evidence_sufficiency_pred`.
 ### Reporting scripts (`reporting/`)
 
 The table below lists each reporting script, where it writes, and what it shows.
+Scripts are grouped by scope: `reporting/per_model/` for single-combo ("per
+combo") scripts, `reporting/cross_model/` for everything that compares across
+doctors/combos ("cross combo" and "per bucket").
 
 | Scope | Script | Output | Shows |
 |---|---|---|---|
-| per combo | `plot_turn_eval.py` | `analysis/<combo>/turn_eval/turn_eval_cases_plot*.png` | Hypothesis metrics per turn, per disorder (reads `turn_eval.json` only) |
-| per combo | `plot_question_eval.py` | `analysis/<combo>/question_eval/question_eval_plot*.png` | QTS, DRS, RP per turn, per disorder |
-| per combo | `plot_turn_abs.py` / `plot_turn_rel.py` | `analysis/<combo>/turn_abs/`, `turn_rel/` | Hypothesis metrics and QTS by absolute turn / relative progress |
-| per combo | `plot_efficiency_eval.py` | `analysis/<combo>/efficiency/efficiency_eval_plot*.png` | stacked 1st-Confidence + Overcommitment = Total Turns; final accuracy |
-| per combo | `summarize_efficiency.py` | `analysis/<combo>/efficiency/efficiency_summary.txt` | per-disorder efficiency table |
-| cross combo | `summarize_v4_metrics_csv.py` | `analysis/v4_metrics_summary[_plain].{csv,xlsx}` | all 10 headline metrics per combo (input to the `plot_v4_*` scatters and radar) |
-| cross combo | `reporting/headline_metrics.py` | — | shared per-episode loader, same aggregation as the CSV |
-| per bucket | `summarize_comparisons.py` → `summarize_main_eval_findings.py` | `analysis/<patient>/<judge>/comparison/headline_comparison.*`, `main_eval_*.png` | model × headline-metric tables, bars, normalized heatmap |
-| per bucket | `summarize_ablation_all_dimensions.py`, `summarize_question_eval_outcome.py` | `comparison/outcome_stratified/` | headline metrics split by Final Accuracy (correct vs. incorrect) |
-| per bucket | `summarize_question_eval.py` | `comparison/question_eval_comparison.*` | QTS, DRS, RP, and empty-target rate per model |
+| per combo | `per_model/plot_turn_eval.py` | `analysis/<combo>/turn_eval/turn_eval_cases_plot*.png` | Hypothesis metrics per turn, per disorder (reads `turn_eval.json` only) |
+| per combo | `per_model/plot_question_eval.py` | `analysis/<combo>/question_eval/question_eval_plot*.png` | QTS, DRS, RP per turn, per disorder |
+| per combo | `per_model/plot_turn_abs.py` / `per_model/plot_turn_rel.py` | `analysis/<combo>/turn_abs/`, `turn_rel/` | Hypothesis metrics and QTS by absolute turn / relative progress |
+| per combo | `per_model/plot_efficiency_eval.py` | `analysis/<combo>/efficiency/efficiency_eval_plot*.png` | stacked 1st-Confidence + Overcommitment = Total Turns; final accuracy |
+| per combo | `per_model/summarize_efficiency.py` | `analysis/<combo>/efficiency/efficiency_summary.txt` | per-disorder efficiency table |
+| cross combo | `cross_model/summarize_v4_metrics_csv.py` | `analysis/v4_metrics_summary[_plain].{csv,xlsx}` | all 10 headline metrics per combo (input to the `plot_v4_*` scatters and radar) |
+| cross combo | `reporting/cross_model/headline_metrics.py` | — | shared per-episode loader, same aggregation as the CSV |
+| per bucket | `cross_model/summarize_comparisons.py` → `cross_model/summarize_main_eval_findings.py` | `analysis/<patient>/<judge>/comparison/headline_comparison.*`, `main_eval_*.png` | model × headline-metric tables, bars, normalized heatmap |
+| per bucket | `cross_model/summarize_ablation_all_dimensions.py`, `cross_model/summarize_question_eval_outcome.py` | `comparison/outcome_stratified/` | headline metrics split by Final Accuracy (correct vs. incorrect) |
+| per bucket | `cross_model/summarize_question_eval.py` | `comparison/question_eval_comparison.*` | QTS, DRS, RP, and empty-target rate per model |
 
 Cross-model scripts default to `--style plain`.
 
@@ -259,7 +262,7 @@ un-commenting.
 | ECR (Expected Candidate Reduction), active-turn conditional means, safety-critical coverage | `question_targeting_score.py`, `evaluate_question.py` | none |
 | Cosine-similarity question mapper | `evaluate_question.py` | none (local embedding model; compute only) |
 | CSSR, Turn to 1st correct, monotonicity violations, redundant-turn ratio, `overcommitment_turns` (first size-1 collapse) | `evaluate_efficiency.py` | none |
-| Semantic-mapper IAS (`question_eval_semantic.json`) | `reporting/plot_question_eval.py` (now plots the `llm_judge` QTS instead) | none |
+| Semantic-mapper IAS (`question_eval_semantic.json`) | `reporting/per_model/plot_question_eval.py` (now plots the `llm_judge` QTS instead) | none |
 
 **LLM calls that remain:**
 1. symptom extraction (`symptom_diagnosis.py`, per turn), which every dimension depends on

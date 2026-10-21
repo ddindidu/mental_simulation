@@ -73,8 +73,8 @@ if str(_REPO_ROOT) not in _sys.path:
 
 from utils.metric_compat import episode_mean_qts, turn_qts
 from utils.turn_policy import OPENING_TURN, preceding_question_turn_to_policy
-from reporting.ias_variants import IAS_VARIANT_KEYS, IAS_VARIANT_LABELS, episode_ias_variants
-from reporting.plot_v4_radar_by_judge import DOCTOR_NAME_CANONICAL, PALETTE
+from reporting.cross_model.ias_variants import IAS_VARIANT_KEYS, IAS_VARIANT_LABELS, episode_ias_variants
+from reporting.cross_model.plot_v4_radar_by_judge import DOCTOR_NAME_CANONICAL, PALETTE
 
 _DOCTOR_MODEL_ORDER = ["gpt-5.4", "gemini-3.8-flash", "claude-sonnet-5", "qwen3-235b", "llama-3.3-70b-instruct"]
 
