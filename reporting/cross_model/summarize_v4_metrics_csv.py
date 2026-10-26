@@ -65,6 +65,7 @@ FIELDS = [
     "n_episodes_question_eval", "qts",
     "n_episodes_efficiency", "turn_count", "turn_to_1st_confident", "overcommitment_conf",
     "n_episodes_diagnostic_reasoning", "diagnostic_evidence_sufficiency_pred",
+    "diagnostic_evidence_sufficiency_pred_symptom",
 ]
 
 SELECTED_FIELDS = [
@@ -78,6 +79,7 @@ SELECTED_FIELDS = [
         "turn_count", "turn_to_1st_confident", "overcommitment_conf",
         # Diagnostic Decision Quality
         "final_accuracy_pct", "diagnostic_evidence_sufficiency_pred",
+        "diagnostic_evidence_sufficiency_pred_symptom",
     ]
 
 DOCTOR_ORDER = [
@@ -189,15 +191,21 @@ def load_question_eval(path: Path, style: str | None) -> dict | None:
 
 def load_diagnostic_reasoning(path: Path, style: str | None) -> dict | None:
     """overall_score_pred = evidence sufficiency for the doctor's own final
-    diagnosis (None when that diagnosis couldn't be resolved to a disease
-    id). Mean over episodes with a non-null value."""
+    diagnosis, GROUP-weighted symptom satisfaction (None when that diagnosis
+    couldn't be resolved to a disease id). overall_score_symptom is the
+    SYMPTOM-weighted variant (eval/compute_evidence_sufficiency_symptom.py —
+    see markdown/evaluation_v5.md §4.2). Mean over episodes with a non-null
+    value, each metric independently."""
     data = _filter_style(_load_list(path), style)
     if not data:
         return None
     pred_vals = [ep.get("overall_score_pred") for ep in data if ep.get("overall_score_pred") is not None]
+    symptom_vals = [ep.get("overall_score_symptom") for ep in data if ep.get("overall_score_symptom") is not None]
     return {
         "n": len(pred_vals),
         "pred": _mean(pred_vals) if pred_vals else None,
+        "n_symptom": len(symptom_vals),
+        "symptom": _mean(symptom_vals) if symptom_vals else None,
     }
 
 
@@ -242,6 +250,7 @@ def build_rows(style: str | None) -> list[dict]:
             "overcommitment_conf": eff["overcommit_conf"] if eff else None,
             "n_episodes_diagnostic_reasoning": dr["n"] if dr else None,
             "diagnostic_evidence_sufficiency_pred": dr["pred"] if dr else None,
+            "diagnostic_evidence_sufficiency_pred_symptom": dr["symptom"] if dr else None,
         })
     return rows
 

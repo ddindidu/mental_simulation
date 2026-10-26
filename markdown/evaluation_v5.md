@@ -170,14 +170,38 @@ No LLM call is made in that case.
 The score is a hybrid of two parts, both checked against `d̂`'s required
 criteria:
 
-**(a) Symptom satisfaction (algorithmic, no LLM).** This part uses the
-final-turn `cumulative_confirmed`. For each symptom group *g*:
+**(a) Symptom satisfaction (algorithmic, no LLM) — GROUP-weighted (the
+`_pred` field everywhere else in this doc).** This part uses the final-turn
+`cumulative_confirmed`. For each symptom **group** *g* (e.g. "inattention"),
+weighted 2x if mandatory (`must_include`), 1x if optional, REGARDLESS of how
+many individual symptoms that group's pool contains:
 
 ```
 coverage_g  = min(1, |pool_g ∩ confirmed| / min_count_g)
 satisfied_g = coverage_g ≥ 1  ∧  must_include_all ⊆ confirmed  ∧  (must_include_one_of ∩ confirmed ≠ ∅)
-SymSat      = (2·#satisfied mandatory + #satisfied optional) / (2·#mandatory + #optional)
+SymSat_group = (2·#satisfied mandatory GROUPS + #satisfied optional GROUPS)
+               / (2·#mandatory GROUPS + #optional GROUPS)
 ```
+
+**(a′) Symptom satisfaction — SYMPTOM-weighted variant
+(`eval/compute_evidence_sufficiency_symptom.py`, fields
+`symptom_satisfaction_score_symptom` / `overall_score_symptom`).** Same final-
+turn `cumulative_confirmed`, but weights individual MANDATORY symptoms 2x and
+individual OPTIONAL symptoms 1x instead of groups — a group with 9 symptoms
+counts 9x as much as a group with 1:
+
+```
+SymSat_symptom = (2·|mandatory_symptom_ids(d̂) ∩ confirmed| + |optional_symptom_ids(d̂) ∩ confirmed|)
+                  / (2·|mandatory_symptom_ids(d̂)| + |optional_symptom_ids(d̂)|)
+```
+
+No LLM call either — reuses the same `cumulative_confirmed` and, for part
+(b) below, the already-cached `*_score_pred` scalar sub-scores from the
+group-weighted run (so running this script after
+`evaluate_diagnostic_reasoning.py` adds two fields per episode without any
+new LLM calls). Pearson r between the group and symptom overall scores
+(n=3227, run_batch_20260912, style=plain) is 0.845 — correlated but not
+interchangeable (mean |diff| ≈ 0.12).
 
 **(b) Non-symptom requirements (LLM judge).** The judge compares the doctor's
 final `diagnostic_checklist` against `d̂`'s non-symptom criteria. If no
@@ -192,7 +216,8 @@ included only if `d̂` requires it:
 - additional requirements
 
 ```
-overall_score_pred = mean( SymSat, and each required item from (b) )   — macro-mean, equal weight
+overall_score_pred    = mean( SymSat_group,   and each required item from (b) )   — macro-mean, equal weight
+overall_score_symptom = mean( SymSat_symptom, and each required item from (b) )   — same (b) items, group's SymSat swapped
 ```
 
 If the judge's output can't be parsed, only the (b) items are dropped; SymSat

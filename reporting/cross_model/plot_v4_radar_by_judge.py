@@ -61,7 +61,7 @@ METRICS = [
     ("Question Q.\n(QTS)", "qts"),
     ("Efficiency\n(Total Turns, reversed)", "turn_count"),
     ("Decision Q.\n(Final Acc.)", "final_accuracy_pct"),
-    ("Decision Q.\n(Evidence\nSufficiency)", "diagnostic_evidence_sufficiency_pred"),
+    ("Decision Q.\n(Evidence\nSufficiency)", "diagnostic_evidence_sufficiency_pred_symptom"),
 ]
 
 # Fields where a lower raw value is better — their z-score is sign-flipped
@@ -240,7 +240,7 @@ def main() -> None:
                   frameon=False, bbox_to_anchor=(1.3, 1.1))
 
         fig.tight_layout()
-        out_path = Path(f"{out_prefix}{judge}.png")
+        out_path = Path(f"{out_prefix}{judge}.pdf")
         out_path.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(out_path, dpi=150, bbox_inches="tight", pad_inches=0.4)
         plt.close(fig)

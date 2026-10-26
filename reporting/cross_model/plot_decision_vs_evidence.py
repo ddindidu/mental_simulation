@@ -39,12 +39,21 @@ if str(_REPO_ROOT) not in _sys.path:
     _sys.path.insert(0, str(_REPO_ROOT))
 
 from utils.paths import ANALYSIS_ROOT, RESULTS_ROOT, RUN_ROOT
-from reporting.cross_model.plot_overcommitment_by_judge import EXCLUDE_DOCTORS, MODEL_ORDER
 from reporting.cross_model.plot_v4_radar_by_judge import DOCTOR_NAME_CANONICAL
 
+MODEL_ORDER = [
+    "gpt-5.4", "gpt-5.6-luna",
+    "gemini-3.8-flash", "gemini-3.1-flash-lite",
+    "claude-sonnet-5", "claude-haiku-4.5",
+    "qwen3-235b",
+    "llama-3.3-70b-instruct",
+]
+# Smaller/secondary variants dropped from this chart to keep the panel to
+# one clear representative per provider family.
+EXCLUDE_DOCTORS = {"gpt-5.6-luna", "gemini-3.1-flash-lite", "claude-haiku-4.5"}
+
 # Local model order for this chart only (swaps qwen3-235b <-> llama-3.3-70b-instruct
-# relative to plot_overcommitment_by_judge.MODEL_ORDER, which other v4 figures
-# still use as-is — not shared, to avoid reordering every other consumer of it).
+# relative to MODEL_ORDER above).
 _LOCAL_MODEL_ORDER = list(MODEL_ORDER)
 _i, _j = _LOCAL_MODEL_ORDER.index("qwen3-235b"), _LOCAL_MODEL_ORDER.index("llama-3.3-70b-instruct")
 _LOCAL_MODEL_ORDER[_i], _LOCAL_MODEL_ORDER[_j] = _LOCAL_MODEL_ORDER[_j], _LOCAL_MODEL_ORDER[_i]
@@ -84,7 +93,7 @@ def joined_episodes(eff_path: Path, dr_path: Path, style: str | None) -> list[tu
         log_file = row.get("log_file")
         if not log_file or (style and not log_file.endswith(f"_{style}")):
             continue
-        score = row.get("overall_score_pred")
+        score = row.get("overall_score_symptom")
         acc = acc_by_log.get(log_file)
         if score is None or acc is None:
             continue
@@ -202,7 +211,7 @@ def main() -> None:
         # )
 
         fig.tight_layout()
-        out_path = Path(f"{out_prefix}{judge}.png")
+        out_path = Path(f"{out_prefix}{judge}.pdf")
         out_path.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(out_path, dpi=150, bbox_inches="tight", pad_inches=0.35)
         plt.close(fig)
